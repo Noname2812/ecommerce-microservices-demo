@@ -45,7 +45,7 @@ src/
 │   ├── UrbanX.Gateway.Application/         # Abstractions, config options
 │   └── UrbanX.Gateway.Infrastructure/      # RBAC, enrichment, TLS, observability
 └── Shared/
-    ├── Shared.Kernel/          # Domain primitives: Error, Result<T>, DomainException, BaseEntity, IDateTracking, ISoftDelete, IUserTracking, IValidationResult, PageResult<T>
+    ├── Shared.Kernel/          # Domain primitives: Error, Result<T>, DomainException, BaseEntity, IDateTracking, ISoftDelete, IUserTracking, IValidationResult, PageResult<T>; GatewayHeaderNames
     ├── Shared.Contract/        # Cross-service contracts: IIntegrationEvent, IntegrationEventBase, integration event DTOs (Catalog)
     ├── Shared.Application/     # CQRS abstractions: ICommand, IQuery, handlers, IDomainEvent, IEventPublisher, ISagaState
     ├── Shared.Messaging/       # MassTransit + RabbitMQ config, MediatR pipeline behaviors, saga base, EventPublisher impl
@@ -133,7 +133,8 @@ Thêm package mới: **chỉ sửa `Directory.Packages.props`**, không sửa `.
 ## Skills & Agents
 | Task | Dùng |
 |---|---|
-| Tạo Command/Query       | skill `command` / `query` |
+| Tạo Command             | skill `command` |
+| Tạo Query               | skill `query` |
 | Review code C#          | skill `code-reviewer` hoặc agent `code-reviewer` |
 | Viết unit test          | skill `unit-test-writer` |
 | Viết integration test   | skill `integration-test-writer` |

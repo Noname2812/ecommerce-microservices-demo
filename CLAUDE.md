@@ -62,7 +62,7 @@ Each service is split into layers:
 ### Shared libraries (`src/Shared/`)
 | Library | Purpose |
 |---|---|
-| `Shared.Kernel` | Domain primitives: `Error`, `Result<T>`, `DomainException`, `BaseEntity<TKey>`, `IDateTracking`, `ISoftDelete`, `IUserTracking`, `IValidationResult`, `PageResult<T>` |
+| `Shared.Kernel` | Domain primitives: `Error`, `Result<T>`, `DomainException`, `BaseEntity<TKey>`, `IDateTracking`, `ISoftDelete`, `IUserTracking`, `IValidationResult`, `PageResult<T>`; also `GatewayHeaderNames` (shared header name constants) |
 | `Shared.Contract` | Cross-service contracts only: `IIntegrationEvent`, `IntegrationEventBase`, integration event DTOs and events (Catalog) |
 | `Shared.Application` | CQRS abstractions: `ICommand`, `IQuery`, handler interfaces, `IDomainEvent`, `IEventPublisher`, `ISagaState` |
 | `Shared.Messaging` | MassTransit + RabbitMQ config, MediatR pipeline behaviors (`Validation`, `Logging`, `Idempotency`, `Transaction`), saga infrastructure, `EventPublisher` impl |

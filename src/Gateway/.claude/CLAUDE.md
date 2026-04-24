@@ -33,7 +33,6 @@ src/Gateway/
 | `Configuration/RateLimitingOptions.cs` | Sliding-window limits — section `"RateLimit"` |
 | `Constants/GatewayContextItems.cs` | `HttpContext.Items` keys (e.g. `PermissionScope`) |
 | `Constants/GatewayErrorCodes.cs` | JSON `error` field values (e.g. `UNAUTHORIZED`) |
-| `Constants/GatewayHeaderNames.cs` | All header name strings (e.g. `X-User-Id`) |
 
 ### UrbanX.Gateway.Infrastructure
 
@@ -132,10 +131,11 @@ RBAC result sets `HttpContext.Items[GatewayContextItems.PermissionScope]` to `"o
 
 ```csharp
 // Namespaces
-using UrbanX.Gateway.Application.Constants;       // GatewayHeaderNames, GatewayErrorCodes, GatewayContextItems
+using Shared.Kernel.Constants;                    // GatewayHeaderNames
+using UrbanX.Gateway.Application.Constants;       // GatewayErrorCodes, GatewayContextItems
 using UrbanX.Gateway.Application.Configuration;   // CorsEdgeOptions, KestrelEdgeOptions, EdgeCorsPolicyNames
 
-// Headers
+// Headers (Shared.Kernel.Constants.GatewayHeaderNames)
 GatewayHeaderNames.XRequestId        // "X-Request-Id"
 GatewayHeaderNames.XUserId           // "X-User-Id"
 GatewayHeaderNames.XUserRoles        // "X-User-Roles"

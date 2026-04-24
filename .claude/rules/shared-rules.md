@@ -27,6 +27,7 @@ Shared.Observability  (standalone)
 | `IValidationResult`, `ValidationResult`, `ValidationResult<T>` | `Primitives/IValidationResult.cs`, `ValidationResult.cs`, `ValidationResultT.cs` |
 | `BaseEntity<TKey>` | `Domain/BaseEntity.cs` |
 | `IDateTracking`, `ISoftDelete`, `IUserTracking` | `Domain/I*.cs` |
+| `GatewayHeaderNames` | `Constants/GatewayHeaderNames.cs` — header name constants shared across Gateway + downstream services |
 
 **Rules:**
 - Không thêm NuGet dependency vào project này
