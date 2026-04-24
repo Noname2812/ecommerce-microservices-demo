@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Shared.Security.Gateway;
+using UrbanX.Gateway.Application.Constants;
 using UrbanX.Gateway.Application.Configuration;
 using UrbanX.Gateway.Infrastructure.Error;
 

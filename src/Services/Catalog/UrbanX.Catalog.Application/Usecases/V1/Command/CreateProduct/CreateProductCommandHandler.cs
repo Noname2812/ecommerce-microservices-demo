@@ -11,7 +11,7 @@ using UrbanX.Catalog.Domain.ValueObjects;
 
 namespace UrbanX.Catalog.Application.Usecases.V1.Command
 {
-    public sealed class CreateProductCommandHandler : ICommandHandler<CreateProductCommand>
+    public sealed class CreateProductCommandHandler : ICommandHandler<CreateProductCommand, Guid>
     {
         private readonly IProductRepository _productRepository;
         private readonly ICategoryRepository _categoryRepository;
@@ -33,33 +33,33 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             _outboxWriter = outboxWriter;
         }
 
-        public async Task<Result> Handle(CreateProductCommand request, CancellationToken cancellationToken)
+        public async Task<Result<Guid>> Handle(CreateProductCommand request, CancellationToken cancellationToken)
         {
             var slug = string.IsNullOrWhiteSpace(request.Slug)
                 ? SlugHelper.ToSlug(request.Name)
                 : request.Slug!.Trim().ToLowerInvariant();
 
             if (await _productRepository.SlugInUseAsync(slug, cancellationToken))
-                return Result.Failure(ProductErrors.SlugInUse(slug));
+                return Result.Failure<Guid>(ProductErrors.SlugInUse(slug));
 
             if (await _productRepository.SkuInUseAsync(request.Sku, cancellationToken))
-                return Result.Failure(ProductErrors.SkuInUse(request.Sku));
+                return Result.Failure<Guid>(ProductErrors.SkuInUse(request.Sku));
             foreach (var v in request.Variants)
             {
                 if (await _productRepository.SkuInUseAsync(v.Sku, cancellationToken))
-                    return Result.Failure(ProductErrors.SkuInUse(v.Sku));
+                    return Result.Failure<Guid>(ProductErrors.SkuInUse(v.Sku));
             }
 
             var category = await _categoryRepository.GetByIdAsync(request.CategoryId, cancellationToken);
             if (category is null)
-                return Result.Failure(ProductErrors.CategoryNotFound(request.CategoryId));
+                return Result.Failure<Guid>(ProductErrors.CategoryNotFound(request.CategoryId));
 
             Brand? brand = null;
             if (request.BrandId is { } brandId)
             {
                 brand = await _brandRepository.GetByIdAsync(brandId, cancellationToken);
                 if (brand is null)
-                    return Result.Failure(ProductErrors.BrandNotFound(brandId));
+                    return Result.Failure<Guid>(ProductErrors.BrandNotFound(brandId));
             }
 
             var displayOrder = 0;
@@ -148,7 +148,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             var integrationEvent = MapToCreatedEvent(product, attributeNameById);
             await _outboxWriter.WriteAsync(integrationEvent, cancellationToken);
 
-            return Result.Success();
+            return Result.Success(product.Id);
         }
 
         private static ProductIntegrationEvents.ProductCreatedV1 MapToCreatedEvent(

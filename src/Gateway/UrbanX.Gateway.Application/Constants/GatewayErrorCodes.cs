@@ -1,4 +1,4 @@
-namespace Shared.Security.Gateway;
+namespace UrbanX.Gateway.Application.Constants;
 
 /// <summary>Stable error code strings returned in gateway-generated JSON (before upstream response).</summary>
 public static class GatewayErrorCodes

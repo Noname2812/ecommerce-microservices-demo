@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
-using Shared.Security.Gateway;
+using UrbanX.Gateway.Application.Constants;
 using UrbanX.Gateway.Application.Abstractions;
 
 namespace UrbanX.Gateway.Infrastructure.Enrichment;

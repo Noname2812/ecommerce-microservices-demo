@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Shared.Security.Edge;
+namespace UrbanX.Gateway.Application.Configuration;
 
 /// <summary>
 /// Optional HTTPS listener for edge TLS termination (Kestrel). Omitted in development; used in

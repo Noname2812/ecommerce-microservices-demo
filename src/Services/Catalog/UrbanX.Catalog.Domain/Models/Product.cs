@@ -41,7 +41,7 @@ namespace UrbanX.Catalog.Domain.Models
         public static Product Create(
             string sku,
             string name,
-            string? slug,
+            string slug,
             string? description,
             string? shortDescription,
             Guid? categoryId,
@@ -80,7 +80,7 @@ namespace UrbanX.Catalog.Domain.Models
                 Id = id,
                 Sku = sku,
                 Name = name.Trim(),
-                Slug = string.IsNullOrWhiteSpace(slug) ? SlugHelper.ToSlug(name) : slug!.Trim().ToLowerInvariant(),
+                Slug = slug,
                 Description = description,
                 ShortDescription = shortDescription,
                 CategoryId = categoryId,

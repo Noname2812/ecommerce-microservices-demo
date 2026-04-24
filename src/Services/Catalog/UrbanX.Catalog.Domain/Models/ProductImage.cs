@@ -5,14 +5,14 @@ namespace UrbanX.Catalog.Domain.Models
     /// <summary>Gallery row: product-level and/or variant-level (see variant_id).</summary>
     public class ProductImage : BaseEntity<Guid>
     {
-        public Guid ProductId { get; set; }
-        public Guid? VariantId { get; set; }
-        public string Url { get; set; } = null!;
-        public string? AltText { get; set; }
-        public int DisplayOrder { get; set; }
-        public bool IsPrimary { get; set; }
+        public Guid ProductId { get; init; }
+        public Guid? VariantId { get; init; }
+        public string Url { get; init; } = null!;
+        public string? AltText { get; init; }
+        public int DisplayOrder { get; init; }
+        public bool IsPrimary { get; init; }
 
-        public Product Product { get; set; } = null!;
-        public ProductVariant? Variant { get; set; }
+        public Product Product { get; init; } = null!;
+        public ProductVariant? Variant { get; init; }
     }
 }

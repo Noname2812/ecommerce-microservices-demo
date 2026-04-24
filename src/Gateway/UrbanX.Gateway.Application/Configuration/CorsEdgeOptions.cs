@@ -1,11 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Shared.Security.Edge;
+namespace UrbanX.Gateway.Application.Configuration;
 
-/// <summary>
-/// Configuration contract for the API gateway edge: browser-facing CORS policy
-/// (matches design: allowed methods, headers, preflight, credentials with explicit origins).
-/// </summary>
 public sealed class CorsEdgeOptions
 {
     public const string SectionName = "Cors";

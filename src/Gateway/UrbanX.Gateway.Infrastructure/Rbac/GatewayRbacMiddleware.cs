@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Http;
-using Shared.Security.Gateway;
+using UrbanX.Gateway.Application.Constants;
 using UrbanX.Gateway.Application.Abstractions;
 using UrbanX.Gateway.Application.Configuration;
 using UrbanX.Gateway.Infrastructure.Error;

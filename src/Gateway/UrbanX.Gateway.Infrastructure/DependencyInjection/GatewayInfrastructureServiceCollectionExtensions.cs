@@ -4,7 +4,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Shared.Security.Edge;
 using UrbanX.Gateway.Application.Abstractions;
 using UrbanX.Gateway.Application.Configuration;
 using UrbanX.Gateway.Infrastructure.Edge;
@@ -29,7 +28,7 @@ public static class GatewayInfrastructureServiceCollectionExtensions
             throw new InvalidOperationException("Missing or empty configuration section: Cors (edge CORS contract).");
         }
 
-        services.AddUrbanXEdgeCors(configuration);
+        services.AddGatewayCors(configuration);
         services.AddSingleton<IKestrelEdgeTlsConfiguration, KestrelEdgeTlsConfiguration>();
 
         services.Configure<GatewayRbacOptions>(configuration.GetSection(GatewayRbacOptions.SectionName));

@@ -40,9 +40,12 @@ namespace UrbanX.Catalog.Persistence
                 .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
         public async Task<bool> SkuInUseAsync(string sku, CancellationToken cancellationToken = default) =>
-            await _db.Products.AnyAsync(p => p.Sku == sku, cancellationToken)
+            await _db.Products.AnyAsync(
+                p => p.Sku == sku && p.DeletedAt == null,
+                cancellationToken)
             || await _db.ProductVariants.AnyAsync(
-                v => v.Sku == sku && v.DeletedAt == null, cancellationToken);
+                v => v.Sku == sku && v.DeletedAt == null,
+                cancellationToken);
 
         public async Task<bool> IsSkuInUseExcludingAsync(
             string sku,

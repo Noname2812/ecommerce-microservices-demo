@@ -1,4 +1,4 @@
-namespace Shared.Security.Gateway;
+namespace UrbanX.Gateway.Application.Constants;
 
 /// <summary>Keys in <c>HttpContext.Items</c> for gateway flow.</summary>
 public static class GatewayContextItems

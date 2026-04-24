@@ -1,16 +1,14 @@
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using UrbanX.Gateway.Application.Configuration;
 
-namespace Shared.Security.Edge;
+namespace UrbanX.Gateway.Infrastructure.DependencyInjection;
 
-/// <summary>
-/// Registers the gateway edge CORS policy as <see cref="EdgeCorsPolicyNames.Default"/> using
-/// <see cref="CorsEdgeOptions"/> (section <see cref="CorsEdgeOptions.SectionName"/>).
-/// </summary>
-public static class UrbanXEdgeCorsServiceCollectionExtensions
+public static class GatewayCorsServiceCollectionExtensions
 {
-    public static IServiceCollection AddUrbanXEdgeCors(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddGatewayCors(this IServiceCollection services, IConfiguration configuration)
     {
         services
             .AddOptions<CorsEdgeOptions>()

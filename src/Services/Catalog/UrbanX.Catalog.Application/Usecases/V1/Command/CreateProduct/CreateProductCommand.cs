@@ -22,7 +22,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
         string? MetaDescription,
         IReadOnlyList<CreateProductImageItem> ProductImages,
         IReadOnlyList<CreateProductVariantItem> Variants
-    ) : ICommand;
+    ) : ICommand<Guid>;
 
     public record ProductDimensionsInput(
         decimal? LengthCm,

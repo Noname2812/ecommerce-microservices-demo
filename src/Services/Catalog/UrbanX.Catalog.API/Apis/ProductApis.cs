@@ -24,7 +24,7 @@ namespace UrbanX.Catalog.API.Apis
             var result = await sender.Send(body, cancellationToken);
             if (result.IsFailure)
                 return HandleFailure(result);
-            return Results.Ok(result);
+            return Results.Created($"/api/v1/catalog/products/{result.Value}", result.Value);
         }
     }
 }

@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Http;
-using Shared.Security.Gateway;
+using UrbanX.Gateway.Application.Constants;
 
 namespace UrbanX.Gateway.Infrastructure.Correlation;
 

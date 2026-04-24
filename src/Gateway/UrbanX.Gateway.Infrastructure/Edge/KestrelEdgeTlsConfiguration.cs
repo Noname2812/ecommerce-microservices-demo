@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using Shared.Security.Edge;
+using UrbanX.Gateway.Application.Configuration;
 using UrbanX.Gateway.Application.Abstractions;
 
 namespace UrbanX.Gateway.Infrastructure.Edge;
