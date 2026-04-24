@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Usecases\NewFolder\**" />
+    <Compile Remove="Usecases\V1\Dtos\**" />
+    <EmbeddedResource Remove="Usecases\NewFolder\**" />
+    <EmbeddedResource Remove="Usecases\V1\Dtos\**" />
+    <None Remove="Usecases\NewFolder\**" />
+    <None Remove="Usecases\V1\Dtos\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Abstractions\" />
+    <Folder Include="Adapters\" />
+    <Folder Include="DependencyInjection\Options\" />
+    <Folder Include="Mappers\Product\" />
+    <Folder Include="Usecases\V1\Event\" />
+    <Folder Include="Usecases\V1\Query\" />
+    <Folder Include="Usecases\V2\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\Shared.Application\Shared.Application.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
+    <ProjectReference Include="..\UrbanX.Catalog.Domain\UrbanX.Catalog.Domain.csproj" />
+    <ProjectReference Include="..\UrbanX.Catalog.Persistence\UrbanX.Catalog.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,264 @@
+version: '3.8'
+
+services:
+  # Infrastructure
+  postgres:
+    image: postgres:16
+    container_name: urbanx-postgres-prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    
+  # Microservices
+  identity-service:
+    build:
+      context: .
+      dockerfile: src/Services/Identity/Dockerfile
+    container_name: urbanx-identity
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__identitydb=Host=postgres;Database=urbanx_identity;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_COLLECTOR_ENDPOINT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5005:8080"
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/alive"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: src/Services/Catalog/Dockerfile
+    container_name: urbanx-catalog
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__catalogdb=Host=postgres;Database=urbanx_catalog;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD}
+      - Kafka__BootstrapServers=kafka:9092
+      - IdentityServer__Authority=http://identity-service:8080
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_COLLECTOR_ENDPOINT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/alive"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  order-service:
+    build:
+      context: .
+      dockerfile: src/Services/Order/Dockerfile
+    container_name: urbanx-order
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__orderdb=Host=postgres;Database=urbanx_order;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD}
+      - Kafka__BootstrapServers=kafka:9092
+      - IdentityServer__Authority=http://identity-service:8080
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_COLLECTOR_ENDPOINT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/alive"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: src/Services/Payment/Dockerfile
+    container_name: urbanx-payment
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__paymentdb=Host=postgres;Database=urbanx_payment;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD}
+      - Kafka__BootstrapServers=kafka:9092
+      - IdentityServer__Authority=http://identity-service:8080
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_COLLECTOR_ENDPOINT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/alive"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  merchant-service:
+    build:
+      context: .
+      dockerfile: src/Services/Merchant/Dockerfile
+    container_name: urbanx-merchant
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__merchantdb=Host=postgres;Database=urbanx_merchant;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD}
+      - IdentityServer__Authority=http://identity-service:8080
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_COLLECTOR_ENDPOINT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/alive"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: src/Services/Inventory/Dockerfile
+    container_name: urbanx-inventory
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__inventorydb=Host=postgres;Database=urbanx_inventory;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD}
+      - Kafka__BootstrapServers=kafka:9092
+      - IdentityServer__Authority=http://identity-service:8080
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_COLLECTOR_ENDPOINT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/alive"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  gateway:
+    build:
+      context: .
+      dockerfile: src/Gateway/Dockerfile
+    container_name: urbanx-gateway
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_COLLECTOR_ENDPOINT}
+    depends_on:
+      - identity-service
+      - catalog-service
+      - order-service
+      - payment-service
+      - merchant-service
+      - inventory-service
+    ports:
+      - "5000:8080"
+    networks:
+      - urbanx-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/alive"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  urbanx-network:
+    driver: bridge
