@@ -1,7 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Shared.Contract.Abstractions;
-using Shared.Contract.Common;
+﻿using Microsoft.AspNetCore.Mvc;
+using Shared.Kernel.Primitives;
 
 namespace UrbanX.Catalog.API.Abstractions
 {

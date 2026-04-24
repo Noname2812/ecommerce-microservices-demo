@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
 using UrbanX.Gateway.Application.Constants;
 using UrbanX.Gateway.Application.Abstractions;
+using Shared.Kernel.Constants;
 
 namespace UrbanX.Gateway.Infrastructure.Enrichment;
 

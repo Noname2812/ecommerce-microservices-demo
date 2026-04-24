@@ -62,12 +62,14 @@ Each service is split into layers:
 ### Shared libraries (`src/Shared/`)
 | Library | Purpose |
 |---|---|
-| `Shared.Application` | Base types: domain events, MediatR pipeline behaviors, saga state base |
-| `Shared.Messaging` | MassTransit + RabbitMQ configuration, consumer registration helpers |
-| `Shared.Outbox` | Transactional outbox: EF Core outbox table + `OutboxRelayService` background worker |
-| `Shared.Security` | JWT validation middleware, policy-based authorization, global exception handler |
-| `Shared.Observability` | OpenTelemetry configuration wired via `ServiceDefaults` |
-| `Shared.Contract` | Shared integration event contracts (consumed across service boundaries) |
+| `Shared.Kernel` | Domain primitives: `Error`, `Result<T>`, `DomainException`, `BaseEntity<TKey>`, `IDateTracking`, `ISoftDelete`, `IUserTracking`, `IValidationResult`, `PageResult<T>` |
+| `Shared.Contract` | Cross-service contracts only: `IIntegrationEvent`, `IntegrationEventBase`, integration event DTOs and events (Catalog) |
+| `Shared.Application` | CQRS abstractions: `ICommand`, `IQuery`, handler interfaces, `IDomainEvent`, `IEventPublisher`, `ISagaState` |
+| `Shared.Messaging` | MassTransit + RabbitMQ config, MediatR pipeline behaviors (`Validation`, `Logging`, `Idempotency`, `Transaction`), saga infrastructure, `EventPublisher` impl |
+| `Shared.Outbox` | Transactional outbox: `OutboxMessage`, `OutboxRelayWorker`, `IOutboxWriter` |
+| `Shared.Observability` | OpenTelemetry configuration: metrics, activity sources, OTLP exporter |
+
+**Dependency order (lower = fewer deps):** Shared.Kernel → Shared.Contract → Shared.Application → Shared.Messaging → services
 
 ### Key patterns
 

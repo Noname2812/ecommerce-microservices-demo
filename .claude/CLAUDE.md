@@ -45,11 +45,11 @@ src/
 │   ├── UrbanX.Gateway.Application/         # Abstractions, config options
 │   └── UrbanX.Gateway.Infrastructure/      # RBAC, enrichment, TLS, observability
 └── Shared/
-    ├── Shared.Application/     # ICommand, IQuery, ICommandHandler, IQueryHandler, IDomainEvent
-    ├── Shared.Contract/        # BaseEntity, Result<T>, DomainException, integration event contracts
-    ├── Shared.Messaging/       # MassTransit config, pipeline behaviors, saga base, EventPublisher
+    ├── Shared.Kernel/          # Domain primitives: Error, Result<T>, DomainException, BaseEntity, IDateTracking, ISoftDelete, IUserTracking, IValidationResult, PageResult<T>
+    ├── Shared.Contract/        # Cross-service contracts: IIntegrationEvent, IntegrationEventBase, integration event DTOs (Catalog)
+    ├── Shared.Application/     # CQRS abstractions: ICommand, IQuery, handlers, IDomainEvent, IEventPublisher, ISagaState
+    ├── Shared.Messaging/       # MassTransit + RabbitMQ config, MediatR pipeline behaviors, saga base, EventPublisher impl
     ├── Shared.Outbox/          # OutboxMessage, OutboxRelayWorker, IOutboxWriter
-    ├── Shared.Security/        # CORS, Gateway headers/error codes
     └── Shared.Observability/   # OpenTelemetry wiring
 
 docs/                           # Docs tổng quan (migrations, security, deployment)
@@ -128,6 +128,7 @@ Thêm package mới: **chỉ sửa `Directory.Packages.props`**, không sửa `.
 
 ## Rules
 @.claude/rules/response-rules.md
+@.claude/rules/shared-rules.md
 
 ## Skills & Agents
 | Task | Dùng |

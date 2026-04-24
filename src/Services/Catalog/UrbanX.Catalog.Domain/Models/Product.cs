@@ -1,6 +1,5 @@
-using Shared.Contract.Abstractions;
+using Shared.Kernel.Domain;
 using UrbanX.Catalog.Domain.Exceptions;
-using UrbanX.Catalog.Domain.Helpers;
 using UrbanX.Catalog.Domain.ValueObjects;
 
 namespace UrbanX.Catalog.Domain.Models

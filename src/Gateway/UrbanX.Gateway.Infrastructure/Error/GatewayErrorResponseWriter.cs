@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
+using Shared.Kernel.Constants;
 using UrbanX.Gateway.Application.Constants;
 
 namespace UrbanX.Gateway.Infrastructure.Error;

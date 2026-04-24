@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using UrbanX.Gateway.Application.Constants;
 using UrbanX.Gateway.Application.Configuration;
+using Shared.Kernel.Constants;
 
 namespace UrbanX.Gateway.Infrastructure.DependencyInjection;
 

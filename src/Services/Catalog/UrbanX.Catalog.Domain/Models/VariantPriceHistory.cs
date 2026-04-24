@@ -1,4 +1,4 @@
-using Shared.Contract.Abstractions;
+using Shared.Kernel.Domain;
 
 namespace UrbanX.Catalog.Domain.Models;
 

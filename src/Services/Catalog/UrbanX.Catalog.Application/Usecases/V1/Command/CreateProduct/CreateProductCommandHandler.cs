@@ -1,7 +1,7 @@
 using Shared.Application;
-using Shared.Contract.Common;
 using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
+using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Errors;
 using UrbanX.Catalog.Domain;

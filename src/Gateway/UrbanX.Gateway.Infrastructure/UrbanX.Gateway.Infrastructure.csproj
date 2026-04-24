@@ -6,6 +6,7 @@
     <RootNamespace>UrbanX.Gateway.Infrastructure</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Shared.Kernel\Shared.Kernel.csproj" />
     <ProjectReference Include="..\UrbanX.Gateway.Application\UrbanX.Gateway.Application.csproj" />
   </ItemGroup>
   <ItemGroup>

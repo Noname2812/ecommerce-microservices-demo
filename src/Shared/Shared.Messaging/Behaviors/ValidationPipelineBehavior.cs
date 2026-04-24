@@ -1,7 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Shared.Contract.Common;
+using Shared.Kernel.Primitives;
 
 namespace Shared.Messaging.Behaviors
 {

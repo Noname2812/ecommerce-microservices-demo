@@ -1,4 +1,4 @@
-using Shared.Contract.Common;
+using Shared.Kernel.Primitives;
 
 namespace UrbanX.Catalog.Application.Usecases.V1.Errors
 {

@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\Shared.Kernel\Shared.Kernel.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
     <ProjectReference Include="..\UrbanX.Catalog.Domain\UrbanX.Catalog.Domain.csproj" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-namespace UrbanX.Gateway.Application.Constants;
+namespace Shared.Kernel.Constants;
 
 /// <summary>Headers the gateway may add, strip, or forward (see API gateway design).</summary>
 public static class GatewayHeaderNames

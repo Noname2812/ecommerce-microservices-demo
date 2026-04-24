@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Shared.Kernel\Shared.Kernel.csproj" />
     <ProjectReference Include="..\Shared.Contract\Shared.Contract.csproj" />
   </ItemGroup>
 

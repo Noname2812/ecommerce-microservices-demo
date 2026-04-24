@@ -1,5 +1,5 @@
 using MediatR;
-using Shared.Contract.Common;
+using Shared.Kernel.Primitives;
 
 namespace Shared.Application
 {
