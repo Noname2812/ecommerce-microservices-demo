@@ -13,7 +13,7 @@ Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `invent
 | `UrbanX.Inventory.Domain` | Entities, value objects, domain exceptions, repository interfaces |
 | `UrbanX.Inventory.Application` | Commands, handlers, validators, error codes, MediatR behavior |
 | `UrbanX.Inventory.Persistence` | EF Core DbContext, entity configs, repos, migrations |
-| `UrbanX.Inventory.API` | Carter modules, HTTP endpoints, JWT auth, OpenAPI, Program.cs |
+| `UrbanX.Inventory.API` | Carter modules, HTTP endpoints, Trust-Gateway user context middleware, OpenAPI, Program.cs |
 | `UrbanX.Inventory.Infrastructure` | Empty placeholder |
 
 **Dependency order:** Domain ← Persistence ← Application ← API
@@ -144,12 +144,24 @@ Chưa có endpoint. Thêm bằng skill `add-command` / `add-query`.
 - `OPTIMISTIC_LOCK_CONFLICT` → 409
 - default → 400
 
+### Authentication / Authorization
+
+**Trust-the-Gateway pattern.** Service KHÔNG verify JWT — Gateway verify, enrich `X-User-*` headers, strip Authorization trước khi forward.
+
+- `app.UseUserContext()` middleware đọc headers, set OpenTelemetry activity tags
+- `IUserContext` (scoped) đọc identity từ headers per request
+- Endpoints **KHÔNG** dùng `RequireAuthorization()` — authorization qua MediatR `AuthorizationPipelineBehavior`
+- Command/Query gắn `[RequirePermission(Permissions.Inventory.*)]` để khai báo permission required
+- Xem `docs/auth/trust-gateway-flow.md`
+
 ### Program.cs Registration Order
 
 ```
 AddServiceDefaults() → AddOpenApi() → AddNpgsqlDbContext<InventoryDbContext>("inventorydb")
 → AddOutbox<InventoryDbContext>() → AddConfigMessaging() → AddMessaging()
-→ AddAuthentication(JwtBearer) → AddApplication() → Carter
+→ AddApplication() → Carter
+
+app.UseExceptionHandler() → app.UseUserContext() → app.MapCarter()
 ```
 
 Auto-runs EF migrations on startup.

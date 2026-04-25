@@ -1,6 +1,6 @@
 using Carter;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
@@ -27,21 +27,7 @@ builder.Services
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<InventoryDbContext>(name: "inventorydb", tags: ["ready", "db"]);
 
-// JWT auth
-var identityAuthority = builder.Configuration["services__identity__https__0"]
-    ?? builder.Configuration["services__identity__http__0"]
-    ?? builder.Configuration["IdentityServer:Authority"];
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = identityAuthority;
-        options.Audience = builder.Configuration["IdentityServer:Audience"] ?? "urbanx-api";
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-    });
-
 builder.Services.AddProblemDetails();
-builder.Services.AddHttpContextAccessor();
 builder.Services.AddApplication(builder.Configuration);
 
 builder.Services
@@ -62,8 +48,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseExceptionHandler();
-app.UseAuthentication();
-app.UseAuthorization();
+
+// Trust-the-Gateway: read identity from X-User-* headers (set by Gateway).
+// Authorization is enforced via AuthorizationPipelineBehavior on each Command/Query.
+app.UseUserContext();
 
 using (var scope = app.Services.CreateScope())
 {

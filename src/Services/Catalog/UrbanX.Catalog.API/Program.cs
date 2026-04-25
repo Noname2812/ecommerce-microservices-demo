@@ -1,7 +1,7 @@
 using Carter;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
+using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Catalog.Application.DependencyInjection.Extensions;
@@ -31,30 +31,10 @@ builder.Services
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<CatalogDbContext>(name: "catalogdb", tags: ["ready", "db"]);
 
-// Configure JWT bearer authentication
-var identityAuthority = builder.Configuration["services__identity__https__0"]
-    ?? builder.Configuration["services__identity__http__0"]
-    ?? builder.Configuration["IdentityServer:Authority"];
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = identityAuthority;
-        options.Audience = builder.Configuration["IdentityServer:Audience"] ?? "urbanx-api";
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-    });
 builder.Services.AddProblemDetails();
-builder.Services.AddHttpContextAccessor();
 
 // Add Application
 builder.Services.AddApplication(builder.Configuration);
-
-// Add Swagger
-//builder.Services
-//    .AddSwaggerGenNewtonsoftSupport()
-//    .AddFluentValidationRulesToSwagger()
-//    .AddEndpointsApiExplorer()
-//    .AddSwagger();
 
 // Add versioning
 builder.Services
@@ -84,8 +64,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler();
-app.UseAuthentication();
-app.UseAuthorization();
+
+// Trust-the-Gateway: read identity from X-User-* headers (set by Gateway).
+// Authorization is enforced via AuthorizationPipelineBehavior on each Command/Query.
+app.UseUserContext();
 
 // Apply database migrations
 using (var scope = app.Services.CreateScope())
@@ -98,12 +80,6 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Applying database migrations for CatalogDbContext...");
         await context.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
-
-        //Seed data in development
-        //if (app.Environment.IsDevelopment())
-        //{
-        //    await DataSeeder.SeedAsync(context);
-        //}
     }
     catch (Exception ex)
     {

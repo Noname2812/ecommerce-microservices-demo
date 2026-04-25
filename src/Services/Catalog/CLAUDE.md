@@ -13,7 +13,7 @@ Port: **5290** | DB: `urbanx_catalog` | Status: **Active**
 | `UrbanX.Catalog.Domain` | Entities, value objects, domain exceptions, repository interfaces |
 | `UrbanX.Catalog.Application` | Commands, handlers, validators, error codes, MediatR behavior |
 | `UrbanX.Catalog.Persistence` | EF Core DbContext, entity configs, repos, migrations, seeding |
-| `UrbanX.Catalog.API` | Carter modules, HTTP endpoints, JWT auth, OpenAPI, Program.cs |
+| `UrbanX.Catalog.API` | Carter modules, HTTP endpoints, Trust-Gateway user context middleware, OpenAPI, Program.cs |
 | `UrbanX.Catalog.Infrastructure` | Empty placeholder |
 
 **Dependency order:** Domain ← Persistence ← Application ← API
@@ -114,7 +114,11 @@ Port: **5290** | DB: `urbanx_catalog` | Status: **Active**
 
 #### `CreateProductCommand` → `Result<Guid>`
 
-Input fields: `Sku, Name, Slug?, Description?, ShortDescription?, CategoryId, BrandId?, BasePrice, SellerId, SellerName, Status?, WeightGrams?, Dimensions?, Tags?, MetaTitle?, MetaDescription?, ProductImages[], Variants[]`
+`[RequirePermission(Permissions.Products.Write)]`
+
+Input fields: `Sku, Name, Slug?, Description?, ShortDescription?, CategoryId, BrandId?, BasePrice, Status?, WeightGrams?, Dimensions?, Tags?, MetaTitle?, MetaDescription?, ProductImages[], Variants[]`
+
+`SellerId` / `SellerName` **không** ở payload — handler lấy từ `IUserContext.UserId` (gateway header `X-User-Id`).
 
 Nested: `CreateProductVariantItem` (Sku, Name?, Price, CompareAtPrice?, ImageUrl?, Barcode?, Attributes[], GalleryImages[])
 
@@ -127,10 +131,11 @@ Nested: `CreateProductVariantItem` (Sku, Name?, Price, CompareAtPrice?, ImageUrl
 6. Fetch Brand (if provided) — 404 if missing
 7. `GetOrCreateAsync` each AttributeDefinition
 8. Build `NewVariantSpec[]` + `NewProductImageSpec[]`
-9. `Product.Create(...)` builds full graph
-10. `IProductRepository.AddAsync(product)`
-11. `IOutboxWriter` writes `ProductCreatedV1` to outbox
-12. Returns `Result<Guid>(product.Id)`
+9. Resolve `SellerId` từ `IUserContext.UserId` (behavior đã đảm bảo authenticated)
+10. `Product.Create(...)` builds full graph
+11. `IProductRepository.AddAsync(product)`
+12. `IOutboxWriter` writes `ProductCreatedV1` to outbox
+13. Returns `Result<Guid>(product.Id)`
 
 **Validator:** `CreateProductCommandValidator` (FluentValidation)
 - Cross-field: all SKUs (product + all variants) must be unique in the request
@@ -139,17 +144,22 @@ Nested: `CreateProductVariantItem` (Sku, Name?, Price, CompareAtPrice?, ImageUrl
 
 #### `UpdateProductBasicInfoCommand` → `Result`
 
+`[RequirePermission(Permissions.Products.Write, MinScope = PermissionScope.Own)]`
+
 Input: `ProductId, Name, Slug?, Description?, ShortDescription?, CategoryId?, BrandId?, BasePrice, Status?, WeightGrams?, Dimensions?, Tags?, MetaTitle?, MetaDescription?`
 
 **Handler flow:**
 1. `GetByIdForUpdateAsync` → `ProductNotFound`
-2. Normalize slug → `IsSlugInUseExcludingProductAsync` → `SlugExists`
-3. Category lookup if CategoryId changed → `CategoryNotFound`
-4. Brand lookup if BrandId changed → `BrandNotFound`
-5. `product.ApplyEdit(state, utcNow)`
-6. Outbox: `ProductInfoUpdatedV1` (always) + `ProductStatusChangedV1` (if status changed)
+2. Ownership check: nếu `IUserContext.Scope == Own` thì `product.SellerId` phải == `_userContext.UserId`, else `Forbidden`
+3. Normalize slug → `IsSlugInUseExcludingProductAsync` → `SlugExists`
+4. Category lookup if CategoryId changed → `CategoryNotFound`
+5. Brand lookup if BrandId changed → `BrandNotFound`
+6. `product.ApplyEdit(state, utcNow)`
+7. Outbox: `ProductInfoUpdatedV1` (always) + `ProductStatusChangedV1` (if status changed)
 
 #### `UpdateProductVariantsCommand` → `Result`
+
+`[RequirePermission(Permissions.Products.Write, MinScope = PermissionScope.Own)]`
 
 Input: `ProductId, Variants[]` — full snapshot; server diffs against DB.
 - `VariantSnapshotItem(Id?, Sku, Name?, Price, CompareAtPrice?, ImageUrl?, Barcode?, IsActive, AttributeValues[], GalleryImages[])`
@@ -158,22 +168,25 @@ Input: `ProductId, Variants[]` — full snapshot; server diffs against DB.
 
 **Handler flow:**
 1. Load product → `ProductNotFound`
-2. Re-check snapshot has ≥ 1 `IsActive=true` → `NoActiveVariant`
-3. Validate all `toUpdate` IDs belong to product → `VariantNotFound`
-4. Check reservations for `toDelete` via `IInventoryServiceClient` → `VariantHasActiveReservations` / `InventoryCheckUnavailable`
-5. SKU uniqueness in DB for `toAdd` + `toUpdate` → `SkuExists`
-6. Apply: soft-delete `toDelete`, upsert `toUpdate` (with SKU/Price history), `product.AddVariant` for `toAdd`
-7. Outbox: `ProductVariantDeletedV1` / `ProductVariantUpdatedV1` / `ProductVariantAddedV1`
+2. Ownership check: nếu `Scope == Own` thì `product.SellerId == UserId`, else `Forbidden`
+3. Re-check snapshot has ≥ 1 `IsActive=true` → `NoActiveVariant`
+4. Validate all `toUpdate` IDs belong to product → `VariantNotFound`
+5. Check reservations for `toDelete` via `IInventoryServiceClient` → `VariantHasActiveReservations` / `InventoryCheckUnavailable`
+6. SKU uniqueness in DB for `toAdd` + `toUpdate` → `SkuExists`
+7. Apply: soft-delete `toDelete`, upsert `toUpdate` (with SKU/Price history), `product.AddVariant` for `toAdd`
+8. Outbox: `ProductVariantDeletedV1` / `ProductVariantUpdatedV1` / `ProductVariantAddedV1`
 
 ### Current Queries
 
 #### `GetVariantDeleteEligibilityQuery` → `Result<VariantDeleteEligibilityResult>`
 
+`[RequirePermission(Permissions.Products.Read, MinScope = PermissionScope.Own)]`
+
 Input: `ProductId, VariantId`
 
 Returns: `CanDelete, HasActiveReservations, HasInventoryStock, InventoryQuantity, BlockReason?`
 
-**Handler flow:** verify variant exists → check last-active-variant guard → call `IInventoryServiceClient` (partial result if unavailable)
+**Handler flow:** verify product exists → ownership check (Scope==Own → product.SellerId == UserId, else Forbidden) → verify variant exists → check last-active-variant guard → call `IInventoryServiceClient` (partial result if unavailable)
 
 ### Error Codes (`CatalogErrors.cs`)
 
@@ -197,6 +210,8 @@ Returns: `CanDelete, HasActiveReservations, HasInventoryStock, InventoryQuantity
 ### MediatR Behavior
 
 `CatalogTransactionBehavior<TRequest, TResponse>` — extends `TransactionPipelineBehavior<..., CatalogDbContext>`. Wraps every command in a DB transaction; rolls back on exception.
+
+`AuthorizationPipelineBehavior` (từ `Shared.Messaging`) reflect `[RequirePermission]` / `[RequireRole]` / `[AllowAnonymous]` trên Command/Query rồi check `IUserContext`. Failure trả `Result.Failure(AuthorizationErrors.Unauthenticated | MissingPermission | InsufficientScope)`.
 
 ### Placeholder Folders (not yet implemented)
 - `Usecases/V1/Event/` — domain event handlers
@@ -268,9 +283,10 @@ Base: `/api/v{version:apiVersion}/catalog/products`
 
 ### `ApiEndpoint` base class
 
-`HandleFailure(Result)` maps error codes → HTTP status:
-- `PRODUCT_NOT_FOUND`, `VARIANT_NOT_FOUND` → 404
+`HandleFailure(Result)` / `ToCatalogResult(Result)` maps error codes → HTTP status:
+- `AUTH_REQUIRED` → 401
 - `FORBIDDEN` → 403
+- `PRODUCT_NOT_FOUND`, `VARIANT_NOT_FOUND` → 404
 - `OPTIMISTIC_LOCK_CONFLICT` → 409
 - `INVENTORY_CHECK_UNAVAILABLE` → 503
 - Everything else → 400
@@ -281,21 +297,24 @@ Errors serialized as RFC 7231 `ProblemDetails` with `extensions.errors[]`.
 
 URL-based: `/v1/`, `/v2/`. Group name format: `'v'VVV`. Substitutes version in URL automatically.
 
-### Authentication
+### Authentication / Authorization
 
-JWT Bearer. Authority resolved from (in order):
-1. `services__identity__https__0` (Aspire)
-2. `services__identity__http__0` (Aspire fallback)
-3. `IdentityServer:Authority` (config)
+**Trust-the-Gateway pattern.** Service KHÔNG verify JWT — Gateway verify, enrich `X-User-*` headers, strip Authorization trước khi forward.
 
-Audience: `urbanx-api` (configurable). HTTPS required except in Development.
+- `app.UseUserContext()` middleware đọc headers, set OpenTelemetry activity tags
+- `IUserContext` (scoped) đọc `X-User-Id` / `X-User-Roles` / `X-Merchant-Id` / `X-Permission-Scope` per request
+- Endpoints **KHÔNG** dùng `RequireAuthorization()` — authorization qua MediatR `AuthorizationPipelineBehavior`
+- Command/Query gắn `[RequirePermission(Permissions.Products.*)]` để khai báo permission required
+- Production caveat: cần mTLS hoặc shared-secret giữa Gateway↔Service. Xem `docs/auth/trust-gateway-flow.md`
 
 ### Program.cs Registration Order
 
 ```
 AddServiceDefaults() → AddOpenApi() → AddNpgsqlDbContext<CatalogDbContext>("catalogdb")
 → AddOutbox<CatalogDbContext>() → AddConfigMessaging() → AddMessaging()
-→ AddAuthentication(JwtBearer) → AddApplication() → Carter(formUploadLimit: 50 MB)
+→ AddApplication() → Carter(formUploadLimit: 50 MB)
+
+app.UseExceptionHandler() → app.UseUserContext() → app.MapCarter()
 ```
 
 Auto-runs EF migrations on startup.

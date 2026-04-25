@@ -1,8 +1,10 @@
-﻿using FluentValidation;
+using FluentValidation;
 using Shared.Application;
+using Shared.Application.Authorization;
 
 namespace UrbanX.Catalog.Application.Usecases.V1.Command
 {
+    [RequirePermission(Permissions.Products.Write)]
     public record CreateProductCommand(
         string Sku,
         string Name,
@@ -12,8 +14,6 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
         Guid CategoryId,
         Guid? BrandId,
         decimal BasePrice,
-        Guid SellerId,
-        string SellerName,
         string? Status,
         int? WeightGrams,
         ProductDimensionsInput? Dimensions,
@@ -61,8 +61,6 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             RuleFor(x => x.Name).NotEmpty().MaximumLength(500);
             RuleFor(x => x.Slug).MaximumLength(500).When(x => !string.IsNullOrEmpty(x.Slug));
             RuleFor(x => x.CategoryId).NotEmpty();
-            RuleFor(x => x.SellerId).NotEmpty();
-            RuleFor(x => x.SellerName).NotEmpty().MaximumLength(255);
             RuleFor(x => x.BasePrice).GreaterThanOrEqualTo(0);
             RuleFor(x => x.MetaTitle).MaximumLength(255);
             RuleFor(x => x.ShortDescription).MaximumLength(500);

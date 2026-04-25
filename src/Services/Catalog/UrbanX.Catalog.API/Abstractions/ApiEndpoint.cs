@@ -8,6 +8,14 @@ namespace UrbanX.Catalog.API.Abstractions
         protected static IResult HandleFailure(Result result) => result switch
         {
             { IsSuccess: true } => throw new InvalidOperationException(),
+            { Error.Code: "AUTH_REQUIRED" } => Results.Problem(
+                detail: result.Error.Message,
+                statusCode: StatusCodes.Status401Unauthorized,
+                type: result.Error.Code),
+            { Error.Code: "FORBIDDEN" } => Results.Problem(
+                detail: result.Error.Message,
+                statusCode: StatusCodes.Status403Forbidden,
+                type: result.Error.Code),
             IValidationResult validationResult => Results.BadRequest(CreateProblemDetails("Validation Error", StatusCodes.Status400BadRequest,
                 result.Error, validationResult.Errors)),
             _ => Results.BadRequest(CreateProblemDetails("Bad Request", StatusCodes.Status400BadRequest,
@@ -24,8 +32,9 @@ namespace UrbanX.Catalog.API.Abstractions
 
             var status = result.Error.Code switch
             {
-                "PRODUCT_NOT_FOUND" or "VARIANT_NOT_FOUND" => StatusCodes.Status404NotFound,
+                "AUTH_REQUIRED" => StatusCodes.Status401Unauthorized,
                 "FORBIDDEN" => StatusCodes.Status403Forbidden,
+                "PRODUCT_NOT_FOUND" or "VARIANT_NOT_FOUND" => StatusCodes.Status404NotFound,
                 "OPTIMISTIC_LOCK_CONFLICT" => StatusCodes.Status409Conflict,
                 "INVENTORY_CHECK_UNAVAILABLE" => StatusCodes.Status503ServiceUnavailable,
                 _ => StatusCodes.Status400BadRequest

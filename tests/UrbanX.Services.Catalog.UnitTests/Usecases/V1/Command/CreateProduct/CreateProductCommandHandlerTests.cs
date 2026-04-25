@@ -1,4 +1,5 @@
 using Moq;
+using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Command;
@@ -16,17 +17,23 @@ public class CreateProductCommandHandlerTests
     private readonly Mock<IBrandRepository> _brandRepository = new();
     private readonly Mock<IAttributeDefinitionRepository> _attributeDefinitionRepository = new();
     private readonly Mock<IOutboxWriter> _outboxWriter = new();
+    private readonly Mock<IUserContext> _userContext = new();
+    private readonly Guid _testUserId = Guid.NewGuid();
 
     private readonly CreateProductCommandHandler _handler;
 
     public CreateProductCommandHandlerTests()
     {
+        _userContext.SetupGet(u => u.UserId).Returns(_testUserId);
+        _userContext.SetupGet(u => u.IsAuthenticated).Returns(true);
+
         _handler = new CreateProductCommandHandler(
             _productRepository.Object,
             _categoryRepository.Object,
             _brandRepository.Object,
             _attributeDefinitionRepository.Object,
-            _outboxWriter.Object);
+            _outboxWriter.Object,
+            _userContext.Object);
     }
 
     [Fact]
@@ -321,7 +328,7 @@ public class CreateProductCommandHandlerTests
 
         _categoryRepository
             .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id) => new Category { Id = id, Name = "Electronics", Slug = "electronics" });
+            .ReturnsAsync((Guid id, CancellationToken _) => new Category { Id = id, Name = "Electronics", Slug = "electronics" });
 
         _outboxWriter
             .Setup(w => w.WriteAsync(It.IsAny<ProductIntegrationEvents.ProductCreatedV1>(), It.IsAny<CancellationToken>()))
@@ -337,8 +344,6 @@ public class CreateProductCommandHandlerTests
         CategoryId: Guid.NewGuid(),
         BrandId: null,
         BasePrice: 100_000,
-        SellerId: Guid.NewGuid(),
-        SellerName: "Test Seller",
         Status: ProductStatus.Draft,
         WeightGrams: null,
         Dimensions: null,

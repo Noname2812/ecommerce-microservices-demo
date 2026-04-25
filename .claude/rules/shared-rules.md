@@ -25,6 +25,7 @@ Shared.Observability  (standalone)
 | `DomainException` | `Primitives/DomainException.cs` |
 | `PageResult<T>` | `Primitives/PageResult.cs` |
 | `IValidationResult`, `ValidationResult`, `ValidationResult<T>` | `Primitives/IValidationResult.cs`, `ValidationResult.cs`, `ValidationResultT.cs` |
+| `AuthorizationErrors` | `Primitives/AuthorizationErrors.cs` — `AUTH_REQUIRED`, `FORBIDDEN` errors dùng bởi `AuthorizationPipelineBehavior` |
 | `BaseEntity<TKey>` | `Domain/BaseEntity.cs` |
 | `IDateTracking`, `ISoftDelete`, `IUserTracking` | `Domain/I*.cs` |
 | `GatewayHeaderNames` | `Constants/GatewayHeaderNames.cs` — header name constants shared across Gateway + downstream services |
@@ -57,49 +58,64 @@ Shared.Observability  (standalone)
 
 ## Shared.Application
 
-**Namespace:** `Shared.Application`  
-**Chứa:** CQRS abstractions + domain event interfaces. Không chứa implementation.
+**Namespace:** `Shared.Application` / `Shared.Application.Authorization`  
+**Chứa:** CQRS abstractions + domain event interfaces + authorization contracts. Không chứa implementation.
 
-| Type | Mục đích |
-|---|---|
-| `ICommand`, `ICommand<T>` | Command markers (MediatR `IRequest`) |
-| `ICommandHandler<C>`, `ICommandHandler<C,R>` | Handler interfaces |
-| `IQuery<T>`, `IQueryHandler<Q,R>` | Query interfaces |
-| `IDomainEvent`, `DomainEventBase` | In-process domain events |
-| `IDomainEventHandler<T>` | Domain event handler |
-| `IEventPublisher` | Publish integration events (impl ở Shared.Messaging) |
-| `IIdempotentCommand` | Marker cho idempotent commands |
-| `IMessageRequestClient` | Service-to-service RPC (impl ở Shared.Messaging) |
-| `ISagaState` | Saga state contract (extends MassTransit `SagaStateMachineInstance`) |
+| Type | Namespace | Mục đích |
+|---|---|---|
+| `ICommand`, `ICommand<T>` | `Shared.Application` | Command markers (MediatR `IRequest`) |
+| `ICommandHandler<C>`, `ICommandHandler<C,R>` | `Shared.Application` | Handler interfaces |
+| `IQuery<T>`, `IQueryHandler<Q,R>` | `Shared.Application` | Query interfaces |
+| `IDomainEvent`, `DomainEventBase` | `Shared.Application` | In-process domain events |
+| `IDomainEventHandler<T>` | `Shared.Application` | Domain event handler |
+| `IEventPublisher` | `Shared.Application` | Publish integration events (impl ở Shared.Messaging) |
+| `IIdempotentCommand` | `Shared.Application` | Marker cho idempotent commands |
+| `IMessageRequestClient` | `Shared.Application` | Service-to-service RPC (impl ở Shared.Messaging) |
+| `ISagaState` | `Shared.Application` | Saga state contract (extends MassTransit `SagaStateMachineInstance`) |
+| `IUserContext` | `Shared.Application.Authorization` | Identity từ Gateway header (impl `UserHttpContext` ở Shared.Messaging) |
+| `PermissionScope` | `Shared.Application.Authorization` | enum `None / Own / All` |
+| `Permissions`, `Roles` | `Shared.Application.Authorization` | **Constants** — bắt buộc dùng thay string literal |
+| `RequirePermissionAttribute`, `RequireRoleAttribute`, `AllowAnonymousAttribute` | `Shared.Application.Authorization` | Gắn trên Command/Query để khai báo permission required |
 
 **Rules:**
-- Chỉ chứa interfaces/abstractions — không có class implementation nào trừ `DomainEventBase`
+- Chỉ chứa interfaces/abstractions — không có class implementation nào trừ `DomainEventBase` và attributes
 - `using Shared.Kernel` cho `Result`, `Error`; `using Shared.Contract.Abstractions` cho `IIntegrationEvent`
+- **Authorization:** thêm permission/role mới CHỈ ở `Permissions.cs` / `Roles` static class — không bao giờ hardcode string ở Command/Query/Handler
+- Format permission: `"<resource>:<action>"` (vd `product:write`, `inventory:read`)
 
 ---
 
 ## Shared.Messaging
 
-**Namespace:** `Shared.Messaging` / `Shared.Messaging.Behaviors` / `Shared.Messaging.Saga`  
-**Chứa:** MassTransit + MediatR infrastructure.
+**Namespace:** `Shared.Messaging` / `Shared.Messaging.Behaviors` / `Shared.Messaging.Saga` / `Shared.Messaging.Authorization`  
+**Chứa:** MassTransit + MediatR infrastructure + Trust-Gateway user context.
+
+`<FrameworkReference Include="Microsoft.AspNetCore.App" />` để truy cập `IHttpContextAccessor`, `HttpContext`, middleware.
 
 | Component | File |
 |---|---|
-| MediatR behaviors | `Behaviors/Validation|Logging|Idempotency|TransactionPipelineBehavior.cs` |
+| MediatR behaviors | `Behaviors/Validation|Logging|Idempotency|Authorization|TransactionPipelineBehavior.cs` |
 | MassTransit setup | `DependencyInjection/Extensions/ServiceCollectionExtensions.cs` |
 | Event publisher impl | `EventPublisher.cs` |
 | Consumer base | `IntegrationEventConsumerBase.cs` |
 | Saga base classes | `Saga/SagaStateBase.cs`, `SagaStateMachineBase.cs`, `CompensatableActivityBase.cs` |
+| User context impl | `Authorization/UserHttpContext.cs` (internal — đọc Gateway headers) |
+| User context middleware | `Authorization/UserContextMiddleware.cs` (set OpenTelemetry tags) |
+| Builder extension | `Authorization/UserContextApplicationBuilderExtensions.cs` (`app.UseUserContext()`) |
 
 **DI entry points:**
 - `AddMessaging(...)` — đăng ký MassTransit + RabbitMQ + `IEventPublisher`
-- `AddMediator(...)` — đăng ký MediatR + tất cả behaviors
+- `AddMediator(...)` — đăng ký MediatR + behaviors + `IHttpContextAccessor` + `IUserContext`
 - `AddConfigMessaging(config)` — bind `RabbitMqOptions` từ config
+
+**App pipeline:**
+- `app.UseUserContext()` — dùng trước `app.MapCarter()` để enrich tracing tags từ Gateway headers
 
 **Rules:**
 - Consumer mới kế thừa `IntegrationEventConsumerBase<TEvent, TConsumer>`
 - Behavior mới đăng ký trong `AddMediator()`
-- `using Shared.Kernel` cho `Result`, `Error`; `using Shared.Application` cho CQRS interfaces
+- `AuthorizationPipelineBehavior` tự động short-circuit Command/Query có `[RequirePermission]`/`[RequireRole]` mà không pass check — wrap `AuthorizationErrors` thành `Result.Failure` (hoặc `Result<T>.Failure`)
+- `using Shared.Kernel` cho `Result`, `Error`; `using Shared.Application` cho CQRS interfaces; `using Shared.Application.Authorization` cho `IUserContext`
 
 ---
 

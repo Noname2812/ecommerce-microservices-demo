@@ -367,10 +367,12 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddMediator(AssemblyReference.Assembly);
-        services.AddScoped(
-            typeof(IPipelineBehavior<,>),
-            typeof(<Service>TransactionBehavior<,>));
+        services.AddMediator(
+            assembly: AssemblyReference.Assembly,
+            cfg =>
+            {
+                cfg.AddOpenBehavior(typeof(<Service>TransactionBehavior<,>));
+        });
         services.AddPersistence();
         return services;
     }

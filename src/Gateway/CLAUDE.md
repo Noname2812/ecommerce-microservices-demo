@@ -2,6 +2,8 @@
 
 YARP reverse proxy, JWT authentication, RBAC, rate limiting, header enrichment.
 
+Downstream services apply **Trust-the-Gateway** pattern: they do NOT verify JWT — they read identity from `X-User-*` headers Gateway enriches here. End-to-end flow: `docs/auth/trust-gateway-flow.md`.
+
 ---
 
 ## Project Layout

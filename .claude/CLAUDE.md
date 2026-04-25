@@ -72,8 +72,18 @@ tests/
 - Command → `Usecases/V1/Command/<Name>/<Name>Command.cs` + `<Name>CommandHandler.cs`
 - Query → `Usecases/V1/Query/<Name>/<Name>Query.cs` + `<Name>QueryHandler.cs`
 - Mỗi Command/Query đi kèm Validator (`FluentValidation`)
+- Gắn `[RequirePermission(Permissions.<Resource>.<Action>, MinScope = PermissionScope.Own|All)]` trên Command/Query class (hoặc `[AllowAnonymous]` cho public). **Bắt buộc dùng constants**, không string literal.
+- Inject `IUserContext` vào handler khi cần `UserId` / ownership check
 - `CatalogTransactionBehavior` tự bọc command trong DB transaction
 - Sử dụng skill: `command` hoặc `query`
+
+### Trust-the-Gateway Auth
+- Gateway verify JWT, enrich `X-User-Id` / `X-User-Roles` / `X-Merchant-Id` / `X-Permission-Scope` headers, strip Authorization
+- Service KHÔNG verify JWT, KHÔNG dùng `RequireAuthorization()` ở endpoints
+- `app.UseUserContext()` + `IUserContext` (scoped) đọc identity từ headers
+- `AuthorizationPipelineBehavior` reflect attribute → check IUserContext
+- Permissions/Roles constants: `Shared.Application/Authorization/Permissions.cs`
+- Doc: `docs/auth/trust-gateway-flow.md`
 
 ### Transactional Outbox (Catalog, Payment)
 - Command handler ghi data + `OutboxMessage` trong 1 transaction
@@ -109,9 +119,11 @@ Thứ tự chuẩn (Domain → Application → Persistence → API):
 
 1. **Domain**: thêm entity/value object/domain event nếu cần
 2. **Application**: tạo Command hoặc Query + Validator + Handler
+   - Gắn `[RequirePermission(Permissions.<Resource>.<Action>)]` (hoặc `[AllowAnonymous]`)
+   - Nếu cần `UserId` / ownership check → inject `IUserContext` vào handler
 3. **Persistence**: cập nhật DbContext config, thêm repo nếu cần
 4. **Migration**: `dotnet ef migrations add <Name>` từ `*.Persistence/`
-5. **API**: thêm Carter module endpoint
+5. **API**: thêm Carter module endpoint (KHÔNG `RequireAuthorization()` — authorization qua attribute trên Command/Query)
 6. **Gateway**: cập nhật route nếu path mới
 7. **Docs**: tạo `docs/<service>/<feature>.md`
 
@@ -152,16 +164,12 @@ Framework: **xUnit 2.9.3** · Mock: **Moq 4.20.72** · Assertions: xUnit `Assert
 <ProjectReference Include="..\..\src\Services\Catalog\UrbanX.Catalog.Application\UrbanX.Catalog.Application.csproj" />
 ```
 
-**Known issue — Windows Smart App Control:** Trên Windows 11 với Smart App Control bật, các DLL mới compile bị block (`0x800711C7`). Nếu `dotnet test` báo `FileLoadException: An Application Control policy has blocked this file`, chạy lệnh sau để unblock:
-```powershell
-Get-ChildItem "tests\UrbanX.Services.Catalog.UnitTests\bin" -Recurse -Include "*.dll" | Unblock-File
-```
-
 ---
 
 ## Rules
 @.claude/rules/response-rules.md
 @.claude/rules/shared-rules.md
+@.claude/rules/rtk-rules.md
 
 ## Skills & Agents
 | Task | Dùng |

@@ -64,8 +64,8 @@ Each service is split into layers:
 |---|---|
 | `Shared.Kernel` | Domain primitives: `Error`, `Result<T>`, `DomainException`, `BaseEntity<TKey>`, `IDateTracking`, `ISoftDelete`, `IUserTracking`, `IValidationResult`, `PageResult<T>`; also `GatewayHeaderNames` (shared header name constants) |
 | `Shared.Contract` | Cross-service contracts only: `IIntegrationEvent`, `IntegrationEventBase`, integration event DTOs and events (Catalog) |
-| `Shared.Application` | CQRS abstractions: `ICommand`, `IQuery`, handler interfaces, `IDomainEvent`, `IEventPublisher`, `ISagaState` |
-| `Shared.Messaging` | MassTransit + RabbitMQ config, MediatR pipeline behaviors (`Validation`, `Logging`, `Idempotency`, `Transaction`), saga infrastructure, `EventPublisher` impl |
+| `Shared.Application` | CQRS abstractions: `ICommand`, `IQuery`, handler interfaces, `IDomainEvent`, `IEventPublisher`, `ISagaState`; authorization (`IUserContext`, `Permissions`/`Roles` constants, `[RequirePermission]`/`[RequireRole]`/`[AllowAnonymous]` attributes, `PermissionScope`) |
+| `Shared.Messaging` | MassTransit + RabbitMQ config, MediatR pipeline behaviors (`Validation`, `Logging`, `Idempotency`, `Authorization`, `Transaction`), saga infrastructure, `EventPublisher` impl, `UserHttpContext` + `UserContextMiddleware` (Trust-Gateway) |
 | `Shared.Outbox` | Transactional outbox: `OutboxMessage`, `OutboxRelayWorker`, `IOutboxWriter` |
 | `Shared.Observability` | OpenTelemetry configuration: metrics, activity sources, OTLP exporter |
 
@@ -79,7 +79,9 @@ Each service is split into layers:
 
 **Saga choreography:** The planned order flow (Order → Inventory → Payment → Merchant) uses choreography — each service reacts to integration events from the previous step and emits its own, with compensation events on failure.
 
-**MediatR pipeline:** `CatalogTransactionBehavior` wraps command handlers in a DB transaction. Validation behaviors run FluentValidation before handlers.
+**MediatR pipeline:** `CatalogTransactionBehavior` wraps command handlers in a DB transaction. Validation behaviors run FluentValidation before handlers. `AuthorizationPipelineBehavior` reflects `[RequirePermission]`/`[RequireRole]`/`[AllowAnonymous]` attributes on Command/Query and validates against `IUserContext`.
+
+**Trust-the-Gateway auth:** Gateway verifies JWT once, enriches `X-User-Id`/`X-User-Roles`/`X-Merchant-Id`/`X-Permission-Scope` headers, strips Authorization before forwarding. Services do NOT verify JWT — they read identity from headers via `IUserContext` and authorize via MediatR behavior + ownership checks in handlers. See `docs/auth/trust-gateway-flow.md`.
 
 ### API Gateway (`src/Gateway/UrbanX.Gateway`)
 YARP reverse proxy. Routes all client requests to services, enforces JWT authentication, rate limiting, and CORS. Service URLs resolved via Aspire service discovery.
@@ -89,3 +91,6 @@ YARP reverse proxy. Routes all client requests to services, enforces JWT authent
 - `Directory.Packages.props` — centralized NuGet version management; add new packages here, not in individual `.csproj` files
 - `.env.example` — copy to `.env` for manual (non-Aspire) setup; contains DB connection strings, Stripe keys, etc.
 - Aspire handles connection strings and service URLs automatically in development via `WithReference()`
+
+## Token Optimization
+@.claude/rules/rtk-rules.md

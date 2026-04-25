@@ -19,9 +19,9 @@ namespace UrbanX.Catalog.API.Apis
               .MapGroup(BaseURL).HasApiVersion(1);
 
             group1.MapPost("/", CreateProductV1);
-            group1.MapPatch("/{productId:guid}", UpdateProductBasicInfoV1).RequireAuthorization();
-            group1.MapPut("/{productId:guid}/variants", UpdateProductVariantsV1).RequireAuthorization();
-            group1.MapGet("/{productId:guid}/variants/{variantId:guid}/delete-eligibility", GetVariantDeleteEligibilityV1).RequireAuthorization();
+            group1.MapPatch("/{productId:guid}", UpdateProductBasicInfoV1);
+            group1.MapPut("/{productId:guid}/variants", UpdateProductVariantsV1);
+            group1.MapGet("/{productId:guid}/variants/{variantId:guid}/delete-eligibility", GetVariantDeleteEligibilityV1);
         }
 
         public static async Task<IResult> CreateProductV1(

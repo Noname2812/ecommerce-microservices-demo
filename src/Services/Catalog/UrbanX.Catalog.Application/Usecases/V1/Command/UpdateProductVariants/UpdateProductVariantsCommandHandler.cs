@@ -1,4 +1,5 @@
 using Shared.Application;
+using Shared.Application.Authorization;
 using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
@@ -16,15 +17,18 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductVariants
         private readonly IProductRepository _productRepository;
         private readonly IOutboxWriter _outboxWriter;
         private readonly IInventoryServiceClient _inventoryServiceClient;
+        private readonly IUserContext _userContext;
 
         public UpdateProductVariantsCommandHandler(
             IProductRepository productRepository,
             IOutboxWriter outboxWriter,
-            IInventoryServiceClient inventoryServiceClient)
+            IInventoryServiceClient inventoryServiceClient,
+            IUserContext userContext)
         {
             _productRepository = productRepository;
             _outboxWriter = outboxWriter;
             _inventoryServiceClient = inventoryServiceClient;
+            _userContext = userContext;
         }
 
         public async Task<Result> Handle(UpdateProductVariantsCommand request, CancellationToken cancellationToken)
@@ -32,6 +36,9 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductVariants
             var product = await _productRepository.GetByIdForUpdateAsync(request.ProductId, cancellationToken);
             if (product is null)
                 return Result.Failure(CatalogErrors.ProductNotFound(request.ProductId));
+
+            if (_userContext.Scope == PermissionScope.Own && product.SellerId != _userContext.UserId)
+                return Result.Failure(CatalogErrors.Forbidden());
 
             var utcNow = DateTimeOffset.UtcNow;
             var dbVariants = product.Variants.Where(v => v.DeletedAt == null).ToList();

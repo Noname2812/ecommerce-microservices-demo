@@ -1,4 +1,5 @@
 using Moq;
+using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Abstractions;
@@ -15,15 +16,21 @@ public class UpdateProductVariantsCommandHandlerTests
     private readonly Mock<IProductRepository> _productRepository = new();
     private readonly Mock<IOutboxWriter> _outboxWriter = new();
     private readonly Mock<IInventoryServiceClient> _inventoryServiceClient = new();
+    private readonly Mock<IUserContext> _userContext = new();
 
     private readonly UpdateProductVariantsCommandHandler _handler;
 
     public UpdateProductVariantsCommandHandlerTests()
     {
+        _userContext.SetupGet(u => u.UserId).Returns(Guid.NewGuid());
+        _userContext.SetupGet(u => u.IsAuthenticated).Returns(true);
+        _userContext.SetupGet(u => u.Scope).Returns(PermissionScope.All);
+
         _handler = new UpdateProductVariantsCommandHandler(
             _productRepository.Object,
             _outboxWriter.Object,
-            _inventoryServiceClient.Object);
+            _inventoryServiceClient.Object,
+            _userContext.Object);
     }
 
     [Fact]
@@ -185,6 +192,7 @@ public class UpdateProductVariantsCommandHandlerTests
         // Arrange
         var product = MakeProduct(variantCount: 1);
         var v1 = product.Variants[0];
+        var originalSku = v1.Sku;
         SetupHappyPath(product);
 
         var command = new UpdateProductVariantsCommand(
@@ -198,13 +206,13 @@ public class UpdateProductVariantsCommandHandlerTests
         Assert.True(result.IsSuccess);
         _productRepository.Verify(
             r => r.AddSkuHistoryAsync(
-                It.Is<VariantSkuHistory>(h => h.OldSku == v1.Sku && h.NewSku == "CHANGED-SKU"),
+                It.Is<VariantSkuHistory>(h => h.OldSku == originalSku && h.NewSku == "CHANGED-SKU"),
                 It.IsAny<CancellationToken>()),
             Times.Once);
         _outboxWriter.Verify(
             w => w.WriteAsync(
                 It.Is<ProductUpdateIntegrationEvents.ProductVariantUpdatedV1>(e =>
-                    e.PreviousSku == v1.Sku),
+                    e.PreviousSku == originalSku),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -215,6 +223,7 @@ public class UpdateProductVariantsCommandHandlerTests
         // Arrange
         var product = MakeProduct(variantCount: 1);
         var v1 = product.Variants[0];
+        var originalPrice = v1.Price;
         SetupHappyPath(product);
 
         var command = new UpdateProductVariantsCommand(
@@ -228,13 +237,13 @@ public class UpdateProductVariantsCommandHandlerTests
         Assert.True(result.IsSuccess);
         _productRepository.Verify(
             r => r.AddPriceHistoryAsync(
-                It.Is<VariantPriceHistory>(h => h.OldPrice == v1.Price && h.NewPrice == 999_000),
+                It.Is<VariantPriceHistory>(h => h.OldPrice == originalPrice && h.NewPrice == 999_000),
                 It.IsAny<CancellationToken>()),
             Times.Once);
         _outboxWriter.Verify(
             w => w.WriteAsync(
                 It.Is<ProductUpdateIntegrationEvents.ProductVariantUpdatedV1>(e =>
-                    e.PreviousPrice == v1.Price),
+                    e.PreviousPrice == originalPrice),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }

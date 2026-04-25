@@ -1,8 +1,10 @@
 using FluentValidation;
 using Shared.Application;
+using Shared.Application.Authorization;
 
 namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductBasicInfo
 {
+    [RequirePermission(Permissions.Products.Write, MinScope = PermissionScope.Own)]
     public record UpdateProductBasicInfoCommand(
         Guid ProductId,
         string Name,

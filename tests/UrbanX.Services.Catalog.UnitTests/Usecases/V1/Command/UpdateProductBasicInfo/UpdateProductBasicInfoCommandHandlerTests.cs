@@ -1,4 +1,5 @@
 using Moq;
+using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductBasicInfo;
@@ -15,16 +16,22 @@ public class UpdateProductBasicInfoCommandHandlerTests
     private readonly Mock<ICategoryRepository> _categoryRepository = new();
     private readonly Mock<IBrandRepository> _brandRepository = new();
     private readonly Mock<IOutboxWriter> _outboxWriter = new();
+    private readonly Mock<IUserContext> _userContext = new();
 
     private readonly UpdateProductBasicInfoCommandHandler _handler;
 
     public UpdateProductBasicInfoCommandHandlerTests()
     {
+        _userContext.SetupGet(u => u.UserId).Returns(Guid.NewGuid());
+        _userContext.SetupGet(u => u.IsAuthenticated).Returns(true);
+        _userContext.SetupGet(u => u.Scope).Returns(PermissionScope.All);
+
         _handler = new UpdateProductBasicInfoCommandHandler(
             _productRepository.Object,
             _categoryRepository.Object,
             _brandRepository.Object,
-            _outboxWriter.Object);
+            _outboxWriter.Object,
+            _userContext.Object);
     }
 
     [Fact]
@@ -121,7 +128,7 @@ public class UpdateProductBasicInfoCommandHandlerTests
             .ReturnsAsync(false);
         _categoryRepository
             .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid id) => new Category { Id = id, Name = "Electronics", Slug = "electronics" });
+            .ReturnsAsync((Guid id, CancellationToken _) => new Category { Id = id, Name = "Electronics", Slug = "electronics" });
         _outboxWriter
             .Setup(w => w.WriteAsync(It.IsAny<ProductUpdateIntegrationEvents.ProductInfoUpdatedV1>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);

@@ -1,4 +1,5 @@
 using Shared.Application;
+using Shared.Application.Authorization;
 using Shared.Kernel.Primitives;
 using UrbanX.Catalog.Application.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Errors;
@@ -11,13 +12,16 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Query.GetVariantDeleteEligibili
     {
         private readonly IProductRepository _productRepository;
         private readonly IInventoryServiceClient _inventoryServiceClient;
+        private readonly IUserContext _userContext;
 
         public GetVariantDeleteEligibilityQueryHandler(
             IProductRepository productRepository,
-            IInventoryServiceClient inventoryServiceClient)
+            IInventoryServiceClient inventoryServiceClient,
+            IUserContext userContext)
         {
             _productRepository = productRepository;
             _inventoryServiceClient = inventoryServiceClient;
+            _userContext = userContext;
         }
 
         public async Task<Result<VariantDeleteEligibilityResult>> Handle(
@@ -27,6 +31,9 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Query.GetVariantDeleteEligibili
             var product = await _productRepository.GetByIdAsync(request.ProductId, cancellationToken);
             if (product is null)
                 return Result.Failure<VariantDeleteEligibilityResult>(CatalogErrors.ProductNotFound(request.ProductId));
+
+            if (_userContext.Scope == PermissionScope.Own && product.SellerId != _userContext.UserId)
+                return Result.Failure<VariantDeleteEligibilityResult>(CatalogErrors.Forbidden());
 
             var variant = product.Variants.FirstOrDefault(v => v.Id == request.VariantId && v.DeletedAt == null);
             if (variant is null)

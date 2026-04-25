@@ -1,3 +1,8 @@
+---
+name: add-command
+description: Tạo CQRS Command mới (Command record + Validator + Handler + Carter endpoint). Tự động invoke khi user yêu cầu thêm write operation, use case mới, hoặc bất kỳ từ khóa nào như "tạo command", "implement", "thêm feature", "xử lý", "create/update/delete/activate/publish" cho bất kỳ service nào trong UrbanX.
+allowed-tools: Read, Grep, LS
+---
 # Skill: add-command
 
 ## Khi nào dùng

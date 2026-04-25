@@ -1,4 +1,5 @@
 using Shared.Application;
+using Shared.Application.Authorization;
 using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
@@ -17,17 +18,20 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductBasicInfo
         private readonly ICategoryRepository _categoryRepository;
         private readonly IBrandRepository _brandRepository;
         private readonly IOutboxWriter _outboxWriter;
+        private readonly IUserContext _userContext;
 
         public UpdateProductBasicInfoCommandHandler(
             IProductRepository productRepository,
             ICategoryRepository categoryRepository,
             IBrandRepository brandRepository,
-            IOutboxWriter outboxWriter)
+            IOutboxWriter outboxWriter,
+            IUserContext userContext)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
             _brandRepository = brandRepository;
             _outboxWriter = outboxWriter;
+            _userContext = userContext;
         }
 
         public async Task<Result> Handle(UpdateProductBasicInfoCommand request, CancellationToken cancellationToken)
@@ -35,6 +39,10 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductBasicInfo
             var product = await _productRepository.GetByIdForUpdateAsync(request.ProductId, cancellationToken);
             if (product is null)
                 return Result.Failure(CatalogErrors.ProductNotFound(request.ProductId));
+
+            // Scope=Own enforces ownership: caller may only modify their own products.
+            if (_userContext.Scope == PermissionScope.Own && product.SellerId != _userContext.UserId)
+                return Result.Failure(CatalogErrors.Forbidden());
 
             var slug = string.IsNullOrWhiteSpace(request.Slug)
                 ? SlugHelper.ToSlug(request.Name)

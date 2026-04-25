@@ -5,7 +5,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shared.Application;
+using Shared.Application.Authorization;
 using Shared.Contract.Abstractions;
+using Shared.Messaging.Authorization;
 using Shared.Messaging.Behaviors;
 using Shared.Messaging.DependencyInjection.Options;
 using Shared.Messaging.Filters;
@@ -123,19 +125,25 @@ namespace Shared.Messaging.DependencyInjection.Extensions
         /// </summary>
         public static IServiceCollection AddMediator(
             this IServiceCollection services,
-            params Assembly[] handlerAssemblies)
+            Assembly assembly,
+            Action<MediatRServiceConfiguration>? configure = null)
         {
+            services.AddHttpContextAccessor();
+            services.AddScoped<IUserContext, UserHttpContext>();
+
             services.AddMediatR(cfg =>
             {
-                cfg.RegisterServicesFromAssemblies(handlerAssemblies);
+                cfg.RegisterServicesFromAssembly(assembly);
 
                 cfg.AddOpenBehavior(typeof(LoggingPipelineBehavior<,>));
-                cfg.AddOpenBehavior(typeof(ValidationPipelineBehavior<,>));
                 cfg.AddOpenBehavior(typeof(IdempotencyPipelineBehavior<,>));
+                cfg.AddOpenBehavior(typeof(AuthorizationPipelineBehavior<,>));
+                cfg.AddOpenBehavior(typeof(ValidationPipelineBehavior<,>));
+                configure?.Invoke(cfg);
             });
 
 
-            services.AddValidatorsFromAssemblies(handlerAssemblies);
+            services.AddValidatorsFromAssembly(assembly);
 
             return services;
         }

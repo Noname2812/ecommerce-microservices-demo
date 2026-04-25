@@ -1,4 +1,5 @@
 using Shared.Application;
+using Shared.Application.Authorization;
 using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
@@ -18,19 +19,22 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
         private readonly IBrandRepository _brandRepository;
         private readonly IAttributeDefinitionRepository _attributeDefinitionRepository;
         private readonly IOutboxWriter _outboxWriter;
+        private readonly IUserContext _userContext;
 
         public CreateProductCommandHandler(
             IProductRepository productRepository,
             ICategoryRepository categoryRepository,
             IBrandRepository brandRepository,
             IAttributeDefinitionRepository attributeDefinitionRepository,
-            IOutboxWriter outboxWriter)
+            IOutboxWriter outboxWriter,
+            IUserContext userContext)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
             _brandRepository = brandRepository;
             _attributeDefinitionRepository = attributeDefinitionRepository;
             _outboxWriter = outboxWriter;
+            _userContext = userContext;
         }
 
         public async Task<Result<Guid>> Handle(CreateProductCommand request, CancellationToken cancellationToken)
@@ -121,6 +125,11 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
                 };
             }
 
+            // Identity is derived from the trusted gateway header (X-User-Id) via IUserContext.
+            // AuthorizationPipelineBehavior guarantees IsAuthenticated == true before reaching here.
+            var sellerId = _userContext.UserId!.Value;
+            var sellerName = sellerId.ToString();
+
             var product = Product.Create(
                 request.Sku,
                 request.Name,
@@ -132,8 +141,8 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
                 category.Name,
                 brand?.Name,
                 request.BasePrice,
-                request.SellerId,
-                request.SellerName,
+                sellerId,
+                sellerName,
                 request.Status ?? ProductStatus.Draft,
                 request.WeightGrams,
                 dimensions,

@@ -50,32 +50,6 @@ public class CreateProductCommandValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.CategoryId);
     }
 
-    [Fact]
-    public void Validate_WhenSellerIdIsEmpty_HasValidationError()
-    {
-        var command = ValidCommand() with { SellerId = Guid.Empty };
-        var result = _validator.TestValidate(command);
-        result.ShouldHaveValidationErrorFor(x => x.SellerId);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Validate_WhenSellerNameIsEmpty_HasValidationError(string sellerName)
-    {
-        var command = ValidCommand() with { SellerName = sellerName };
-        var result = _validator.TestValidate(command);
-        result.ShouldHaveValidationErrorFor(x => x.SellerName);
-    }
-
-    [Fact]
-    public void Validate_WhenSellerNameExceedsMaxLength_HasValidationError()
-    {
-        var command = ValidCommand() with { SellerName = new string('A', 256) };
-        var result = _validator.TestValidate(command);
-        result.ShouldHaveValidationErrorFor(x => x.SellerName);
-    }
-
     [Theory]
     [InlineData(-1)]
     [InlineData(-100)]
@@ -166,8 +140,6 @@ public class CreateProductCommandValidatorTests
         CategoryId: Guid.NewGuid(),
         BrandId: null,
         BasePrice: 100_000,
-        SellerId: Guid.NewGuid(),
-        SellerName: "Test Seller",
         Status: null,
         WeightGrams: null,
         Dimensions: null,
