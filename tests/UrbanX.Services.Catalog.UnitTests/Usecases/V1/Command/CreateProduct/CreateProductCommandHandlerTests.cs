@@ -32,10 +32,14 @@ public class CreateProductCommandHandlerTests
     [Fact]
     public async Task Handle_WithValidCommand_ReturnsSuccessWithProductId()
     {
+        // Arrange
         SetupHappyPath();
+        var command = ValidCommand();
 
-        var result = await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         Assert.True(result.IsSuccess);
         Assert.NotEqual(Guid.Empty, result.Value);
     }
@@ -43,22 +47,30 @@ public class CreateProductCommandHandlerTests
     [Fact]
     public async Task Handle_WithValidCommand_WritesOutboxOnce()
     {
+        // Arrange
         SetupHappyPath();
+        var command = ValidCommand();
 
-        await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         _outboxWriter.Verify(
             w => w.WriteAsync(It.IsAny<ProductIntegrationEvents.ProductCreatedV1>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task Handle_WithValidCommand_CallsRepositoryAddOnce()
+    public async Task Handle_WithValidCommand_CallsAddAsyncOnce()
     {
+        // Arrange
         SetupHappyPath();
+        var command = ValidCommand();
 
-        await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         _productRepository.Verify(
             r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()),
             Times.Once);
@@ -67,86 +79,113 @@ public class CreateProductCommandHandlerTests
     [Fact]
     public async Task Handle_WhenSlugInUse_ReturnsSlugInUseError()
     {
+        // Arrange
         SetupHappyPath();
         _productRepository
             .Setup(r => r.SlugInUseAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+        var command = ValidCommand();
 
-        var result = await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         Assert.True(result.IsFailure);
         Assert.Equal(ProductErrors.SlugInUse("x").Code, result.Error.Code);
     }
 
     [Fact]
-    public async Task Handle_WhenSlugInUse_DoesNotCallRepositoryAdd()
+    public async Task Handle_WhenSlugInUse_DoesNotCallAddAsync()
     {
+        // Arrange
         SetupHappyPath();
         _productRepository
             .Setup(r => r.SlugInUseAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
+        // Act
         await _handler.Handle(ValidCommand(), CancellationToken.None);
 
+        // Assert
         _productRepository.Verify(
             r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
-    public async Task Handle_WhenProductSkuInUse_ReturnsSkuInUseError()
+    public async Task Handle_WhenSlugInUse_DoesNotCallOutboxWriter()
     {
+        // Arrange
         SetupHappyPath();
         _productRepository
-            .Setup(r => r.SkuInUseAsync("SKU-001", It.IsAny<CancellationToken>()))
+            .Setup(r => r.SlugInUseAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        await _handler.Handle(ValidCommand(), CancellationToken.None);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(ProductErrors.SkuInUse("SKU-001").Code, result.Error.Code);
+        // Assert
+        _outboxWriter.Verify(
+            w => w.WriteAsync(It.IsAny<ProductIntegrationEvents.ProductCreatedV1>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
-    [Fact]
-    public async Task Handle_WhenVariantSkuInUse_ReturnsSkuInUseError()
+    [Theory]
+    [InlineData("SKU-001")]
+    [InlineData("VAR-001")]
+    public async Task Handle_WhenSkuInUse_ReturnsSkuInUseError(string inUseSku)
     {
+        // Arrange
         SetupHappyPath();
         _productRepository
-            .Setup(r => r.SkuInUseAsync("VAR-001", It.IsAny<CancellationToken>()))
+            .Setup(r => r.SkuInUseAsync(inUseSku, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+        var command = inUseSku == "SKU-001"
+            ? ValidCommand()
+            : ValidCommand() with { Variants = [ValidVariant() with { Sku = inUseSku }] };
 
-        var result = await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         Assert.True(result.IsFailure);
-        Assert.Equal(ProductErrors.SkuInUse("VAR-001").Code, result.Error.Code);
+        Assert.Equal(ProductErrors.SkuInUse(inUseSku).Code, result.Error.Code);
     }
 
     [Fact]
     public async Task Handle_WhenCategoryNotFound_ReturnsCategoryNotFoundError()
     {
+        // Arrange
         SetupHappyPath();
+        var categoryId = Guid.NewGuid();
         _categoryRepository
-            .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByIdAsync(categoryId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Category?)null);
+        var command = ValidCommand() with { CategoryId = categoryId };
 
-        var result = await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         Assert.True(result.IsFailure);
-        Assert.Equal(ProductErrors.CategoryNotFound(Guid.Empty).Code, result.Error.Code);
+        Assert.Equal(ProductErrors.CategoryNotFound(categoryId).Code, result.Error.Code);
     }
 
     [Fact]
     public async Task Handle_WhenBrandIdProvidedButBrandNotFound_ReturnsBrandNotFoundError()
     {
+        // Arrange
         SetupHappyPath();
         var brandId = Guid.NewGuid();
         _brandRepository
             .Setup(r => r.GetByIdAsync(brandId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Brand?)null);
-
         var command = ValidCommand() with { BrandId = brandId };
+
+        // Act
         var result = await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         Assert.True(result.IsFailure);
         Assert.Equal(ProductErrors.BrandNotFound(brandId).Code, result.Error.Code);
     }
@@ -154,19 +193,25 @@ public class CreateProductCommandHandlerTests
     [Fact]
     public async Task Handle_WhenBrandIdIsNull_DoesNotCallBrandRepository()
     {
+        // Arrange
         SetupHappyPath();
+        var command = ValidCommand();
 
-        await _handler.Handle(ValidCommand(), CancellationToken.None);
+        // Act
+        await _handler.Handle(command, CancellationToken.None);
 
+        // Assert
         _brandRepository.Verify(
             r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
-    public async Task Handle_WhenVariantHasAttributes_CallsGetOrCreatePerAttribute()
+    public async Task Handle_WhenVariantHasAttributes_CallsGetOrCreateAsyncPerAttribute()
     {
+        // Arrange
         SetupHappyPath();
+        var attributeDefinition = new AttributeDefinition { Id = Guid.NewGuid(), Name = "Color" };
         _attributeDefinitionRepository
             .Setup(r => r.GetOrCreateAsync(
                 It.IsAny<Guid?>(),
@@ -175,7 +220,7 @@ public class CreateProductCommandHandlerTests
                 It.IsAny<bool>(),
                 It.IsAny<int>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AttributeDefinition { Id = Guid.NewGuid(), Name = "Color" });
+            .ReturnsAsync(attributeDefinition);
 
         var command = ValidCommand() with
         {
@@ -197,8 +242,10 @@ public class CreateProductCommandHandlerTests
             ]
         };
 
+        // Act
         await _handler.Handle(command, CancellationToken.None);
 
+        // Assert — verify called twice (once per attribute)
         _attributeDefinitionRepository.Verify(
             r => r.GetOrCreateAsync(
                 It.IsAny<Guid?>(),
@@ -210,8 +257,58 @@ public class CreateProductCommandHandlerTests
             Times.Exactly(2));
     }
 
+    [Fact]
+    public async Task Handle_WithMultipleVariants_ReturnsSuccessAndWritesEvent()
+    {
+        // Arrange
+        SetupHappyPath();
+        var command = ValidCommand() with
+        {
+            Variants =
+            [
+                ValidVariant() with { Sku = "VAR-001" },
+                ValidVariant() with { Sku = "VAR-002", Name = "Variant 2" }
+            ]
+        };
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        _productRepository.Verify(
+            r => r.AddAsync(It.Is<Product>(p => p.Variants.Count == 2), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WithProductImages_CallsAddAsyncWithImages()
+    {
+        // Arrange
+        SetupHappyPath();
+        var command = ValidCommand() with
+        {
+            ProductImages =
+            [
+                new CreateProductImageItem("https://example.com/img1.jpg", "Image 1", 0, true),
+                new CreateProductImageItem("https://example.com/img2.jpg", "Image 2", 1, false)
+            ]
+        };
+
+        // Act
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        _productRepository.Verify(
+            r => r.AddAsync(It.Is<Product>(p => p.Images.Count == 2), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     private void SetupHappyPath()
     {
+        var categoryId = Guid.NewGuid();
+
         _productRepository
             .Setup(r => r.SlugInUseAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
@@ -221,9 +318,11 @@ public class CreateProductCommandHandlerTests
         _productRepository
             .Setup(r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+
         _categoryRepository
             .Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Category { Id = Guid.NewGuid(), Name = "Electronics", Slug = "electronics" });
+            .ReturnsAsync((Guid id) => new Category { Id = id, Name = "Electronics", Slug = "electronics" });
+
         _outboxWriter
             .Setup(w => w.WriteAsync(It.IsAny<ProductIntegrationEvents.ProductCreatedV1>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -247,16 +346,16 @@ public class CreateProductCommandHandlerTests
         MetaTitle: null,
         MetaDescription: null,
         ProductImages: [],
-        Variants:
-        [
-            new CreateProductVariantItem(
-                Sku: "VAR-001",
-                Name: "Default",
-                Price: 100_000,
-                CompareAtPrice: null,
-                ImageUrl: null,
-                Barcode: null,
-                Attributes: [],
-                GalleryImages: [])
-        ]);
+        Variants: [ValidVariant()]);
+
+    private static CreateProductVariantItem ValidVariant() => new(
+        Sku: "VAR-001",
+        Name: "Default",
+        Price: 100_000,
+        CompareAtPrice: null,
+        ImageUrl: null,
+        Barcode: null,
+        Attributes: [],
+        GalleryImages: []);
 }
+

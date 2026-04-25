@@ -9,15 +9,17 @@ Luôn hỏi xác nhận trước khi xóa bất kỳ file nào, kể cả file t
 - Không dùng emoji trừ khi được yêu cầu
 
 ## 3. Cập nhật docs
-Mỗi khi thêm feature mới hoặc thay đổi behavior của service, tạo/cập nhật file doc tương ứng:
-
+- Mỗi khi thêm feature mới hoặc thay đổi behavior của service, tạo/cập nhật file doc tương ứng.
 ```
 ./docs/<service-name>/<feature-name>.md
 
-## 4. Scope
+```
+
+## 4. Chỉ được phép build khi thay đổi code. Không cần phải run thật.
+
+## 5. Scope
  - Khi làm việc với service cụ thể, CHỈ đọc files trong folder đó.
  - Không cần đọc các service khác trừ khi được yêu cầu rõ ràng.
-```
 
 **Ví dụ:**
 - Thêm endpoint product-search vào Catalog → `./docs/catalog/product-search.md`

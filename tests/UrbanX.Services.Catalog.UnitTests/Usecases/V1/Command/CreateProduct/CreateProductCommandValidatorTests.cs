@@ -14,10 +14,12 @@ public class CreateProductCommandValidatorTests
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    [Fact]
-    public void Validate_WhenSkuIsEmpty_HasValidationError()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Validate_WhenSkuIsEmpty_HasValidationError(string sku)
     {
-        var command = ValidCommand() with { Sku = "" };
+        var command = ValidCommand() with { Sku = sku };
         var result = _validator.TestValidate(command);
         result.ShouldHaveValidationErrorFor(x => x.Sku);
     }
@@ -30,10 +32,12 @@ public class CreateProductCommandValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.Sku);
     }
 
-    [Fact]
-    public void Validate_WhenNameIsEmpty_HasValidationError()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Validate_WhenNameIsEmpty_HasValidationError(string name)
     {
-        var command = ValidCommand() with { Name = "" };
+        var command = ValidCommand() with { Name = name };
         var result = _validator.TestValidate(command);
         result.ShouldHaveValidationErrorFor(x => x.Name);
     }
@@ -54,20 +58,40 @@ public class CreateProductCommandValidatorTests
         result.ShouldHaveValidationErrorFor(x => x.SellerId);
     }
 
-    [Fact]
-    public void Validate_WhenSellerNameIsEmpty_HasValidationError()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Validate_WhenSellerNameIsEmpty_HasValidationError(string sellerName)
     {
-        var command = ValidCommand() with { SellerName = "" };
+        var command = ValidCommand() with { SellerName = sellerName };
         var result = _validator.TestValidate(command);
         result.ShouldHaveValidationErrorFor(x => x.SellerName);
     }
 
     [Fact]
-    public void Validate_WhenBasePriceIsNegative_HasValidationError()
+    public void Validate_WhenSellerNameExceedsMaxLength_HasValidationError()
     {
-        var command = ValidCommand() with { BasePrice = -1 };
+        var command = ValidCommand() with { SellerName = new string('A', 256) };
+        var result = _validator.TestValidate(command);
+        result.ShouldHaveValidationErrorFor(x => x.SellerName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-100)]
+    public void Validate_WhenBasePriceIsNegative_HasValidationError(decimal price)
+    {
+        var command = ValidCommand() with { BasePrice = price };
         var result = _validator.TestValidate(command);
         result.ShouldHaveValidationErrorFor(x => x.BasePrice);
+    }
+
+    [Fact]
+    public void Validate_WhenVariantsIsNull_HasValidationError()
+    {
+        var command = ValidCommand() with { Variants = null! };
+        var result = _validator.TestValidate(command);
+        result.ShouldHaveValidationErrorFor(x => x.Variants);
     }
 
     [Fact]
@@ -98,7 +122,7 @@ public class CreateProductCommandValidatorTests
             Variants =
             [
                 ValidVariant() with { Sku = "VAR-DUP" },
-                ValidVariant() with { Sku = "VAR-DUP" }
+                ValidVariant() with { Sku = "VAR-DUP", Name = "Variant 2" }
             ]
         };
         var result = _validator.TestValidate(command);
@@ -114,6 +138,23 @@ public class CreateProductCommandValidatorTests
         };
         var result = _validator.TestValidate(command);
         Assert.NotEmpty(result.Errors);
+        Assert.True(result.Errors.Any(e => e.PropertyName.Contains("Url")));
+    }
+
+    [Fact]
+    public void Validate_WhenProductImageUrlIsValid_HasNoError()
+    {
+        var command = ValidCommand() with
+        {
+            ProductImages =
+            [
+                new CreateProductImageItem("https://example.com/img.jpg", "alt text", 0, true),
+                new CreateProductImageItem("https://cdn.example.com/img2.png", null, 1, false)
+            ]
+        };
+        var result = _validator.TestValidate(command);
+        // Should not have errors on ProductImages
+        Assert.False(result.Errors.Any(e => e.PropertyName.Contains("ProductImages")));
     }
 
     private static CreateProductCommand ValidCommand() => new(
@@ -158,18 +199,31 @@ public class CreateProductVariantItemValidatorTests
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    [Fact]
-    public void Validate_WhenSkuIsEmpty_HasValidationError()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Validate_WhenSkuIsEmpty_HasValidationError(string sku)
     {
-        var variant = ValidVariant() with { Sku = "" };
+        var variant = ValidVariant() with { Sku = sku };
         var result = _validator.TestValidate(variant);
         result.ShouldHaveValidationErrorFor(x => x.Sku);
     }
 
     [Fact]
-    public void Validate_WhenPriceIsZero_HasValidationError()
+    public void Validate_WhenSkuExceedsMaxLength_HasValidationError()
     {
-        var variant = ValidVariant() with { Price = 0 };
+        var variant = ValidVariant() with { Sku = new string('A', 101) };
+        var result = _validator.TestValidate(variant);
+        result.ShouldHaveValidationErrorFor(x => x.Sku);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-100)]
+    public void Validate_WhenPriceIsZeroOrNegative_HasValidationError(decimal price)
+    {
+        var variant = ValidVariant() with { Price = price };
         var result = _validator.TestValidate(variant);
         result.ShouldHaveValidationErrorFor(x => x.Price);
     }
@@ -183,19 +237,72 @@ public class CreateProductVariantItemValidatorTests
     }
 
     [Fact]
-    public void Validate_WhenCompareAtPriceIsZero_HasValidationError()
+    public void Validate_WhenPriceIsValid_HasNoError()
     {
-        var variant = ValidVariant() with { CompareAtPrice = 0 };
+        var variant = ValidVariant() with { Price = 1m };
+        var result = _validator.TestValidate(variant);
+        result.ShouldNotHaveValidationErrorFor(x => x.Price);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Validate_WhenCompareAtPriceIsZeroOrNegative_HasValidationError(decimal price)
+    {
+        var variant = ValidVariant() with { CompareAtPrice = price };
         var result = _validator.TestValidate(variant);
         result.ShouldHaveValidationErrorFor(x => x.CompareAtPrice);
     }
 
     [Fact]
-    public void Validate_WhenImageUrlIsInvalid_HasValidationError()
+    public void Validate_WhenCompareAtPriceIsNull_HasNoError()
     {
-        var variant = ValidVariant() with { ImageUrl = "not-a-valid-url" };
+        var variant = ValidVariant() with { CompareAtPrice = null };
+        var result = _validator.TestValidate(variant);
+        result.ShouldNotHaveValidationErrorFor(x => x.CompareAtPrice);
+    }
+
+    [Fact]
+    public void Validate_WhenCompareAtPriceIsPositive_HasNoError()
+    {
+        var variant = ValidVariant() with { CompareAtPrice = 150_000 };
+        var result = _validator.TestValidate(variant);
+        result.ShouldNotHaveValidationErrorFor(x => x.CompareAtPrice);
+    }
+
+    [Theory]
+    [InlineData("not-a-valid-url")]
+    [InlineData("htp://invalid.com")]
+    [InlineData("")]
+    public void Validate_WhenImageUrlIsInvalid_HasValidationError(string imageUrl)
+    {
+        var variant = ValidVariant() with { ImageUrl = imageUrl };
         var result = _validator.TestValidate(variant);
         result.ShouldHaveValidationErrorFor(x => x.ImageUrl);
+    }
+
+    [Fact]
+    public void Validate_WhenImageUrlIsNull_HasNoError()
+    {
+        var variant = ValidVariant() with { ImageUrl = null };
+        var result = _validator.TestValidate(variant);
+        result.ShouldNotHaveValidationErrorFor(x => x.ImageUrl);
+    }
+
+    [Fact]
+    public void Validate_WhenImageUrlIsValidHttps_HasNoError()
+    {
+        var variant = ValidVariant() with { ImageUrl = "https://cdn.example.com/image.jpg" };
+        var result = _validator.TestValidate(variant);
+        result.ShouldNotHaveValidationErrorFor(x => x.ImageUrl);
+    }
+
+    [Fact]
+    public void Validate_WhenBarcodeExceedsMaxLength_HasValidationError()
+    {
+        var variant = ValidVariant() with { Barcode = new string('1', 101) };
+        var result = _validator.TestValidate(variant);
+        result.ShouldHaveValidationErrorFor(x => x.Barcode);
     }
 
     private static CreateProductVariantItem ValidVariant() => new(
