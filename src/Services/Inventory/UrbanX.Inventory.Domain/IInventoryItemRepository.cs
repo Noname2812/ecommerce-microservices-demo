@@ -1,0 +1,8 @@
+using UrbanX.Inventory.Domain.Models;
+
+namespace UrbanX.Inventory.Domain;
+
+public interface IInventoryItemRepository
+{
+    // Methods sẽ được thêm theo từng use case
+}

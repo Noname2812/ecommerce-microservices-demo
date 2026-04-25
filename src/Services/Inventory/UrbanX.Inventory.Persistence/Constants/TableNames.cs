@@ -2,5 +2,8 @@ namespace UrbanX.Inventory.Persistence.Constants;
 
 internal static class TableNames
 {
-    // Table name constants sẽ được thêm theo từng entity (snake_case, số nhiều)
+    internal const string Warehouses = "warehouses";
+    internal const string InventoryItems = "inventory_items";
+    internal const string InventoryReservations = "inventory_reservations";
+    internal const string StockMovements = "stock_movements";
 }
