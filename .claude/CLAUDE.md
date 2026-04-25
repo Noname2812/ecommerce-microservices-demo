@@ -158,8 +158,8 @@ Get-ChildItem "tests\UrbanX.Services.Catalog.UnitTests\bin" -Recurse -Include "*
 ## Skills & Agents
 | Task | Dùng |
 |---|---|
-| Tạo Command             | skill `command` |
-| Tạo Query               | skill `query` |
+| Tạo Command             | skill `add-command` — đọc `.claude/skills/add-command/SKILL.md` |
+| Tạo Query               | skill `add-query` — đọc `.claude/skills/add-query/SKILL.md` |
 | Review code C#          | skill `code-reviewer` hoặc agent `code-reviewer` |
 | Viết unit test          | skill `unit-test-writer` — đọc `.claude/skills/unit-test-writer/SKILL.md` |
 | Viết integration test   | skill `integration-test-writer` |
