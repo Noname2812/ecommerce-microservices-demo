@@ -2,7 +2,7 @@
 
 .NET 10 — Clean Architecture, Carter, MediatR (CQRS), EF Core + PostgreSQL, Transactional Outbox.
 
-Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `inventorydb` | Status: **Active (scaffold)**
+Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `inventorydb` | Status: **Active**
 
 ---
 
@@ -22,12 +22,46 @@ Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `invent
 
 ## Domain
 
-Chưa có entity. Dùng skill `migration-generator` để tạo Domain model + EF config + migration.
+### Entities
 
-Placeholder folders:
-- `Domain/Models/`
-- `Domain/ValueObjects/`
-- `Domain/Exceptions/`
+**Warehouse** — kho hàng vật lý
+- `Guid Id`, `string Name`, `string Code` (unique), `bool IsActive`
+- `WarehouseAddress Address` — value object lưu JSONB
+- Navigation: `ICollection<InventoryItem> InventoryItems`
+
+**InventoryItem** — aggregate chính; nguồn sự thật duy nhất về stock, per variant × warehouse
+- Denormalized từ Catalog (không có FK cross-service): `ProductId`, `ProductName`, `VariantId`, `VariantSku`, `VariantName?`
+- `Guid? WarehouseId` — FK → `warehouses`
+- `int QuantityOnHand`, `int QuantityReserved`
+- `int QuantityAvailable` — **computed column** `quantity_on_hand - quantity_reserved` (read-only, `private set`)
+- `int ReorderPoint` (default 10), `int ReorderQuantity` (default 50)
+- `DateTimeOffset UpdatedAt`
+- Unique constraint: `(VariantId, WarehouseId)`
+- Navigation: `Warehouse?`, `ICollection<InventoryReservation> Reservations`, `ICollection<StockMovement> Movements`
+
+**InventoryReservation** — giữ hàng khi order được tạo
+- `Guid InventoryItemId` → FK cascade, `Guid OrderId`, `Guid OrderItemId`
+- `int Quantity`, `string Status` (`ReservationStatus`), `DateTimeOffset ExpiresAt`
+- `DateTimeOffset CreatedAt`, `DateTimeOffset UpdatedAt`
+
+**StockMovement** — append-only audit trail, không bao giờ xóa
+- `Guid InventoryItemId` → FK restrict, `string MovementType` (`MovementType`)
+- `int QuantityChange` (Positive = nhập, Negative = xuất), `int QuantityBefore`, `int QuantityAfter`
+- `string? ReferenceType`, `Guid? ReferenceId`, `string? Note`
+- `Guid? CreatedById`, `string? CreatedByName` — cross-service, không có FK
+- `DateTimeOffset CreatedAt`
+
+### Value Objects
+
+| Type | Kind | Values |
+|---|---|---|
+| `WarehouseAddress` | `record` | `Street?, Ward?, District?, City?, Province?, Country?, ZipCode?` |
+| `ReservationStatus` | `static class` | `Reserved, Confirmed, Released, Cancelled` |
+| `MovementType` | `static class` | `Receipt, Sale, Return, Adjustment, TransferIn, TransferOut, Reservation, Release` |
+
+### Repository Interfaces (trong Domain project)
+
+**`IWarehouseRepository`**, **`IInventoryItemRepository`**, **`IInventoryReservationRepository`**, **`IStockMovementRepository`** — hiện tại empty; methods thêm theo từng use case.
 
 ---
 
@@ -52,19 +86,45 @@ public static Error NotFound(Guid id) =>
 
 ### `InventoryDbContext`
 
-Kế thừa `OutboxDbContext` (từ `Shared.Outbox`). DbSets sẽ được thêm theo entity.
+Kế thừa `OutboxDbContext` (từ `Shared.Outbox`). DbSets:
+
+`Warehouses`, `InventoryItems`, `InventoryReservations`, `StockMovements` + `OutboxMessages` (inherited)
+
+### Table Names
+
+| Entity | Table |
+|---|---|
+| Warehouse | `warehouses` |
+| InventoryItem | `inventory_items` |
+| InventoryReservation | `inventory_reservations` |
+| StockMovement | `stock_movements` |
+
+### Notable EF Config
+
+- `InventoryItem.QuantityAvailable` — `HasComputedColumnSql("quantity_on_hand - quantity_reserved", stored: true)`
+- `Warehouse.Address` — `HasColumnType("jsonb")` với `System.Text.Json` ValueConverter
+- `InventoryItem.(VariantId, WarehouseId)` — composite unique index
+- `StockMovement.(InventoryItemId, CreatedAt)` — index cho audit query
+- `InventoryReservation.(Status, ExpiresAt)` — index cho expiry sweep
+- Tất cả PKs: `ValueGeneratedNever()` (app assigns GUID)
+
+### Repositories
+
+`WarehouseRepository`, `InventoryItemRepository`, `InventoryReservationRepository`, `StockMovementRepository` — sealed, hiện tại empty.
+
+### Migrations
+
+Pending: `InitialCreate` (chưa chạy — xem `docs/inventory/migrations/initial-schema.md`)
+
+```bash
+cd src/Services/Inventory/UrbanX.Inventory.Persistence
+dotnet ef migrations add InitialCreate
+```
 
 ### Design-Time Factory
 
 `InventoryDbContextFactory` đọc env var `ConnectionStrings__inventorydb`.  
 Fallback: `Host=localhost;Port=5432;Database=urbanx_inventory;Username=postgres;Password=postgres`
-
-### Migrations
-
-```bash
-cd src/Services/Inventory/UrbanX.Inventory.Persistence
-dotnet ef migrations add <MigrationName>
-```
 
 ---
 

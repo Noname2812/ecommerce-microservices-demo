@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "UrbanX.Inventory.API": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:55446;http://localhost:55447"
+    }
+  }
+}

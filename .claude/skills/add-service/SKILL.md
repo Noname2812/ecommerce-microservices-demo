@@ -55,12 +55,16 @@ Hỏi (nếu chưa rõ):
                                 Apis/<Entity>Apis.cs           (placeholder Carter module)
                                 Program.cs
 6.  AppHost.cs                  Thêm đăng ký service mới
-7.  docs/<service>/             <service>-service.md
+7.  UrbanX.AppHost.csproj       Thêm ProjectReference đến API project
+8.  UrbanX.sln                  Chạy dotnet sln add cho 5 projects
+9.  docs/<service>/             <service>-service.md
 ```
 
 ### Bước 4 — Không build, không run
 
-Chỉ viết file. Nhắc người dùng chạy `dotnet sln add` và EF migration nếu cần.
+Chỉ viết file. Sau khi viết xong toàn bộ file, thực hiện thêm 2 bước tự động:
+1. Chạy `dotnet sln add` cho 5 projects vào `UrbanX.sln`
+2. Thêm `ProjectReference` của API project vào `UrbanX.AppHost.csproj`
 
 ### Bước 5 — Nếu có schema database / plan migration
 
@@ -670,11 +674,25 @@ gateway
 
 ---
 
+### File 20.5: Thêm ProjectReference vào AppHost
+
+**Sửa file:** `src/AppHost/UrbanX.AppHost/UrbanX.AppHost.csproj`
+
+Thêm dòng sau vào `<ItemGroup>` chứa các `ProjectReference`:
+
+```xml
+<ProjectReference Include="..\..\Services\<Service>\UrbanX.<Service>.API\UrbanX.<Service>.API.csproj" />
+```
+
+Aspire cần ProjectReference này để generate type-safe `Projects.UrbanX_<Service>_API` dùng trong `AppHost.cs`.
+
+---
+
 ## Sau khi scaffold xong
 
-### Thêm vào solution
+### Thêm vào solution (Claude tự chạy)
 
-Nhắc người dùng chạy lệnh sau (Claude không chạy tự động):
+Chạy các lệnh sau để thêm 5 projects vào `UrbanX.sln`:
 
 ```bash
 dotnet sln UrbanX.sln add src/Services/<Service>/UrbanX.<Service>.Domain/UrbanX.<Service>.Domain.csproj
@@ -717,9 +735,10 @@ Thêm vào `src/Gateway/UrbanX.Gateway/appsettings.json`:
 - [ ] `Program.cs` dùng đúng connection string name (khớp với AppHost)
 - [ ] `AddApplication()` gọi `AddMediator` + TransactionBehavior + `AddPersistence`
 - [ ] AppHost đăng ký đúng: database resource → service project → gateway reference
+- [ ] `UrbanX.AppHost.csproj` đã có `ProjectReference` đến API project
 - [ ] Placeholder Carter module tạo đúng URL pattern
 - [ ] `ApiEndpoint.cs` có `To<Service>Result` tên đúng theo service
-- [ ] Nhắc người dùng `dotnet sln add` cho 5 projects
+- [ ] Đã chạy `dotnet sln add` cho 5 projects (Claude tự làm)
 - [ ] Doc: tạo `docs/<service_lowercase>/<service_lowercase>-service.md`
 
 ---
@@ -753,12 +772,19 @@ gateway
     .WaitFor(orderService);
 ```
 
-### dotnet sln commands
+### AppHost.csproj — thêm ProjectReference
 
+```xml
+<ProjectReference Include="..\..\Services\Order\UrbanX.Order.API\UrbanX.Order.API.csproj" />
+```
+
+### dotnet sln commands (Claude tự chạy)
 ```bash
-dotnet sln UrbanX.sln add src/Services/Order/UrbanX.Order.Domain/UrbanX.Order.Domain.csproj
-dotnet sln UrbanX.sln add src/Services/Order/UrbanX.Order.Infrastructure/UrbanX.Order.Infrastructure.csproj
-dotnet sln UrbanX.sln add src/Services/Order/UrbanX.Order.Persistence/UrbanX.Order.Persistence.csproj
-dotnet sln UrbanX.sln add src/Services/Order/UrbanX.Order.Application/UrbanX.Order.Application.csproj
-dotnet sln UrbanX.sln add src/Services/Order/UrbanX.Order.API/UrbanX.Order.API.csproj
+dotnet sln UrbanX.sln add `
+  --solution-folder "src/Services/Order" `
+  src/Services/Order/UrbanX.Order.API/UrbanX.Order.API.csproj `
+  src/Services/Order/UrbanX.Order.Application/UrbanX.Order.Application.csproj `
+  src/Services/Order/UrbanX.Order.Domain/UrbanX.Order.Domain.csproj `
+  src/Services/Order/UrbanX.Order.Infrastructure/UrbanX.Order.Infrastructure.csproj `
+  src/Services/Order/UrbanX.Order.Persistence/UrbanX.Order.Persistence.csproj
 ```

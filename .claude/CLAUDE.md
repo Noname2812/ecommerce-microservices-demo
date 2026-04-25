@@ -15,7 +15,7 @@
 | **Order** | 5002 | Disabled | PostgreSQL | Saga choreography |
 | **Payment** | 5004 | Disabled | PostgreSQL | Stripe + Outbox |
 | **Merchant** | 5003 | Disabled | PostgreSQL | — |
-| **Inventory** | dynamic | Active | PostgreSQL (`urbanx_inventory`) | CQRS + Outbox, scaffold |
+| **Inventory** | dynamic | Active | PostgreSQL (`urbanx_inventory`) | CQRS + Outbox; 4 entities: Warehouse, InventoryItem, Reservation, StockMovement |
 | **Frontend** | 5173 | Disabled | — | React 19 + Vite |
 
 Infrastructure (Aspire tự quản lý): PostgreSQL, RabbitMQ, Elasticsearch, Redis.
@@ -85,6 +85,8 @@ Contracts ở `Shared.Contract/Messaging/`:
 - `Catalog/ProductCreated.cs`
 - `Catalog/ProductUpdateEvents.cs`
 - Consumer kế thừa `IntegrationEventConsumerBase` từ `Shared.Messaging`
+- Consumer đặt trong `*.Application/Messaging/`, đăng ký qua `bus.AddConsumer<>()` trong `Program.cs`
+- Sử dụng skill: `add-consumer`
 
 ### Saga Choreography (Order flow — planned)
 Order → Inventory → Payment → Merchant, mỗi service emit event kế tiếp.
@@ -166,6 +168,7 @@ Get-ChildItem "tests\UrbanX.Services.Catalog.UnitTests\bin" -Recurse -Include "*
 |---|---|
 | Tạo Command             | skill `add-command` — đọc `.claude/skills/add-command/SKILL.md` |
 | Tạo Query               | skill `add-query` — đọc `.claude/skills/add-query/SKILL.md` |
+| Thêm Consumer           | skill `add-consumer` — đọc `.claude/skills/add-consumer/SKILL.md` |
 | Review code C#          | skill `code-reviewer` hoặc agent `code-reviewer` |
 | Viết unit test          | skill `unit-test-writer` — đọc `.claude/skills/unit-test-writer/SKILL.md` |
 | Viết integration test   | skill `integration-test-writer` |
