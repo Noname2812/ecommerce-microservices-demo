@@ -24,7 +24,7 @@ builder.Services
     .AddMessaging(configureBus: bus =>
     {
         bus.AddConsumer<ProductCreatedConsumer>();
-        bus.AddConsumer<ProductCatalogUpdatedConsumer>();
+        bus.AddConsumer<ProductInfoUpdatedConsumer>();
         bus.AddConsumer<ProductStatusChangedSearchConsumer>();
         bus.AddConsumer<ProductDeletedSearchConsumer>();
     });

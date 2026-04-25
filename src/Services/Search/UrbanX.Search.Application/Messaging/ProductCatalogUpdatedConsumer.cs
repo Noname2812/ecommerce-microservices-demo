@@ -5,20 +5,20 @@ using Shared.Messaging;
 
 namespace UrbanX.Search.Application.Messaging
 {
-    public sealed class ProductCatalogUpdatedConsumer
+    public sealed class ProductInfoUpdatedConsumer
         : IntegrationEventConsumerBase<
-            ProductUpdateIntegrationEvents.ProductCatalogUpdatedV1,
-            ProductCatalogUpdatedConsumer>
+            ProductUpdateIntegrationEvents.ProductInfoUpdatedV1,
+            ProductInfoUpdatedConsumer>
     {
-        public ProductCatalogUpdatedConsumer(
+        public ProductInfoUpdatedConsumer(
             IMediator mediator,
-            ILogger<ProductCatalogUpdatedConsumer> logger)
+            ILogger<ProductInfoUpdatedConsumer> logger)
             : base(mediator, logger)
         {
         }
 
         protected override Task HandleAsync(
-            ProductUpdateIntegrationEvents.ProductCatalogUpdatedV1 @event,
+            ProductUpdateIntegrationEvents.ProductInfoUpdatedV1 @event,
             CancellationToken cancellationToken)
         {
             _ = @event;

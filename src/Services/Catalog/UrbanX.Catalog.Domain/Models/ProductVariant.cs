@@ -65,6 +65,8 @@ namespace UrbanX.Catalog.Domain.Models
             return v;
         }
 
+        public void SetBarcode(string? barcode) => Barcode = barcode;
+
         public void SetSku(string sku) => Sku = sku ?? throw new ArgumentNullException(nameof(sku));
 
         public void SetName(string? name) => Name = name;

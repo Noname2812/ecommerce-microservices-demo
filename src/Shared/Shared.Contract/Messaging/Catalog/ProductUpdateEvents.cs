@@ -6,37 +6,37 @@ namespace Shared.Contract.Messaging.Catalog
     /// <summary>Outbox + integration events for product updates (see UPDATE-PRODUCT design doc).</summary>
     public static class ProductUpdateIntegrationEvents
     {
-        public record ProductCatalogUpdatedV1(
+        // Renamed from ProductCatalogUpdatedV1; now includes SellerId + ActiveVariants for search re-index
+        public record ProductInfoUpdatedV1(
             Guid ProductId,
             Guid SellerId,
-            IReadOnlyDictionary<string, string?>? Changes,
-            ProductDtos.ProductUpdateSnapshot FullSnapshot
+            ProductDtos.ProductUpdateSnapshot Snapshot,
+            IReadOnlyList<ProductDtos.ProductVariantSnapshot> ActiveVariants
         ) : IntegrationEventBase
         {
             public override string Source => "catalog-service";
         }
 
-        public record ProductVariantPriceUpdatedV1(
-            Guid ProductId,
-            IReadOnlyList<ProductDtos.VariantPriceChange> Variants
-        ) : IntegrationEventBase
-        {
-            public override string Source => "catalog-service";
-        }
-
+        // Updated: uses ProductVariantSnapshot (includes Barcode, IsActive); added SellerId
         public record ProductVariantAddedV1(
             Guid ProductId,
-            ProductDtos.VariantSnapshot Variant
+            Guid SellerId,
+            ProductDtos.ProductVariantSnapshot Variant
         ) : IntegrationEventBase
         {
             public override string Source => "catalog-service";
         }
 
-        public record ProductVariantDisabledV1(
+        // New: replaces ProductVariantPriceUpdatedV1 + ProductVariantSkuChangedV1 + ProductVariantDisabledV1
+        // Previous* fields are non-null only when that field actually changed
+        public record ProductVariantUpdatedV1(
             Guid ProductId,
+            Guid SellerId,
             Guid VariantId,
-            string Sku,
-            string Reason
+            string? PreviousSku,
+            decimal? PreviousPrice,
+            bool? PreviousIsActive,
+            ProductDtos.ProductVariantSnapshot Variant
         ) : IntegrationEventBase
         {
             public override string Source => "catalog-service";
@@ -46,16 +46,6 @@ namespace Shared.Contract.Messaging.Catalog
             Guid ProductId,
             Guid VariantId,
             string Sku
-        ) : IntegrationEventBase
-        {
-            public override string Source => "catalog-service";
-        }
-
-        public record ProductVariantSkuChangedV1(
-            Guid ProductId,
-            Guid VariantId,
-            string OldSku,
-            string NewSku
         ) : IntegrationEventBase
         {
             public override string Source => "catalog-service";

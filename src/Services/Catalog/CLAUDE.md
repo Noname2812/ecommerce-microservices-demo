@@ -35,13 +35,14 @@ Port: **5290** | DB: `urbanx_catalog` | Status: **Active**
 - `DateTimeOffset? DeletedAt` — soft delete marker
 - Navigation: `Category?`, `Brand?`, `List<ProductVariant> Variants`, `List<ProductImage> Images`
 - Factory: `Product.Create(...)` builds entire graph in one call
-- Mutators: `ApplyEdit()`, `MarkAsDeleted()`
+- Mutators: `ApplyEdit()`, `AddVariant(spec, galleryImages, utc)`, `MarkAsDeleted()`
 
 **ProductVariant** — child of Product
 - `Guid Id`, `Guid ProductId` (cascade), `string Sku` (unique)
 - `decimal Price` (18,2), `decimal? CompareAtPrice`, `bool IsActive`
 - `int RowVersion`, `DateTimeOffset? DeletedAt` — soft delete
 - Navigation: `ICollection<VariantAttributeValue>`
+- Mutators: `SetSku()`, `SetName()`, `SetPrice()`, `SetImageUrl()`, `SetIsActive()`, `SetBarcode()`, `MarkSoftDeleted()`
 
 **Category** — self-referential hierarchy
 - `Guid? ParentId` (restrict), `string Slug` (unique)
@@ -102,6 +103,13 @@ Port: **5290** | DB: `urbanx_catalog` | Status: **Active**
 
 ## Application
 
+### Cross-Service Abstraction
+
+`IInventoryServiceClient` (in `Application/Abstractions/`) — interface for checking variant inventory status.
+- `GetVariantInventoryStatusAsync(Guid variantId)` → `VariantInventoryStatus?` (null = unavailable)
+- `VariantInventoryStatus(int Quantity, bool HasActiveReservations)`
+- Implementation TBD (caller provides via DI)
+
 ### Current Commands
 
 #### `CreateProductCommand` → `Result<Guid>`
@@ -129,6 +137,44 @@ Nested: `CreateProductVariantItem` (Sku, Name?, Price, CompareAtPrice?, ImageUrl
 - URL format validated for image fields
 - Price: BasePrice >= 0; variant Price > 0 and <= 1,000,000,000
 
+#### `UpdateProductBasicInfoCommand` → `Result`
+
+Input: `ProductId, Name, Slug?, Description?, ShortDescription?, CategoryId?, BrandId?, BasePrice, Status?, WeightGrams?, Dimensions?, Tags?, MetaTitle?, MetaDescription?`
+
+**Handler flow:**
+1. `GetByIdForUpdateAsync` → `ProductNotFound`
+2. Normalize slug → `IsSlugInUseExcludingProductAsync` → `SlugExists`
+3. Category lookup if CategoryId changed → `CategoryNotFound`
+4. Brand lookup if BrandId changed → `BrandNotFound`
+5. `product.ApplyEdit(state, utcNow)`
+6. Outbox: `ProductInfoUpdatedV1` (always) + `ProductStatusChangedV1` (if status changed)
+
+#### `UpdateProductVariantsCommand` → `Result`
+
+Input: `ProductId, Variants[]` — full snapshot; server diffs against DB.
+- `VariantSnapshotItem(Id?, Sku, Name?, Price, CompareAtPrice?, ImageUrl?, Barcode?, IsActive, AttributeValues[], GalleryImages[])`
+
+**Diff logic:** `Id == null` → add; `Id exists in DB` → update; `DB Id not in snapshot` → delete.
+
+**Handler flow:**
+1. Load product → `ProductNotFound`
+2. Re-check snapshot has ≥ 1 `IsActive=true` → `NoActiveVariant`
+3. Validate all `toUpdate` IDs belong to product → `VariantNotFound`
+4. Check reservations for `toDelete` via `IInventoryServiceClient` → `VariantHasActiveReservations` / `InventoryCheckUnavailable`
+5. SKU uniqueness in DB for `toAdd` + `toUpdate` → `SkuExists`
+6. Apply: soft-delete `toDelete`, upsert `toUpdate` (with SKU/Price history), `product.AddVariant` for `toAdd`
+7. Outbox: `ProductVariantDeletedV1` / `ProductVariantUpdatedV1` / `ProductVariantAddedV1`
+
+### Current Queries
+
+#### `GetVariantDeleteEligibilityQuery` → `Result<VariantDeleteEligibilityResult>`
+
+Input: `ProductId, VariantId`
+
+Returns: `CanDelete, HasActiveReservations, HasInventoryStock, InventoryQuantity, BlockReason?`
+
+**Handler flow:** verify variant exists → check last-active-variant guard → call `IInventoryServiceClient` (partial result if unavailable)
+
 ### Error Codes (`CatalogErrors.cs`)
 
 | Method | HTTP |
@@ -144,6 +190,7 @@ Nested: `CreateProductVariantItem` (Sku, Name?, Price, CompareAtPrice?, ImageUrl
 | `VariantHasActiveReservations()` | 400 |
 | `ProductHasActiveOrders()` | 400 |
 | `InventoryCheckUnavailable()` | 503 |
+| `NoActiveVariant()` | 400 |
 
 `ProductErrors.cs` mirrors a subset: `NotFound, CategoryNotFound, BrandNotFound, SkuInUse, SlugInUse`.
 
@@ -152,11 +199,10 @@ Nested: `CreateProductVariantItem` (Sku, Name?, Price, CompareAtPrice?, ImageUrl
 `CatalogTransactionBehavior<TRequest, TResponse>` — extends `TransactionPipelineBehavior<..., CatalogDbContext>`. Wraps every command in a DB transaction; rolls back on exception.
 
 ### Placeholder Folders (not yet implemented)
-- `Usecases/V1/Query/` — no query handlers yet
 - `Usecases/V1/Event/` — domain event handlers
 - `Usecases/V2/` — future API version
 - `Mappers/Product/` — AutoMapper profiles
-- `Abstractions/`, `Adapters/`
+- `Adapters/`
 
 ---
 
@@ -216,6 +262,9 @@ Base: `/api/v{version:apiVersion}/catalog/products`
 | Method | Path | Handler | Response |
 |---|---|---|---|
 | `POST` | `/` | `CreateProductV1` | 201 + `Location` header |
+| `PATCH` | `/{productId}` | `UpdateProductBasicInfoV1` | 204 No Content |
+| `PUT` | `/{productId}/variants` | `UpdateProductVariantsV1` | 204 No Content |
+| `GET` | `/{productId}/variants/{variantId}/delete-eligibility` | `GetVariantDeleteEligibilityV1` | 200 + `VariantDeleteEligibilityResult` |
 
 ### `ApiEndpoint` base class
 
@@ -257,14 +306,20 @@ Auto-runs EF migrations on startup.
 
 ### Produced (via Outbox)
 
-**`ProductCreatedV1`** — fired by `CreateProductCommandHandler`
-- Namespace: `Shared.Contract.Messaging.Catalog`
-- Source: `"catalog-service"`
-- Payload: full product snapshot (Id, Sku, Name, Slug, Category, Brand, BasePrice, Seller, Status, Tags, Dimensions, Variants[])
+| Event | Fired by | Condition |
+|---|---|---|
+| `ProductCreatedV1` | `CreateProductCommandHandler` | Always |
+| `ProductInfoUpdatedV1` | `UpdateProductBasicInfoCommandHandler` | Always |
+| `ProductStatusChangedV1` | `UpdateProductBasicInfoCommandHandler` | Only if status changed |
+| `ProductVariantDeletedV1` | `UpdateProductVariantsCommandHandler` | Per deleted variant |
+| `ProductVariantUpdatedV1` | `UpdateProductVariantsCommandHandler` | Per variant with SKU/price/active changes |
+| `ProductVariantAddedV1` | `UpdateProductVariantsCommandHandler` | Per new variant |
 
-### Defined but not yet fired (contracts in `Shared.Contract`)
+All events in `Shared.Contract.Messaging.Catalog.ProductUpdateIntegrationEvents` / `ProductIntegrationEvents`.
 
-`ProductCatalogUpdatedV1`, `ProductVariantPriceUpdatedV1`, `ProductVariantAddedV1`, `ProductVariantDisabledV1`, `ProductVariantDeletedV1`, `ProductVariantSkuChangedV1`, `ProductStatusChangedV1`, `ProductDeletedV1`
+### Defined but not yet fired
+
+`ProductDeletedV1`
 
 ### Snapshot DTOs (in `Shared.Contract.Dtos.Catalog`)
 

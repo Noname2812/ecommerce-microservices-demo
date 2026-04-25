@@ -21,5 +21,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Errors
             new("PRODUCT_HAS_ACTIVE_ORDERS", "Cannot delete the product while orders are still in progress.");
         public static Error InventoryCheckUnavailable() =>
             new("INVENTORY_CHECK_UNAVAILABLE", "Cannot confirm reservation state. Please try again later.");
+        public static Error NoActiveVariant() =>
+            new("NO_ACTIVE_VARIANT", "Snapshot must contain at least one active variant.");
     }
 }

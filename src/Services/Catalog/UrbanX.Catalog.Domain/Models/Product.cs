@@ -168,6 +168,27 @@ namespace UrbanX.Catalog.Domain.Models
             UpdatedAt = utc;
         }
 
+        public void AddVariant(
+            NewVariantSpec spec,
+            IReadOnlyList<NewProductImageSpec> galleryImages,
+            DateTimeOffset utc)
+        {
+            var v = ProductVariant.Create(Id, spec.Sku, spec.Name, spec.Price,
+                                           spec.CompareAtPrice, spec.ImageUrl, spec.Barcode,
+                                           spec.AttributeValues);
+            Variants.Add(v);
+            var order = 0;
+            foreach (var g in galleryImages)
+                Images.Add(new ProductImage
+                {
+                    Id = Guid.NewGuid(), ProductId = Id, VariantId = v.Id,
+                    Url = g.Url, AltText = g.AltText,
+                    DisplayOrder = g.DisplayOrder != 0 ? g.DisplayOrder : order++,
+                    IsPrimary = g.IsPrimary
+                });
+            UpdatedAt = utc;
+        }
+
         /// <summary>Soft delete product (status DELETED + deleted timestamp).</summary>
         public void MarkAsDeleted(DateTimeOffset deletedAt, DateTimeOffset updateAt)
         {
