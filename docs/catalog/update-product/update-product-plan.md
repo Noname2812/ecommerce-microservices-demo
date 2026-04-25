@@ -19,7 +19,7 @@ Tách thành 2 command riêng biệt (BasicInfo + Variants) vì 2 màn hình có
 3. **Application — Command + Validator + Handler (UC1: UpdateProductBasicInfo)** — `UpdateProductBasicInfoCommand` + Validator + Handler; flow: load product → validate slug unique → category/brand lookup → `product.ApplyEdit()` → write outbox `ProductInfoUpdatedV1` (+ `ProductStatusChangedV1` nếu status đổi).
    🔧 Skill: `.claude/skills/add-command/SKILL.md`
 
-4. **Application — Command + Validator + Handler (UC2: UpdateProductVariants)** — `UpdateProductVariantsCommand` + Validator + Handler; flow: validate ownership → validate còn ≥ 1 active variant → check reservation qua Inventory (hard block) → validate SKU unique → apply delete/update/add → write outbox `ProductVariantDeletedV1` / `ProductVariantUpdatedV1` / `ProductVariantAddedV1`.
+4. **Application — Command + Validator + Handler (UC2: UpdateProductVariants)** — `UpdateProductVariantsCommand` nhận snapshot toàn bộ variants; server tự diff (null Id = add, có Id = update, Id không có trong snapshot = delete). Validator + Handler; flow: diff → validate ownership → validate ≥ 1 active → check reservation (hard block) → validate SKU unique → apply changes → write outbox `ProductVariantDeletedV1` / `ProductVariantUpdatedV1` / `ProductVariantAddedV1`.
    🔧 Skill: `.claude/skills/add-command/SKILL.md`
 
 5. **Application — Query + Handler (GetVariantDeleteEligibility)** — Query kiểm tra trước khi xóa: xác nhận variant tồn tại, không phải variant active cuối cùng, gọi Inventory service lấy quantity + reservation status → trả về `VariantDeleteEligibilityResult`.
@@ -231,34 +231,59 @@ public record VariantDeleteEligibilityResult(
 
 **Endpoint:** `PUT /api/v1/catalog/products/{productId}/variants` → `204 No Content`
 
+**Thiết kế:** Client gửi snapshot toàn bộ variants hiện tại trên màn hình sau khi user chỉnh sửa xong và nhấn Save. Server tự diff với DB:
+- `Id == null` → tạo mới
+- `Id != null` và tồn tại trong DB → upsert (update)
+- Variant trong DB có `Id` không nằm trong snapshot → xóa (soft delete)
+
 **Command:**
 ```csharp
 public record UpdateProductVariantsCommand(
     Guid ProductId,
-    IReadOnlyList<UpdateVariantItem> VariantsToUpdate,
-    IReadOnlyList<AddVariantItem> VariantsToAdd,
-    IReadOnlyList<Guid> VariantIdsToDelete
+    IReadOnlyList<VariantSnapshotItem> Variants  // toàn bộ variants sau khi user save
 ) : ICommand;
+
+public record VariantSnapshotItem(
+    Guid? Id,               // null = new; non-null = existing
+    string Sku,
+    string? Name,
+    decimal Price,
+    decimal? CompareAtPrice,
+    string? ImageUrl,
+    string? Barcode,
+    bool IsActive,
+    IReadOnlyList<AttributeValueInput>? AttributeValues,
+    IReadOnlyList<GalleryImageInput>? GalleryImages
+);
 ```
 
 **Validator:**
-- `VariantsToUpdate`: `Sku` NotEmpty, `Price > 0 && <= 1_000_000_000`
-- `VariantsToAdd`: `Sku` NotEmpty, `Price > 0`
-- Cross-field: tất cả SKU trong request phải unique; `VariantIdsToDelete` không trùng với `VariantsToUpdate`
+- `Variants` NotEmpty (không cho phép xóa hết)
+- Mỗi item: `Sku` NotEmpty, `Price > 0 && <= 1_000_000_000`
+- Cross-field: tất cả `Sku` trong snapshot phải unique
+- Snapshot phải có ít nhất 1 item `IsActive = true`
+
+**Diff logic (tính trước khi validate business rules):**
+```
+toAdd    = Variants where Id == null
+toUpdate = Variants where Id != null  (all; server validates Id thuộc product)
+toDelete = DB variants where Id ∉ { snapshot Ids }
+```
 
 **Handler flow:**
 1. `GetByIdForUpdateAsync(productId)` → `CatalogErrors.ProductNotFound`
-2. Validate ownership: tất cả VariantId phải thuộc product → `CatalogErrors.VariantNotFound`
-3. Validate còn ≥ 1 variant active sau khi xóa + set IsActive=false
-4. Check active reservation qua Inventory cho mỗi `VariantIdsToDelete`:
+2. Diff: tính `toAdd` / `toUpdate` / `toDelete` từ snapshot vs DB variants
+3. Validate: tất cả Id trong `toUpdate` phải thuộc product → `CatalogErrors.VariantNotFound`
+4. Validate: snapshot có ≥ 1 item `IsActive = true` (validator đã chặn, handler re-check)
+5. Check active reservation qua Inventory cho mỗi variant trong `toDelete`:
    - Có reservation → `CatalogErrors.VariantHasActiveReservations` (400)
    - Unavailable → `CatalogErrors.InventoryCheckUnavailable` (503)
-5. SKU uniqueness DB: `IsSkuInUseExcludingAsync` cho updated + new variants → `CatalogErrors.SkuExists`
-6. Resolve attributes: `GetOrCreateAsync` cho attributes của updated + new variants
-7. Apply deletions: `variant.MarkSoftDeleted(utcNow)`
-8. Apply updates: capture prev values → set fields → `AddSkuHistoryAsync` / `AddPriceHistoryAsync` nếu có thay đổi
-9. Apply additions: `product.AddVariant(spec, galleryImages, utcNow)`
-10. Write outbox: `ProductVariantDeletedV1` / `ProductVariantUpdatedV1` / `ProductVariantAddedV1`
+6. SKU uniqueness DB: `IsSkuInUseExcludingAsync` cho `toAdd` + `toUpdate` → `CatalogErrors.SkuExists`
+7. Resolve attributes: `GetOrCreateAsync` cho attributes của `toUpdate` + `toAdd`
+8. Apply deletions: `variant.MarkSoftDeleted(utcNow)` cho `toDelete`
+9. Apply updates: capture prev values → upsert fields → `AddSkuHistoryAsync` / `AddPriceHistoryAsync` nếu có thay đổi
+10. Apply additions: `product.AddVariant(spec, galleryImages, utcNow)` cho `toAdd`
+11. Write outbox: `ProductVariantDeletedV1` / `ProductVariantUpdatedV1` / `ProductVariantAddedV1`
 
 ---
 
@@ -301,12 +326,12 @@ public void SetBarcode(string? barcode) => Barcode = barcode;
 - Slug trùng → `CatalogErrors.SlugExists`
 
 **`UpdateProductVariantsCommandHandlerTests`:**
-- Happy path (add + update + delete cùng lúc)
-- Xóa variant có active reservation → `VariantHasActiveReservations` (400)
-- Inventory service unavailable → `InventoryCheckUnavailable` (503)
-- Variant không thuộc product → `VariantNotFound`
-- Xóa variant active cuối cùng → validation error
-- Duplicate SKU trong request → validation error
-- SKU trùng DB → `SkuExists`
-- SKU đổi → `AddSkuHistoryAsync` được gọi, `ProductVariantUpdatedV1.PreviousSku` non-null
-- Price đổi → `AddPriceHistoryAsync` được gọi, `ProductVariantUpdatedV1.PreviousPrice` non-null
+- Happy path: snapshot có add + update + delete → 3 loại outbox event được emit
+- Snapshot omit tất cả DB variants (Id không có trong snapshot) → tất cả bị soft delete → bị chặn vì không còn active variant
+- Snapshot item có Id không thuộc product → `VariantNotFound`
+- Variant bị diff sang `toDelete` có active reservation → `VariantHasActiveReservations` (400)
+- Inventory service unavailable khi check reservation → `InventoryCheckUnavailable` (503)
+- SKU trùng DB (toAdd hoặc toUpdate) → `SkuExists`
+- SKU đổi trong toUpdate → `AddSkuHistoryAsync` được gọi, `ProductVariantUpdatedV1.PreviousSku` non-null
+- Price đổi trong toUpdate → `AddPriceHistoryAsync` được gọi, `ProductVariantUpdatedV1.PreviousPrice` non-null
+- Snapshot chỉ có Id null items → toDelete = tất cả DB variants, toAdd = snapshot items (full replace)

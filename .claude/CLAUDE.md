@@ -15,7 +15,7 @@
 | **Order** | 5002 | Disabled | PostgreSQL | Saga choreography |
 | **Payment** | 5004 | Disabled | PostgreSQL | Stripe + Outbox |
 | **Merchant** | 5003 | Disabled | PostgreSQL | — |
-| **Inventory** | dynamic | Disabled | PostgreSQL | — |
+| **Inventory** | dynamic | Active | PostgreSQL (`urbanx_inventory`) | CQRS + Outbox, scaffold |
 | **Frontend** | 5173 | Disabled | — | React 19 + Vite |
 
 Infrastructure (Aspire tự quản lý): PostgreSQL, RabbitMQ, Elasticsearch, Redis.
@@ -35,11 +35,17 @@ src/
 │   │   ├── UrbanX.Catalog.Domain/          # Models, ValueObjects, Repositories (interfaces)
 │   │   ├── UrbanX.Catalog.Infrastructure/  # (trống, dùng Persistence trực tiếp)
 │   │   └── UrbanX.Catalog.Persistence/     # DbContext, Repos, Migrations, SeedData
-│   └── Search/
-│       ├── UrbanX.Search.API/
-│       ├── UrbanX.Search.Application/
-│       ├── UrbanX.Search.Infrastructure/
-│       └── UrbanX.Search.Infrastructure.Elasticsearch/
+│   ├── Search/
+│   │   ├── UrbanX.Search.API/
+│   │   ├── UrbanX.Search.Application/
+│   │   ├── UrbanX.Search.Infrastructure/
+│   │   └── UrbanX.Search.Infrastructure.Elasticsearch/
+│   └── Inventory/
+│       ├── UrbanX.Inventory.API/             # Carter modules (InventoryItemApis.cs)
+│       ├── UrbanX.Inventory.Application/     # CQRS: Usecases/V1/Command|Query/
+│       ├── UrbanX.Inventory.Domain/          # Models, ValueObjects, Repositories (interfaces)
+│       ├── UrbanX.Inventory.Infrastructure/  # (trống, placeholder)
+│       └── UrbanX.Inventory.Persistence/     # DbContext, Repos, Migrations
 ├── Gateway/
 │   ├── UrbanX.Gateway/                     # Program.cs, appsettings (routes, rate limits)
 │   ├── UrbanX.Gateway.Application/         # Abstractions, config options
@@ -164,6 +170,7 @@ Get-ChildItem "tests\UrbanX.Services.Catalog.UnitTests\bin" -Recurse -Include "*
 | Viết unit test          | skill `unit-test-writer` — đọc `.claude/skills/unit-test-writer/SKILL.md` |
 | Viết integration test   | skill `integration-test-writer` |
 | Tạo EF migration        | skill `migration-generator` |
+| Thêm service mới        | skill `add-service` |
 | Lên plan feature        | agent `make-plan` |
 
 Skill files: `.claude/skills/<name>/SKILL.md`

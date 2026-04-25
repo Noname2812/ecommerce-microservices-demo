@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-UrbanX is a learning project demonstrating microservices patterns on .NET 10. Only the Catalog, Search, Identity services and API Gateway are currently implemented — Order, Merchant, Payment, and Inventory are planned but their AppHost registrations are commented out.
+UrbanX is a learning project demonstrating microservices patterns on .NET 10. Catalog, Search, API Gateway, and Inventory are currently scaffolded and active. Order, Merchant, Payment, and Identity are planned but their AppHost registrations are commented out.
 
 **Important discrepancy:** The README describes Apache Kafka as the message broker, but the actual implementation uses **RabbitMQ via MassTransit**.
 
