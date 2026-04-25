@@ -28,7 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+  </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Catalog\UrbanX.Catalog.Application\UrbanX.Catalog.Application.csproj" />
   </ItemGroup>
 
 </Project>

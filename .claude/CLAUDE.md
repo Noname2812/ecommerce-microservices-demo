@@ -53,7 +53,9 @@ src/
     └── Shared.Observability/   # OpenTelemetry wiring
 
 docs/                           # Docs tổng quan (migrations, security, deployment)
-tests/                          # Unit tests (xUnit + Moq)
+tests/
+├── UrbanX.Services.Catalog.UnitTests/      # xUnit + Moq, no DB
+└── UrbanX.Services.Catalog.IntegrationTests/ # WebApplicationFactory + EF InMemory
 ```
 
 ---
@@ -126,6 +128,29 @@ Thêm package mới: **chỉ sửa `Directory.Packages.props`**, không sửa `.
 
 ---
 
+## Unit Testing — Quick Reference
+
+Framework: **xUnit 2.9.3** · Mock: **Moq 4.20.72** · Assertions: xUnit `Assert` (no FluentAssertions)
+
+- Test file location: `tests/UrbanX.Services.Catalog.UnitTests/Usecases/V1/Command/<Feature>/`
+- Naming: `{SubjectUnderTest}Tests` / `{Method}_{Scenario}_{ExpectedResult}`
+- Always mock async repo methods with `It.IsAny<CancellationToken>()`
+- Validator tests: use `FluentValidation.TestHelper` (`TestValidate`, `ShouldHaveValidationErrorFor`)
+- Full guide: `.claude/skills/unit-test-writer/SKILL.md`
+
+**Test project `.csproj` dependencies (đã setup):**
+```xml
+<PackageReference Include="FluentValidation" />
+<ProjectReference Include="..\..\src\Services\Catalog\UrbanX.Catalog.Application\UrbanX.Catalog.Application.csproj" />
+```
+
+**Known issue — Windows Smart App Control:** Trên Windows 11 với Smart App Control bật, các DLL mới compile bị block (`0x800711C7`). Nếu `dotnet test` báo `FileLoadException: An Application Control policy has blocked this file`, chạy lệnh sau để unblock:
+```powershell
+Get-ChildItem "tests\UrbanX.Services.Catalog.UnitTests\bin" -Recurse -Include "*.dll" | Unblock-File
+```
+
+---
+
 ## Rules
 @.claude/rules/response-rules.md
 @.claude/rules/shared-rules.md
@@ -136,7 +161,7 @@ Thêm package mới: **chỉ sửa `Directory.Packages.props`**, không sửa `.
 | Tạo Command             | skill `command` |
 | Tạo Query               | skill `query` |
 | Review code C#          | skill `code-reviewer` hoặc agent `code-reviewer` |
-| Viết unit test          | skill `unit-test-writer` |
+| Viết unit test          | skill `unit-test-writer` — đọc `.claude/skills/unit-test-writer/SKILL.md` |
 | Viết integration test   | skill `integration-test-writer` |
 | Tạo EF migration        | skill `migration-generator` |
 | Lên plan feature        | agent `make-plan` |

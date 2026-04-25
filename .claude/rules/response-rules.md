@@ -13,6 +13,10 @@ Mỗi khi thêm feature mới hoặc thay đổi behavior của service, tạo/c
 
 ```
 ./docs/<service-name>/<feature-name>.md
+
+## 4. Scope
+ - Khi làm việc với service cụ thể, CHỈ đọc files trong folder đó.
+ - Không cần đọc các service khác trừ khi được yêu cầu rõ ràng.
 ```
 
 **Ví dụ:**
