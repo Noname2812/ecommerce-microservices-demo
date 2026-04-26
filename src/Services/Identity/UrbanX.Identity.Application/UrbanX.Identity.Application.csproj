@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\Shared.Application\Shared.Application.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Shared.Contract\Shared.Contract.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
+    <ProjectReference Include="..\UrbanX.Identity.Domain\UrbanX.Identity.Domain.csproj" />
+    <ProjectReference Include="..\UrbanX.Identity.Infrastructure\UrbanX.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="..\UrbanX.Identity.Persistence\UrbanX.Identity.Persistence.csproj" />
+  </ItemGroup>
+</Project>

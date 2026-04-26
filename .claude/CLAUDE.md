@@ -11,7 +11,7 @@
 | **Catalog** | 5290 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + Outbox |
 | **Search** | dynamic | Active | Elasticsearch | Consumes Catalog events |
 | **Gateway** | dynamic | Active | — | YARP + JWT + Rate limiting |
-| **Identity** | 5005 | Disabled | PostgreSQL | Duende IdentityServer |
+| **Identity** | 5005 | Active | PostgreSQL (`urbanx_identity`) | Duende IdentityServer + ASP.NET Identity + Outbox |
 | **Order** | 5002 | Disabled | PostgreSQL | Saga choreography |
 | **Payment** | 5004 | Disabled | PostgreSQL | Stripe + Outbox |
 | **Merchant** | 5003 | Disabled | PostgreSQL | — |
@@ -40,12 +40,18 @@ src/
 │   │   ├── UrbanX.Search.Application/
 │   │   ├── UrbanX.Search.Infrastructure/
 │   │   └── UrbanX.Search.Infrastructure.Elasticsearch/
-│   └── Inventory/
-│       ├── UrbanX.Inventory.API/             # Carter modules (InventoryItemApis.cs)
-│       ├── UrbanX.Inventory.Application/     # CQRS: Usecases/V1/Command|Query/
-│       ├── UrbanX.Inventory.Domain/          # Models, ValueObjects, Repositories (interfaces)
-│       ├── UrbanX.Inventory.Infrastructure/  # (trống, placeholder)
-│       └── UrbanX.Inventory.Persistence/     # DbContext, Repos, Migrations
+│   ├── Inventory/
+│   │   ├── UrbanX.Inventory.API/             # Carter modules (InventoryItemApis.cs)
+│   │   ├── UrbanX.Inventory.Application/     # CQRS: Usecases/V1/Command|Query/
+│   │   ├── UrbanX.Inventory.Domain/          # Models, ValueObjects, Repositories (interfaces)
+│   │   ├── UrbanX.Inventory.Infrastructure/  # (trống, placeholder)
+│   │   └── UrbanX.Inventory.Persistence/     # DbContext, Repos, Migrations
+│   └── Identity/
+│       ├── UrbanX.Identity.API/              # Carter (AccountApis, ProfileApis, UsersApis, RolesApis, AuditApis) + Duende IdentityServer + Google OAuth
+│       ├── UrbanX.Identity.Application/      # CQRS: Register/ConfirmEmail/ForgotPassword/ResetPassword/ChangePassword/UpdateProfile/AssignRole/RevokeRole/Deactivate/Activate
+│       ├── UrbanX.Identity.Domain/           # ApplicationUser/Role, UserProfile, AuthAuditLog, AuthEventType
+│       ├── UrbanX.Identity.Infrastructure/   # IEmailSender (LogEmailSender), IIdentityAuditWriter
+│       └── UrbanX.Identity.Persistence/      # IdentityDbContext (extends OutboxDbContext), Configurations, AuthAuditLogRepository
 ├── Gateway/
 │   ├── UrbanX.Gateway/                     # Program.cs, appsettings (routes, rate limits)
 │   ├── UrbanX.Gateway.Application/         # Abstractions, config options
@@ -79,11 +85,23 @@ tests/
 
 ### Trust-the-Gateway Auth
 - Gateway verify JWT, enrich `X-User-Id` / `X-User-Roles` / `X-Merchant-Id` / `X-Permission-Scope` headers, strip Authorization
-- Service KHÔNG verify JWT, KHÔNG dùng `RequireAuthorization()` ở endpoints
+- Service KHÔNG verify JWT, KHÔNG dùng `RequireAuthorization()` ở endpoints (Identity là exception — nó là JWT issuer)
 - `app.UseUserContext()` + `IUserContext` (scoped) đọc identity từ headers
 - `AuthorizationPipelineBehavior` reflect attribute → check IUserContext
-- Permissions/Roles constants: `Shared.Application/Authorization/Permissions.cs`
+- Permissions/Roles constants: `Shared.Application/Authorization/Permissions.cs` — `Products`, `Inventory`, `Users`, `Roles`
 - Doc: `docs/auth/trust-gateway-flow.md`
+
+### Identity Service (Duende IdentityServer)
+- Issuer JWT cho toàn hệ thống tại port 5005
+- Endpoints public: `/connect/{token,authorize,endsession,userinfo,revocation}`, `/.well-known/*`, `/api/account/{register,confirm-email,forgot-password,reset-password}`, `/signin-google`
+- Endpoints authenticated: `/api/v1/identity/{me,profile,users,roles,audit-logs,...}`
+- 2 clients (in-memory, dev): `urbanx-spa` (Auth Code + PKCE + offline_access), `urbanx-test-password` (resource owner password, dev secret)
+- Permission claims trên Role: claim type `permission`, dùng cho Gateway RBAC + `IUserContext`
+- `LogEmailSender` (dev) ghi log thay gửi email; thay bằng SMTP/SendGrid khi production
+- Outbox publish: `UserRegistered`, `UserProfileUpdated`, `UserRoleAssigned`, `UserRoleRevoked`, `UserDeactivated`, `UserActivated` (`Shared.Contract/Messaging/Identity/`)
+- Account lockout: 5 fails → 15 phút (config `Identity:Lockout`)
+- Audit log: bảng `auth_audit_logs`, IP + UA capture qua `IIdentityAuditWriter`
+- Doc: `docs/identity/`
 
 ### Transactional Outbox (Catalog, Payment)
 - Command handler ghi data + `OutboxMessage` trong 1 transaction

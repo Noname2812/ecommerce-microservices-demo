@@ -21,7 +21,15 @@ public sealed class GatewayRbacOptionsSetup : IConfigureOptions<GatewayRbacOptio
                 new PublicRouteEntry { PathPrefix = "/connect/authorize", Method = "GET,HEAD" },
                 new PublicRouteEntry { PathPrefix = "/connect/token", Method = "POST" },
                 new PublicRouteEntry { PathPrefix = "/connect/endsession", Method = "GET,HEAD" },
-                new PublicRouteEntry { PathPrefix = "/api/account/register", Method = "POST" }
+                new PublicRouteEntry { PathPrefix = "/connect/userinfo", Method = "GET,POST" },
+                new PublicRouteEntry { PathPrefix = "/connect/revocation", Method = "POST" },
+                new PublicRouteEntry { PathPrefix = "/connect/introspect", Method = "POST" },
+                new PublicRouteEntry { PathPrefix = "/signin-google", Method = "GET" },
+                new PublicRouteEntry { PathPrefix = "/api/account/register", Method = "POST" },
+                new PublicRouteEntry { PathPrefix = "/api/account/confirm-email", Method = "POST" },
+                new PublicRouteEntry { PathPrefix = "/api/account/forgot-password", Method = "POST" },
+                new PublicRouteEntry { PathPrefix = "/api/account/reset-password", Method = "POST" },
+                new PublicRouteEntry { PathPrefix = "/api/account/external", Method = "GET" }
             ];
         }
     }

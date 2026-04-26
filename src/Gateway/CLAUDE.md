@@ -53,7 +53,7 @@ src/Gateway/
 | `Observability/GatewayStructuredRequestLoggingMiddleware.cs` | Structured `LogInformation`/`LogWarning` per request (skips health probes) |
 | `Rbac/EndpointAccessRegistry.cs` | `IEndpointAccessRegistry` impl — longest-prefix matching over `GatewayRbacOptions` |
 | `Rbac/GatewayRbacMiddleware.cs` | Enforces Public / Authenticated / Permission per route; sets `PermissionScope` in `HttpContext.Items` |
-| `Rbac/GatewayRbacOptionsSetup.cs` | Default public routes (health, `/connect/*`, catalog GET, etc.) |
+| `Rbac/GatewayRbacOptionsSetup.cs` | Default public routes (health, `/connect/*`, `/api/account/*`, `/.well-known/*`, `/signin-google`, catalog GET) |
 | `Rbac/PermissionClaimReader.cs` | Reads `permission` claims + wildcard admin check from JWT |
 | `ReverseProxy/YarpGatewayReverseProxy.cs` | `IGatewayReverseProxy` impl — `AddReverseProxy().LoadFromConfig()` |
 
@@ -126,6 +126,22 @@ In `appsettings.json` under `GatewayRbac:Rules`:
 Fields: `PathPrefix`, `Methods` (comma-separated or `*`), `OwnPermission`, `AllPermission`, `RequireAuthenticatedOnly`, `RequiresMfa`.
 
 RBAC result sets `HttpContext.Items[GatewayContextItems.PermissionScope]` to `"own"` or `"all"`, then enrichment forwards it as `X-Permission-Scope` header to downstream services.
+
+---
+
+## Identity Routes (YARP)
+
+All forwarded to `identity-cluster` (Identity service, port 5005):
+
+| Route ID | Path |
+|---|---|
+| `identity-account-route` | `/api/account/{**catch-all}` (register, confirm-email, forgot-password, reset-password) |
+| `identity-connect-route` | `/connect/{**catch-all}` (token, authorize, endsession, userinfo, revocation) |
+| `identity-wellknown-route` | `/.well-known/{**catch-all}` (OIDC discovery + JWKS) |
+| `identity-signin-google-route` | `/signin-google` (Google OAuth callback) |
+| `identity-api-route` | `/api/v1/identity/{**catch-all}` (authenticated management endpoints — profile, users, roles, audit-logs) |
+
+JWT authority resolved via Aspire env (`services__identity__http__0`) → falls back to `IdentityServer:Authority` → `Jwt:Authority`. Identity service issues JWTs with claims: `sub`, `email`, `role`, `merchant_id`, plus `permission` claims aggregated from role claims.
 
 ---
 

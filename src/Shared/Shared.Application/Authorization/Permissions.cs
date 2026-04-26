@@ -13,6 +13,19 @@ public static class Permissions
         public const string Read = "inventory:read";
         public const string Write = "inventory:write";
     }
+
+    public static class Users
+    {
+        public const string Read = "user:read";
+        public const string Write = "user:write";
+        public const string ManageRoles = "user:manage-roles";
+    }
+
+    public static class Roles
+    {
+        public const string Read = "role:read";
+        public const string Write = "role:write";
+    }
 }
 
 public static class Roles

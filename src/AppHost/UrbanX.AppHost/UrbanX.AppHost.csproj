@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Services\Inventory\UrbanX.Inventory.API\UrbanX.Inventory.API.csproj" />
     <ProjectReference Include="..\..\Services\Catalog\UrbanX.Catalog.API\UrbanX.Catalog.API.csproj" />
+    <ProjectReference Include="..\..\Services\Identity\UrbanX.Identity.API\UrbanX.Identity.API.csproj" />
     <ProjectReference Include="..\..\Gateway\UrbanX.Gateway\UrbanX.Gateway.csproj" />
     <ProjectReference Include="..\..\Services\Search\UrbanX.Search.API\UrbanX.Search.API.csproj" />
   </ItemGroup>
