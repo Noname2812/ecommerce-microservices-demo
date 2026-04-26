@@ -1,4 +1,8 @@
-
+---
+name: add-query
+description: Tạo CQRS Query mới (Query record + Validator + Handler + Carter GET endpoint). Tự động invoke khi user yêu cầu thêm read operation như "thêm query", "lấy danh sách", "get by id", "tìm kiếm", "implement GetX", "tạo query lấy X", hoặc bất kỳ từ khóa nào liên quan đến đọc dữ liệu (GetX, ListX, SearchX, FetchX) cho bất kỳ service nào trong UrbanX.
+allowed-tools: Read, Grep, LS, Write, Edit, MultiEdit
+---
 # Skill: add-query
 
 ## Khi nào dùng

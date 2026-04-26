@@ -1,3 +1,8 @@
+---
+name: add-consumer
+description: Thêm MassTransit consumer vào một service để xử lý integration event từ Shared.Contract. Tự động invoke khi user yêu cầu "thêm consumer", "subscribe event", "consume message/event", "lắng nghe event", hoặc khi cần một service phản ứng với event do service khác publish (ví dụ: "khi Catalog publish ProductCreated thì Inventory phải xử lý").
+allowed-tools: Read, Grep, LS, Write, Edit, MultiEdit
+---
 # Skill: add-consumer
 
 Thêm một MassTransit consumer vào service bất kỳ để xử lý integration event từ `Shared.Contract`.

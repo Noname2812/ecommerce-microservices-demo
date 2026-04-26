@@ -1,3 +1,8 @@
+---
+name: add-service
+description: Scaffold toàn bộ một microservice mới theo Clean Architecture (Domain + Infrastructure + Persistence + Application + API projects). Tự động invoke khi user yêu cầu "tạo service", "thêm service", "scaffold service", "tạo microservice mới", hoặc đặt tên service cụ thể như "thêm Order service", "tạo Payment service" trong hệ thống UrbanX.
+allowed-tools: Read, Grep, LS, Write, Edit, MultiEdit, Bash
+---
 # Skill: add-service
 
 ## Khi nào dùng

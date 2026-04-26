@@ -1,3 +1,8 @@
+---
+name: migration-generator
+description: Tạo migration cho các thay đổi trong model (thêm entity, thêm field, sửa field, xóa entity). Tự động invoke khi user yêu cầu "tạo migration", "thêm migration", "scaffold migration", hoặc bất kỳ thay đổi nào liên quan đến database schema trong hệ thống UrbanX.
+allowed-tools: Read, Grep, LS, Write, Edit, MultiEdit, Bash
+---
 # Skill: migration-generator
 
 ## Khi nào dùng

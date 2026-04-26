@@ -1,3 +1,8 @@
+---
+name: unit-test-writer
+description: Viết unit test cho command handler, query handler, validator, hoặc domain entity. Tự động invoke khi user yêu cầu "viết test", "thêm unit test", "cover handler bằng test", "test validator này", hoặc bất kỳ từ khóa nào như "test/spec/coverage" cho bất kỳ class nào trong UrbanX.
+allowed-tools: Read, Grep, LS, Write, Edit, MultiEdit
+---
 # Skill: unit-test-writer
 
 ## Khi nào dùng
