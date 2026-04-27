@@ -10,4 +10,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\UrbanX.Catalog.Application\UrbanX.Catalog.Application.csproj" />
+  </ItemGroup>
 </Project>

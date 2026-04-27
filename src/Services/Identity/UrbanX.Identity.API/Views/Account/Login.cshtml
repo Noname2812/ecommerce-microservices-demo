@@ -1,0 +1,76 @@
+@model LoginViewModel
+@{
+    ViewData["Title"] = "Đăng nhập";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="card-title text-center mb-4">Đăng nhập</h3>
+
+                @if (Model.EnableLocalLogin)
+                {
+                    <form asp-action="Login" method="post">
+                        <input type="hidden" asp-for="ReturnUrl" />
+
+                        <div class="mb-3">
+                            <label asp-for="Email" class="form-label">Email</label>
+                            <input asp-for="Email" class="form-control" autocomplete="username" autofocus />
+                            <span asp-validation-for="Email" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Password" class="form-label">Mật khẩu</label>
+                            <input asp-for="Password" type="password" class="form-control" autocomplete="current-password" />
+                            <span asp-validation-for="Password" class="text-danger small"></span>
+                        </div>
+
+                        @if (Model.AllowRememberLogin)
+                        {
+                            <div class="form-check mb-3">
+                                <input asp-for="RememberLogin" class="form-check-input" />
+                                <label asp-for="RememberLogin" class="form-check-label">Ghi nhớ đăng nhập</label>
+                            </div>
+                        }
+
+                        <div class="d-flex justify-content-between mb-3">
+                            <button type="submit" name="button" value="login" class="btn btn-primary">Đăng nhập</button>
+                            <button type="submit" name="button" value="cancel" class="btn btn-link">Hủy</button>
+                        </div>
+                    </form>
+
+                    <div class="text-center small">
+                        <a asp-controller="Account" asp-action="Login" asp-route-returnUrl="@Model.ReturnUrl">Quên mật khẩu?</a>
+                    </div>
+                }
+
+                @if (Model.VisibleExternalProviders.Any())
+                {
+                    <hr class="my-4" />
+                    <div class="d-grid gap-2">
+                        @foreach (var provider in Model.VisibleExternalProviders)
+                        {
+                            <a class="btn btn-outline-secondary"
+                               asp-controller="External"
+                               asp-action="Challenge"
+                               asp-route-scheme="@provider.AuthenticationScheme"
+                               asp-route-returnUrl="@Model.ReturnUrl">
+                                Đăng nhập với @provider.DisplayName
+                            </a>
+                        }
+                    </div>
+                }
+
+                @if (!Model.EnableLocalLogin && !Model.VisibleExternalProviders.Any())
+                {
+                    <div class="alert alert-warning">Hiện không có phương thức đăng nhập nào khả dụng.</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

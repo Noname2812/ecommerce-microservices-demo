@@ -1,0 +1,40 @@
+@model LoggedOutViewModel
+@{
+    ViewData["Title"] = "Đã đăng xuất";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4 text-center">
+                <h3 class="card-title mb-3">Bạn đã đăng xuất</h3>
+                @if (!string.IsNullOrWhiteSpace(Model.ClientName))
+                {
+                    <p>Bạn vừa đăng xuất khỏi <strong>@Model.ClientName</strong>.</p>
+                }
+                @if (Model.PostLogoutRedirectUri != null)
+                {
+                    <p>
+                        <a class="btn btn-link" href="@Model.PostLogoutRedirectUri">Quay lại ứng dụng</a>
+                    </p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.SignOutIframeUrl != null)
+{
+    <iframe width="0" height="0" class="signout" src="@Model.SignOutIframeUrl"></iframe>
+}
+
+@section Scripts {
+    @if (Model.AutomaticRedirectAfterSignOut && !string.IsNullOrWhiteSpace(Model.PostLogoutRedirectUri))
+    {
+        <script>
+            (function () {
+                window.setTimeout(function () { window.location.href = '@Model.PostLogoutRedirectUri'; }, 800);
+            })();
+        </script>
+    }
+}

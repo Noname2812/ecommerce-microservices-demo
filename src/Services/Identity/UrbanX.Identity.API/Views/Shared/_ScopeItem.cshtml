@@ -1,0 +1,19 @@
+@model ScopeViewModel
+
+<label class="list-group-item d-flex gap-2 align-items-start">
+    <input class="form-check-input flex-shrink-0" type="checkbox"
+           name="ScopesConsented" value="@Model.Value"
+           checked="@Model.Checked" disabled="@Model.Required" />
+    <span>
+        <strong>@Model.DisplayName</strong>
+        @if (Model.Required)
+        {
+            <span class="badge bg-secondary ms-1">Bắt buộc</span>
+            <input type="hidden" name="ScopesConsented" value="@Model.Value" />
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.Description))
+        {
+            <div class="text-muted small">@Model.Description</div>
+        }
+    </span>
+</label>

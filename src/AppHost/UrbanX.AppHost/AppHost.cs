@@ -19,20 +19,21 @@ var rabbitMq = builder.AddRabbitMQ("messaging")
     .WithManagementPlugin();
 
 // Add Elasticsearch
- var elasticsearch = builder.AddElasticsearch("elasticsearch");
+//  var elasticsearch = builder.AddElasticsearch("elasticsearch");
 
 // Add Services
 var identityService = builder.AddProject<Projects.UrbanX_Identity_API>("identity")
+    .WithHttpEndpoint(port: 5005)
     .WithReference(identityDb)
     .WithReference(rabbitMq)
     .WaitFor(identityDb)
     .WaitFor(rabbitMq);
 
-var searchService = builder.AddProject<Projects.UrbanX_Search_API>("search")
-    .WithReference(identityService)
-    .WithReference(rabbitMq)
-    .WaitFor(rabbitMq)
-    .WaitFor(elasticsearch);
+// var searchService = builder.AddProject<Projects.UrbanX_Search_API>("search")
+//     .WithReference(identityService)
+//     .WithReference(rabbitMq)
+//     .WaitFor(rabbitMq)
+//     .WaitFor(elasticsearch);
 
 var catalogService = builder.AddProject<Projects.UrbanX_Catalog_API>("catalog")
     .WithReference(catalogDb)

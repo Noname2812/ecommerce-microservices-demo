@@ -1,0 +1,18 @@
+@model LogoutViewModel
+@{
+    ViewData["Title"] = "Đăng xuất";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4 text-center">
+                <h3 class="card-title mb-3">Bạn có chắc muốn đăng xuất?</h3>
+                <form asp-action="Logout" method="post">
+                    <input type="hidden" asp-for="LogoutId" />
+                    <button type="submit" class="btn btn-primary">Đăng xuất</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

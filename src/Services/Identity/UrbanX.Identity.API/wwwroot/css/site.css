@@ -1,0 +1,17 @@
+body {
+    background-color: #f4f6f9;
+}
+
+.card {
+    border: none;
+    border-radius: .5rem;
+}
+
+.list-group-item {
+    cursor: pointer;
+}
+
+.list-group-item:has(input[disabled]) {
+    cursor: not-allowed;
+    opacity: 0.85;
+}

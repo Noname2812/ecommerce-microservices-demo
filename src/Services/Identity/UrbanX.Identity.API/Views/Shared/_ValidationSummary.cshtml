@@ -1,0 +1,17 @@
+@if (ViewContext.ModelState.ErrorCount > 0)
+{
+    <div class="alert alert-danger" role="alert">
+        <ul class="mb-0">
+            @foreach (var modelState in ViewContext.ModelState.Values)
+            {
+                foreach (var error in modelState.Errors)
+                {
+                    if (!string.IsNullOrWhiteSpace(error.ErrorMessage))
+                    {
+                        <li>@error.ErrorMessage</li>
+                    }
+                }
+            }
+        </ul>
+    </div>
+}

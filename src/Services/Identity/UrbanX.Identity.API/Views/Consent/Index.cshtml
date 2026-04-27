@@ -1,0 +1,60 @@
+@model ConsentViewModel
+@{
+    ViewData["Title"] = "Xác nhận quyền";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center mb-3">
+                    @if (!string.IsNullOrWhiteSpace(Model.ClientLogoUrl))
+                    {
+                        <img src="@Model.ClientLogoUrl" class="me-3" style="max-height:48px" alt="@Model.ClientName" />
+                    }
+                    <h4 class="mb-0">@Model.ClientName</h4>
+                </div>
+                <p class="text-muted">Ứng dụng đang yêu cầu các quyền sau:</p>
+
+                <form asp-action="Index" method="post">
+                    <input type="hidden" asp-for="ReturnUrl" />
+
+                    @if (Model.IdentityScopes.Any())
+                    {
+                        <h6 class="mt-3">Thông tin định danh</h6>
+                        <div class="list-group mb-3">
+                            @foreach (var scope in Model.IdentityScopes)
+                            {
+                                @await Html.PartialAsync("_ScopeItem", scope)
+                            }
+                        </div>
+                    }
+
+                    @if (Model.ApiScopes.Any())
+                    {
+                        <h6 class="mt-3">Quyền truy cập API</h6>
+                        <div class="list-group mb-3">
+                            @foreach (var scope in Model.ApiScopes)
+                            {
+                                @await Html.PartialAsync("_ScopeItem", scope)
+                            }
+                        </div>
+                    }
+
+                    @if (Model.AllowRememberConsent)
+                    {
+                        <div class="form-check mb-3">
+                            <input asp-for="RememberConsent" class="form-check-input" />
+                            <label asp-for="RememberConsent" class="form-check-label">Ghi nhớ lựa chọn của tôi</label>
+                        </div>
+                    }
+
+                    <div class="d-flex gap-2">
+                        <button name="button" value="yes" class="btn btn-primary">Đồng ý</button>
+                        <button name="button" value="no" class="btn btn-outline-secondary">Từ chối</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,14 @@
+@model RedirectViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="0;url=@Model.RedirectUrl" />
+    <title>Đang chuyển hướng...</title>
+</head>
+<body>
+    <p>Đang chuyển hướng tới <a href="@Model.RedirectUrl">@Model.RedirectUrl</a>…</p>
+</body>
+</html>

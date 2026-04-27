@@ -1,0 +1,29 @@
+@model ErrorViewModel
+@{
+    ViewData["Title"] = "Lỗi";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="alert alert-danger">
+            <h4 class="alert-heading">Đã xảy ra lỗi</h4>
+            @if (Model.Error != null)
+            {
+                <p><strong>Mã lỗi:</strong> @Model.Error.Error</p>
+                @if (!string.IsNullOrWhiteSpace(Model.Error.ErrorDescription))
+                {
+                    <p>@Model.Error.ErrorDescription</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Error.RequestId))
+                {
+                    <p class="mb-0"><small>Request ID: @Model.Error.RequestId</small></p>
+                }
+            }
+            else
+            {
+                <p class="mb-0">Đã có lỗi xảy ra trong quá trình xử lý yêu cầu của bạn.</p>
+            }
+        </div>
+        <a href="/" class="btn btn-link">Quay lại trang chủ</a>
+    </div>
+</div>

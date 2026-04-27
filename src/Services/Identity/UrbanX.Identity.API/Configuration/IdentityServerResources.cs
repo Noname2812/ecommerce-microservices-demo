@@ -41,6 +41,8 @@ internal static class IdentityServerResources
             AllowedGrantTypes = GrantTypes.Code,
             RequirePkce = true,
             RequireClientSecret = false,
+            RequireConsent = true,
+            AllowRememberConsent = true,
             AllowOfflineAccess = true,
             RefreshTokenUsage = TokenUsage.OneTimeOnly,
             RefreshTokenExpiration = TokenExpiration.Sliding,

@@ -52,7 +52,7 @@ builder.Services
     .AddEntityFrameworkStores<IdentityDbContext>()
     .AddDefaultTokenProviders();
 
-// Cookie config (used during external login challenge → callback)
+// Cookie config (used during external login challenge → callback, and Quickstart login UI)
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.Name = "urbanx.identity";
@@ -60,6 +60,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.ExpireTimeSpan = TimeSpan.FromHours(1);
     options.SlidingExpiration = true;
+    options.LoginPath = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.AccessDeniedPath = "/Account/AccessDenied";
 });
 
 // Duende IdentityServer
@@ -110,6 +113,7 @@ builder.Services
     });
 
 builder.Services.AddCarter();
+builder.Services.AddControllersWithViews();
 
 var app = builder.Build();
 
@@ -124,6 +128,7 @@ app.UseExceptionHandler();
 // Identity also exposes its own auth via Duende (/connect/**, /api/account/**)
 app.UseUserContext();
 
+app.UseStaticFiles();
 app.UseRouting();
 app.UseIdentityServer();
 app.UseAuthorization();
@@ -151,6 +156,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapCarter();
+app.MapDefaultControllerRoute();
 app.Run();
 
 public partial class Program { }
