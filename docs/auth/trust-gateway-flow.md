@@ -3,34 +3,39 @@
 ## Mục đích
 
 Tách trách nhiệm:
-- **Gateway** = authentication (verify JWT, ai là ai)
+- **Gateway** = authentication (cookie BFF session, ai là ai)
 - **Service** = authorization (làm được gì với resource)
 
-Gateway verify JWT một lần, enrich identity vào headers, strip Authorization header, rồi forward sang service. Service không decode JWT — chỉ đọc headers qua `IUserContext` rồi check permission qua `AuthorizationPipelineBehavior` (MediatR).
+Gateway dùng **Duende.BFF**: là OIDC client thay SPA, lưu access/refresh token trong server-side session, browser nhận cookie `urbanx.bff` HttpOnly. Mỗi request, Gateway đọc cookie → User principal (claims từ id_token), enrich identity vào `X-User-*` headers, strip `Cookie` + `Authorization` rồi forward sang service. Service không decode JWT — chỉ đọc headers qua `IUserContext` rồi check permission qua `AuthorizationPipelineBehavior` (MediatR).
+
+> Direct JWT bearer testing (curl/Postman) qua Gateway KHÔNG còn hỗ trợ — phải dùng cookie flow hoặc bypass Gateway, gọi service trực tiếp với mock `X-User-*` headers.
 
 ## Sơ đồ
 
 ```
-Client ──Authorization: Bearer <jwt>──▶ Gateway
-                                          ├─ JwtBearer verify
-                                          ├─ GatewayRbacMiddleware (coarse RBAC)
-                                          ├─ RequestHeaderEnricher set X-User-*
-                                          └─ strip Authorization + Cookie
-                                                  │
-                                                  ▼ YARP forward
-                                          Catalog/Inventory Service
-                                          ├─ UserContextMiddleware (tracing tags)
-                                          ├─ Carter endpoint (no RequireAuthorization)
-                                          ▼ MediatR.Send(command)
-                                          ├─ LoggingPipelineBehavior
-                                          ├─ IdempotencyPipelineBehavior
-                                          ├─ AuthorizationPipelineBehavior
-                                          │     ├─ reflect [RequirePermission] / [RequireRole] / [AllowAnonymous]
-                                          │     └─ check IUserContext (UserId, Roles, Scope)
-                                          ├─ ValidationPipelineBehavior
-                                          ├─ TransactionPipelineBehavior
-                                          └─ Handler (inject IUserContext khi cần UserId)
+Browser ──Cookie: urbanx.bff──▶ Gateway
+                                  ├─ Cookie auth scheme verify session
+                                  ├─ UseBff middleware (anti-forgery)
+                                  ├─ GatewayRbacMiddleware (coarse RBAC)
+                                  ├─ RequestHeaderEnricher set X-User-*
+                                  └─ strip Cookie + Authorization
+                                          │
+                                          ▼ YARP forward (BFF transform attaches access_token)
+                                  Catalog/Inventory Service
+                                  ├─ UserContextMiddleware (tracing tags)
+                                  ├─ Carter endpoint (no RequireAuthorization)
+                                  ▼ MediatR.Send(command)
+                                  ├─ LoggingPipelineBehavior
+                                  ├─ IdempotencyPipelineBehavior
+                                  ├─ AuthorizationPipelineBehavior
+                                  │     ├─ reflect [RequirePermission] / [RequireRole] / [AllowAnonymous]
+                                  │     └─ check IUserContext (UserId, Roles, Scope)
+                                  ├─ ValidationPipelineBehavior
+                                  ├─ TransactionPipelineBehavior
+                                  └─ Handler (inject IUserContext khi cần UserId)
 ```
+
+> Lưu ý: BFF.Yarp transforms attach `Authorization: Bearer <access_token>` vào outgoing request, nhưng `RequestHeaderEnricher` chạy SAU đó vẫn strip cả `Authorization` lẫn `Cookie`. Hai cơ chế song song; backend chỉ tin `X-User-*`.
 
 ## Headers Gateway → Service
 
@@ -38,13 +43,13 @@ Client ──Authorization: Bearer <jwt>──▶ Gateway
 
 | Header | Nguồn | Ví dụ |
 |---|---|---|
-| `X-User-Id` | claim `sub` | `e35c3863-485f-47bc-98b4-2ebdfdb4a2cb` |
+| `X-User-Id` | claim `sub` (từ id_token, populated vào cookie session) | `e35c3863-485f-47bc-98b4-2ebdfdb4a2cb` |
 | `X-User-Roles` | claim `role`/`roles` (comma-separated) | `seller,merchant` |
 | `X-Merchant-Id` | claim `merchant_id` | guid |
 | `X-Permission-Scope` | RBAC middleware (`own` hoặc `all`) | `own` |
 | `X-Request-Id` | correlation id | guid |
 
-Gateway **strip** `Authorization` và `Cookie` trước khi forward — service không bao giờ thấy JWT.
+Gateway **strip** `Authorization` và `Cookie` trước khi forward — service không bao giờ thấy JWT hay BFF cookie.
 
 ## API permission ở Service
 
@@ -129,6 +134,7 @@ Mapping ở [`ApiEndpoint.cs`](../../src/Services/Catalog/UrbanX.Catalog.API/Abs
 
 ## Cấu trúc file
 
+**Service-side (`IUserContext` + behaviors):**
 | File | Mục đích |
 |---|---|
 | `Shared.Application/Authorization/IUserContext.cs` | Interface đọc identity |
@@ -140,6 +146,16 @@ Mapping ở [`ApiEndpoint.cs`](../../src/Services/Catalog/UrbanX.Catalog.API/Abs
 | `Shared.Messaging/Authorization/UserContextMiddleware.cs` | Set OpenTelemetry activity tags |
 | `Shared.Messaging/Authorization/UserContextApplicationBuilderExtensions.cs` | `app.UseUserContext()` |
 | `Shared.Messaging/Behaviors/AuthorizationPipelineBehavior.cs` | MediatR behavior reflect attribute → check `IUserContext` |
+
+**Gateway-side (BFF + RBAC + enrichment):**
+| File | Mục đích |
+|---|---|
+| `UrbanX.Gateway.Infrastructure/Bff/GatewayBffServiceCollectionExtensions.cs` | Cookie + OIDC + Duende.BFF wiring |
+| `UrbanX.Gateway.Infrastructure/Bff/IdentityAuthorityResolver.cs` | Resolve Identity URL từ Aspire/config |
+| `UrbanX.Gateway.Infrastructure/Rbac/GatewayRbacMiddleware.cs` | Check Public/Authenticated/Permission per route |
+| `UrbanX.Gateway.Infrastructure/Rbac/PermissionClaimReader.cs` | Đọc `permission` claims từ cookie principal |
+| `UrbanX.Gateway.Infrastructure/Enrichment/RequestHeaderEnricher.cs` | Set `X-User-*` headers, strip Cookie + Authorization |
+| `UrbanX.Gateway.Application/Configuration/GatewayBffOptions.cs` | Bind từ section `Bff` |
 
 ## Đăng ký vào service
 
@@ -178,5 +194,6 @@ Khi Catalog gọi Inventory qua HTTP hay khi consumer xử lý integration event
   userContext.SetupGet(u => u.IsAuthenticated).Returns(true);
   userContext.SetupGet(u => u.Scope).Returns(PermissionScope.All);
   ```
-- Integration: gửi request kèm header `X-User-Id` → service xử lý OK.
+- Integration: gọi service trực tiếp (bypass Gateway) kèm header `X-User-Id`/`X-User-Roles`/`X-Permission-Scope` → service xử lý OK.
 - Bỏ header → `AuthorizationPipelineBehavior` trả `AUTH_REQUIRED` → 401.
+- E2E qua Gateway: dùng browser hoặc HTTP client biết handle cookie. Login flow: navigate `/bff/login` → submit Identity login form → cookie `urbanx.bff` được set → các request tiếp theo gửi cookie tự động.

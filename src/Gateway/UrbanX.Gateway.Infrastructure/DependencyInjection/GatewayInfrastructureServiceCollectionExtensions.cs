@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using UrbanX.Gateway.Application.Abstractions;
 using UrbanX.Gateway.Application.Configuration;
+using UrbanX.Gateway.Infrastructure.Bff;
 using UrbanX.Gateway.Infrastructure.Edge;
 using UrbanX.Gateway.Infrastructure.Enrichment;
 using UrbanX.Gateway.Infrastructure.Rbac;
@@ -37,7 +38,7 @@ public static class GatewayInfrastructureServiceCollectionExtensions
         services.AddSingleton<IRequestHeaderEnricher, RequestHeaderEnricher>();
 
         services.AddGatewayRateLimiting(configuration);
-        _ = services.AddGatewayAuthentication(configuration, environment);
+        _ = services.AddGatewayBff(configuration, environment);
 
         var reverseProxy = new YarpGatewayReverseProxy();
         reverseProxy.RegisterServices(services, configuration);
@@ -48,6 +49,12 @@ public static class GatewayInfrastructureServiceCollectionExtensions
 
     public static void UseGatewayEdgeCors(this WebApplication app) =>
         app.UseCors(EdgeCorsPolicyNames.Default);
+
+    public static WebApplication MapGatewayBff(this WebApplication app)
+    {
+        app.MapBffManagementEndpoints();
+        return app;
+    }
 
     public static IEndpointRouteBuilder MapGatewayReverseProxy(this WebApplication app)
     {

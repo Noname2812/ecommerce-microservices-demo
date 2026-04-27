@@ -21,17 +21,18 @@ Indexes: `user_id`, `event_type`, `occurred_at` (for filter + sort).
 
 | Constant | Recorded by |
 |---|---|
-| `REGISTERED` | Register user |
-| `EMAIL_CONFIRMED` | Confirm email |
-| `LOGIN_SUCCESS` / `LOGIN_FAILED` | Duende login (via `Events.RaiseSuccessEvents` — TODO wire to audit) |
-| `LOGOUT` | Duende endsession |
-| `PASSWORD_CHANGED` | Change password |
-| `PASSWORD_RESET_REQUESTED` / `PASSWORD_RESET` | Forgot/reset password |
-| `PROFILE_UPDATED` | Update profile |
-| `ROLE_ASSIGNED` / `ROLE_REVOKED` | Admin role management |
-| `ACCOUNT_LOCKED` | Identity lockout (TODO wire) |
-| `ACCOUNT_DEACTIVATED` / `ACCOUNT_ACTIVATED` | Admin |
-| `EXTERNAL_LOGIN_GOOGLE` | Google OAuth |
+| `REGISTERED` | `RegisterUserCommandHandler` |
+| `EMAIL_CONFIRMED` | `ConfirmEmailCommandHandler` |
+| `LOGIN_SUCCESS` | `AccountController.Login` (Quickstart UI) — sau khi `SignInManager.PasswordSignInAsync` thành công |
+| `LOGIN_FAILED` | `AccountController.Login` — metadata `reason=invalid_credentials` hoặc `reason=inactive` |
+| `LOGOUT` | `AccountController.Logout` (Quickstart UI) — sau `SignInManager.SignOutAsync` |
+| `PASSWORD_CHANGED` | `ChangePasswordCommandHandler` |
+| `PASSWORD_RESET_REQUESTED` / `PASSWORD_RESET` | Forgot/Reset password handlers |
+| `PROFILE_UPDATED` | `UpdateProfileCommandHandler` |
+| `ROLE_ASSIGNED` / `ROLE_REVOKED` | `AssignRole`/`RevokeRole` handlers |
+| `ACCOUNT_LOCKED` | `AccountController.Login` — khi `result.IsLockedOut == true` từ `PasswordSignInAsync` |
+| `ACCOUNT_DEACTIVATED` / `ACCOUNT_ACTIVATED` | `Deactivate`/`Activate` handlers |
+| `EXTERNAL_LOGIN_GOOGLE` | `ExternalController.Callback` — metadata `provider=Google` |
 
 ## Query Endpoint
 

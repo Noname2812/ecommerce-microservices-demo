@@ -28,6 +28,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapDefaultEndpoints();
 
+app.MapGatewayBff();
 app.MapGatewayReverseProxy();
 
 app.Run();

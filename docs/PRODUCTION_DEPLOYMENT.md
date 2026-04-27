@@ -244,7 +244,11 @@ kubectl apply -f kubernetes/cert-issuer.yaml
 - Configure proper OAuth2 scopes
 - Implement rate limiting
 - Enable audit logging for authentication events
-- Use strong signing keys for JWT tokens
+- Use strong signing keys for JWT tokens (replace `AddDeveloperSigningCredential` ở Identity với cert + key rotation)
+- Gateway BFF cookie: bật `CookieSecurePolicy.Always` + `SameSite=Strict` (hoặc `Lax` nếu cần cross-site OAuth callback) trong production
+- Switch Duende.BFF server-side session từ in-memory sang Redis/SQL store (`AddSessionStore<RedisSessionStore>`) để scale-out + survive restart
+- Set `Bff:ClientSecret` qua secret manager (Azure Key Vault, AWS Secrets Manager, K8s Secret) — không bao giờ commit
+- Cân nhắc mTLS giữa Gateway ↔ Service (Trust-the-Gateway pattern), xem `docs/auth/trust-gateway-flow.md`
 
 ## Monitoring and Observability
 
@@ -469,10 +473,11 @@ pg_dump -h postgres -U postgres urbanx > /backups/urbanx_$DATE.sql
 - All Services: `http://<service>:8080/alive`
 
 ### Important Ports
-- Gateway: 8080 (internal), 5000 (external)
+- Gateway: 8080 (internal), 5050 (dev pinned external) — exposes BFF endpoints `/bff/*`, `/signin-oidc`, `/signout-callback-oidc`
+- Identity: 5005 (pinned) — exposes `/Account/Login`, `/Consent/Index`, `/connect/*`, `/.well-known/*`, `/signin-google`
 - Services: 8080 (internal)
 - PostgreSQL: 5432
-- Kafka: 9092
+- RabbitMQ: 5672 (AMQP), 15672 (management)
 
 ### Key Files
 - Production config: `appsettings.Production.json`

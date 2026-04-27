@@ -30,16 +30,8 @@ builder.Services.AddIdentityServer(options =>
 });
 ```
 
-#### Replace Test Users
-The current implementation uses hardcoded test users which **MUST BE REMOVED** in production:
-
-```csharp
-// ❌ DO NOT USE IN PRODUCTION
-.AddTestUsers(new List<TestUser> { ... });
-
-// ✅ USE THIS INSTEAD
-.AddAspNetIdentity<ApplicationUser>();  // With EF Core storage
-```
+#### User Storage
+Current implementation already uses ASP.NET Identity with EF Core (`AddAspNetIdentity<ApplicationUser>()`). KHÔNG dùng Duende `AddTestUsers`. Seed admin trong `IdentitySeeder` chỉ chạy 1 lần lúc migrate — đổi password mặc định qua `Seed:AdminEmail`/`Seed:AdminPassword` config trước khi expose ra public.
 
 #### Strong Password Policy
 Configure password requirements:
@@ -78,36 +70,25 @@ new Client
 }
 ```
 
-### API Authorization
+### API Authorization (UrbanX pattern)
 
-#### Protect All Endpoints
+UrbanX dùng **Trust-the-Gateway**: Gateway authenticate user (cookie BFF session) → enrich `X-User-*` headers → service đọc identity qua `IUserContext` và authorize qua MediatR `AuthorizationPipelineBehavior` reflecting attributes trên Command/Query class. Service KHÔNG dùng `.RequireAuthorization()` ở Carter endpoints.
+
 ```csharp
-app.MapGet("/api/orders/{id}", async (Guid id, OrderDbContext db) =>
-{
-    // Add authorization
-}).RequireAuthorization("orders.read");
+// Command/Query khai báo permission yêu cầu
+[RequirePermission(Permissions.Products.Write)]
+public record CreateProductCommand(...) : ICommand<Guid>;
 
-app.MapPost("/api/orders", async (Order order, OrderDbContext db) =>
-{
-    // Add authorization and validation
-}).RequireAuthorization("orders.write");
+[RequirePermission(Permissions.Products.Write, MinScope = PermissionScope.Own)]
+public record UpdateProductBasicInfoCommand(...) : ICommand;
+
+[AllowAnonymous]
+public record GetPublishedProductsQuery(...) : IQuery<...>;
 ```
 
-#### Implement Policy-Based Authorization
-```csharp
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("orders.read", policy =>
-        policy.RequireClaim("scope", "orders.read"));
-    
-    options.AddPolicy("orders.write", policy =>
-        policy.RequireClaim("scope", "orders.write"));
-    
-    options.AddPolicy("merchant.manage", policy =>
-        policy.RequireClaim("scope", "merchant.manage")
-              .RequireClaim("role", "merchant"));
-});
-```
+`AuthorizationPipelineBehavior` reflect attribute → check `IUserContext.Permissions` / `Roles` / `Scope`. Permissions là constants ở `Shared.Application/Authorization/Permissions.cs` (KHÔNG hardcode string literal).
+
+Chi tiết flow + production hardening (mTLS Gateway↔Service, network isolation): `docs/auth/trust-gateway-flow.md`. Gateway BFF: `docs/gateway/bff.md`.
 
 ## Data Protection
 

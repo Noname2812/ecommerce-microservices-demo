@@ -1,18 +1,19 @@
 # Identity Service
 
-OIDC + ASP.NET Core Identity service powered by Duende IdentityServer 7.4.6. Issues JWTs that the Gateway verifies; manages users, roles, profile, audit logs.
+OIDC + ASP.NET Core Identity service powered by Duende IdentityServer 7.4.6. Issues JWTs cho Gateway BFF + native SPA clients; manages users, roles, profile, audit logs.
 
-Port: **5005** (configured via Aspire) | DB: `urbanx_identity` | Connection string: `identitydb`
+Port: **5005** (pinned via Aspire) | DB: `urbanx_identity` | Connection string: `identitydb`
 
 ## Features (v1)
 
-- **Core auth**: register, email confirmation, login (`/connect/token`), refresh token, logout (`/connect/endsession`)
+- **Core auth**: register, email confirmation, login (Quickstart UI tại `/Account/Login`), refresh token, logout (`/Account/Logout` + `/connect/endsession`)
+- **Quickstart UI** (Razor MVC): Login form, Logout prompt, Consent screen, Error page, AccessDenied — Bootstrap 5.3 CDN, tiếng Việt. Chi tiết: `docs/identity/quickstart-ui.md`
 - **Profile management**: get/update profile, change password
 - **Role management** (admin): list users, assign/revoke role, deactivate/activate user
-- **Google OAuth**: external login via `/api/account/external/google` → callback at `/signin-google`
+- **Google OAuth**: external login qua Quickstart UI button → `/External/Challenge?scheme=Google` → callback `/signin-google` → `/External/Callback`. Chi tiết: `docs/identity/google-oauth.md`
 - **Email confirmation + Password reset**: token-based, emails currently stubbed via `LogEmailSender` (logs to console)
 - **Account lockout**: 5 failed attempts → 15-minute lockout (configurable in `Identity:Lockout`)
-- **Audit log**: every auth event written to `auth_audit_logs` with user-agent + IP
+- **Audit log**: every auth event written to `auth_audit_logs` with user-agent + IP. Chi tiết: `docs/identity/audit-log.md`
 - **Integration events**: `UserRegistered`, `UserProfileUpdated`, `UserRoleAssigned`, `UserRoleRevoked`, `UserDeactivated`, `UserActivated` published via Outbox
 
 ## Architecture
@@ -25,7 +26,13 @@ Identity/
 ├── UrbanX.Identity.Infrastructure/ # IEmailSender (LogEmailSender), IIdentityAuditWriter
 ├── UrbanX.Identity.Persistence/    # IdentityDbContext (extends OutboxDbContext) + EF configurations
 ├── UrbanX.Identity.Application/    # Commands, queries, validators
-└── UrbanX.Identity.API/            # Carter modules + Program.cs (Duende + Identity + Google)
+└── UrbanX.Identity.API/
+    ├── Apis/                      # Carter modules (AccountApis, ProfileApis, UsersApis, RolesApis, AuditApis)
+    ├── Quickstart/                # MVC Controllers + ViewModels + Options (Account, External, Consent, Home)
+    ├── Views/                     # Razor Views (Account/, Consent/, Home/, Shared/_Layout, ...)
+    ├── wwwroot/css/site.css       # Custom Bootstrap overrides
+    ├── Configuration/             # IdentityServerResources, IdentitySeeder
+    └── Program.cs                 # Duende + Identity + Google + Quickstart UI MVC wiring
 ```
 
 Notable: `IdentityDbContext` extends `OutboxDbContext` (not `IdentityDbContext<TUser, TRole, TKey>`) to share outbox infrastructure. ASP.NET Identity tables are configured manually via Fluent API in `Persistence/Configurations/`.
@@ -33,19 +40,32 @@ Notable: `IdentityDbContext` extends `OutboxDbContext` (not `IdentityDbContext<T
 ## Endpoints
 
 ### Public (whitelisted ở Gateway RBAC)
+
+**JSON APIs (Carter modules):**
 | Method | Path | Mục đích |
 |---|---|---|
 | POST | `/api/account/register` | Đăng ký email/password |
 | POST | `/api/account/confirm-email` | Xác nhận email (body: `{ userId, token }`) |
 | POST | `/api/account/forgot-password` | Gửi reset link (body: `{ email }`) |
 | POST | `/api/account/reset-password` | Đặt password mới (body: `{ userId, token, newPassword }`) |
+
+**OIDC + Quickstart UI (Duende + MVC):**
+| Method | Path | Mục đích |
+|---|---|---|
 | GET | `/.well-known/openid-configuration` | OIDC discovery |
 | GET | `/.well-known/openid-configuration/jwks` | Signing keys |
-| POST | `/connect/token` | Login (password / refresh_token grants) |
+| POST | `/connect/token` | Login (authorization_code / password / refresh_token grants) |
 | GET | `/connect/authorize` | Auth Code + PKCE flow |
 | POST | `/connect/endsession` | Logout |
 | POST | `/connect/revocation` | Revoke token |
 | GET | `/connect/userinfo` | OIDC userinfo |
+| GET/POST | `/Account/Login` | Quickstart UI login form |
+| GET/POST | `/Account/Logout` | Quickstart UI logout |
+| GET | `/Account/AccessDenied` | UI access denied |
+| GET | `/External/Challenge?scheme=Google&returnUrl=...` | Trigger external auth |
+| GET | `/External/Callback` | External provider callback handler |
+| GET/POST | `/Consent/Index` | Quickstart UI consent screen |
+| GET | `/Home/Error?errorId=...` | Duende error page |
 | GET | `/signin-google` | Google OAuth callback (set in Google Console) |
 
 ### Authenticated
@@ -73,11 +93,13 @@ Notable: `IdentityDbContext` extends `OutboxDbContext` (not `IdentityDbContext<T
   "IdentityServer": { "Authority": "http://localhost:5005", "Audience": "urbanx-api" },
   "Google": { "ClientId": "", "ClientSecret": "" },
   "Identity": { "Lockout": { "MaxFailedAccessAttempts": 5, "DefaultLockoutMinutes": 15 } },
-  "Seed": { "AdminEmail": "admin@urbanx.local", "AdminPassword": "Admin@123456" }
+  "Seed": { "AdminEmail": "admin@urbanx.local", "AdminPassword": "Admin@123456" },
+  "Bff": { "BaseUrl": "http://localhost:5050", "ClientSecret": "dev-bff-secret" }
 }
 ```
 
-To enable Google login set `Google:ClientId` and `Google:ClientSecret` (recommended via user-secrets / env vars).
+- `Bff:BaseUrl` + `Bff:ClientSecret` — Identity dùng để compose `RedirectUris`/secret cho client `urbanx-bff` ([IdentityServerResources.cs](../../src/Services/Identity/UrbanX.Identity.API/Configuration/IdentityServerResources.cs)). Phải khớp với Gateway `Bff` config.
+- Bật Google login: set `Google:ClientId` và `Google:ClientSecret` (khuyến nghị qua user-secrets / env vars).
 
 ## Seed Data
 
@@ -89,7 +111,17 @@ Permissions are stored as Role claims with type `permission`; `IUserContext.Perm
 
 ## Token Storage Strategy
 
-HttpOnly cookies. Frontend uses Authorization Code + PKCE flow against `/connect/authorize`. Refresh tokens are sliding 7-day. Gateway already supports reading `access_token` from cookie via `GatewayAuthenticationServiceCollectionExtensions`.
+**HttpOnly cookies tại Gateway BFF**. Frontend KHÔNG bao giờ giữ access/refresh token. Flow:
+
+1. Browser → Gateway `/bff/login` → 302 → Identity `/connect/authorize` (Auth Code + PKCE)
+2. Identity issues login UI → user authenticates → 302 back → Gateway `/signin-oidc?code=...`
+3. Gateway exchange code (server-to-server, dùng client secret của `urbanx-bff` confidential client) → access_token + refresh_token + id_token
+4. Gateway lưu tokens vào server-side session (in-memory cho dev, Redis/SQL cho prod), set cookie `urbanx.bff` HttpOnly
+5. Browser tiếp theo gửi cookie → Gateway resolve session → attach Authorization Bearer khi forward downstream (BFF.Yarp transform), nhưng RequestHeaderEnricher strip cả Cookie + Authorization và set X-User-* headers (Trust-the-Gateway)
+
+Refresh tokens sliding 7-day, one-time-use. SPA chỉ dùng `/bff/user`, `/bff/login`, `/bff/logout` — KHÔNG gọi trực tiếp `/connect/*`.
+
+Chi tiết: `docs/gateway/bff.md`.
 
 ## Limitations / Out of Scope
 

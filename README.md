@@ -204,16 +204,16 @@ npm run dev
 The application is now available at:
 
 - Frontend: `http://localhost:5173`
-- API Gateway: `http://localhost:5000`
+- API Gateway: `http://localhost:5050`
 - Identity Service: `http://localhost:5005`
 
 ---
 
 ## API Endpoints
 
-All API requests from the frontend go through the API Gateway at `http://localhost:5000`. The gateway forwards them to the appropriate service.
+All API requests from the frontend go through the API Gateway at `http://localhost:5050`. The gateway forwards them to the appropriate service.
 
-Endpoints marked **[Auth required]** require a valid JWT bearer token in the `Authorization: Bearer <token>` request header. The token is obtained by logging in through the Identity Service.
+Endpoints marked **[Auth required]** require a valid Gateway BFF cookie session (`urbanx.bff` HttpOnly). The frontend obtains it by navigating to `/bff/login` (Gateway acts as OIDC client thay SPA). Direct JWT bearer testing qua Gateway không hỗ trợ — xem `docs/gateway/bff.md` cho chi tiết flow và `docs/auth/trust-gateway-flow.md` cho cơ chế trust-the-gateway.
 
 ### Catalog Service — `/api/products`
 
@@ -390,10 +390,10 @@ You can also use `curl` to test the API through the gateway:
 
 ```bash
 # List all products (no authentication required)
-curl http://localhost:5000/api/products
+curl http://localhost:5050/api/v1/catalog/products
 
 # Get a specific product by ID
-curl http://localhost:5000/api/products/<product-id>
+curl http://localhost:5050/api/v1/catalog/products/<product-id>
 ```
 
 ### Troubleshooting

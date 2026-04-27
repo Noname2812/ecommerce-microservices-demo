@@ -1,9 +1,9 @@
+using Duende.Bff.Yarp;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using UrbanX.Gateway.Application.Abstractions;
-using Yarp.ReverseProxy;
 
 namespace UrbanX.Gateway.Infrastructure.ReverseProxy;
 
@@ -18,8 +18,10 @@ public sealed class YarpGatewayReverseProxy : IGatewayReverseProxy
         }
 
         services.AddReverseProxy()
+            .AddBffExtensions()
             .LoadFromConfig(reverse);
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder app) => app.MapReverseProxy();
+    public void MapEndpoints(IEndpointRouteBuilder app) =>
+        app.MapReverseProxy(proxy => proxy.UseAntiforgeryCheck());
 }

@@ -29,7 +29,16 @@ public sealed class GatewayRbacOptionsSetup : IConfigureOptions<GatewayRbacOptio
                 new PublicRouteEntry { PathPrefix = "/api/account/confirm-email", Method = "POST" },
                 new PublicRouteEntry { PathPrefix = "/api/account/forgot-password", Method = "POST" },
                 new PublicRouteEntry { PathPrefix = "/api/account/reset-password", Method = "POST" },
-                new PublicRouteEntry { PathPrefix = "/api/account/external", Method = "GET" }
+                new PublicRouteEntry { PathPrefix = "/api/account/external", Method = "GET" },
+                // BFF management endpoints + OIDC callbacks (login/logout flow)
+                new PublicRouteEntry { PathPrefix = "/bff/login", Method = "GET" },
+                new PublicRouteEntry { PathPrefix = "/bff/silent-login", Method = "GET" },
+                new PublicRouteEntry { PathPrefix = "/bff/silent-login-callback", Method = "GET" },
+                new PublicRouteEntry { PathPrefix = "/bff/logout", Method = "GET,POST" },
+                new PublicRouteEntry { PathPrefix = "/bff/user", Method = "GET" },
+                new PublicRouteEntry { PathPrefix = "/signin-oidc", Method = "GET,POST" },
+                new PublicRouteEntry { PathPrefix = "/signout-oidc", Method = "GET,POST" },
+                new PublicRouteEntry { PathPrefix = "/signout-callback-oidc", Method = "GET,POST" }
             ];
         }
     }

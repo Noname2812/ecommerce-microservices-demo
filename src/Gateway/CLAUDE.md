@@ -1,8 +1,8 @@
 # Gateway Service — UrbanX
 
-YARP reverse proxy, JWT authentication, RBAC, rate limiting, header enrichment.
+YARP reverse proxy, **Duende.BFF** cookie session (OIDC client thay SPA), RBAC, rate limiting, header enrichment.
 
-Downstream services apply **Trust-the-Gateway** pattern: they do NOT verify JWT — they read identity from `X-User-*` headers Gateway enriches here. End-to-end flow: `docs/auth/trust-gateway-flow.md`.
+Downstream services apply **Trust-the-Gateway** pattern: they do NOT verify JWT — they read identity from `X-User-*` headers Gateway enriches here. End-to-end flow: `docs/auth/trust-gateway-flow.md`. BFF chi tiết: `docs/gateway/bff.md`.
 
 ---
 
@@ -27,7 +27,7 @@ src/Gateway/
 | `Configuration/EdgeCorsPolicyNames.cs` | Constant `"UrbanX.EdgeCors"` |
 | `Configuration/EndpointAccessKind.cs` | Enum: `Public`, `Authenticated`, `Permission` |
 | `Configuration/EndpointAccessResult.cs` | Result returned by `IEndpointAccessRegistry` |
-| `Configuration/GatewayJwtOptions.cs` | JWT authority/audience — section `"Jwt"` |
+| `Configuration/GatewayBffOptions.cs` | BFF (cookie + OIDC) — section `"Bff"` |
 | `Configuration/GatewayRbacOptions.cs` | RBAC rules — section `"GatewayRbac"` |
 | `Configuration/KestrelEdgeOptions.cs` | Edge TLS (PFX) — section `"Kestrel:Edge"` |
 | `Configuration/ProtectedRouteEntry.cs` | Route needing JWT ± permissions |
@@ -40,12 +40,13 @@ src/Gateway/
 
 | Path | Purpose |
 |---|---|
+| `Bff/GatewayBffServiceCollectionExtensions.cs` | `AddGatewayBff()` — registers cookie + OIDC schemes, `Duende.BFF` server-side sessions |
+| `Bff/IdentityAuthorityResolver.cs` | Resolves Identity authority URL from Aspire env or config |
 | `Correlation/GatewayRequestCorrelationMiddleware.cs` | Assigns `X-Request-Id` if absent |
-| `DependencyInjection/GatewayAuthenticationServiceCollectionExtensions.cs` | JWT Bearer + `OnChallenge` 401 handler |
 | `DependencyInjection/GatewayCorsServiceCollectionExtensions.cs` | `AddGatewayCors()` — registers `CorsEdgeOptions` + policy |
-| `DependencyInjection/GatewayInfrastructureServiceCollectionExtensions.cs` | **Master DI entry point** `AddGatewayInfrastructure()` and pipeline helpers `UseGatewayEdgeCors()`, `MapGatewayReverseProxy()` |
+| `DependencyInjection/GatewayInfrastructureServiceCollectionExtensions.cs` | **Master DI entry point** `AddGatewayInfrastructure()` and pipeline helpers `UseGatewayEdgeCors()`, `MapGatewayBff()`, `MapGatewayReverseProxy()` |
 | `DependencyInjection/GatewayRateLimitingServiceCollectionExtensions.cs` | `AddGatewayRateLimiting()` — 5 sliding-window partitions |
-| `DependencyInjection/GatewayRequestPipelineExtensions.cs` | `UseGatewayDownstreamPipeline()` — orders all middleware |
+| `DependencyInjection/GatewayRequestPipelineExtensions.cs` | `UseGatewayDownstreamPipeline()` — orders all middleware (incl. `UseBff()`) |
 | `Edge/KestrelEdgeTlsConfiguration.cs` | Loads PFX cert and calls `kestrel.ListenAnyIP/Listen` |
 | `Enrichment/GatewayRequestEnrichmentMiddleware.cs` | Thin middleware that calls `IRequestHeaderEnricher.Apply()` |
 | `Enrichment/RequestHeaderEnricher.cs` | Sets `X-User-Id`, `X-User-Roles`, `X-Merchant-Id`, `X-Permission-Scope`, `X-Forwarded-For/Host`; strips `Cookie` + `Authorization` |
@@ -53,9 +54,9 @@ src/Gateway/
 | `Observability/GatewayStructuredRequestLoggingMiddleware.cs` | Structured `LogInformation`/`LogWarning` per request (skips health probes) |
 | `Rbac/EndpointAccessRegistry.cs` | `IEndpointAccessRegistry` impl — longest-prefix matching over `GatewayRbacOptions` |
 | `Rbac/GatewayRbacMiddleware.cs` | Enforces Public / Authenticated / Permission per route; sets `PermissionScope` in `HttpContext.Items` |
-| `Rbac/GatewayRbacOptionsSetup.cs` | Default public routes (health, `/connect/*`, `/api/account/*`, `/.well-known/*`, `/signin-google`, catalog GET) |
-| `Rbac/PermissionClaimReader.cs` | Reads `permission` claims + wildcard admin check from JWT |
-| `ReverseProxy/YarpGatewayReverseProxy.cs` | `IGatewayReverseProxy` impl — `AddReverseProxy().LoadFromConfig()` |
+| `Rbac/GatewayRbacOptionsSetup.cs` | Default public routes (health, `/connect/*`, `/api/account/*`, `/.well-known/*`, `/signin-google`, `/bff/*`, `/signin-oidc`, `/signout-*-oidc`, catalog GET) |
+| `Rbac/PermissionClaimReader.cs` | Reads `permission` claims + wildcard admin check from cookie principal |
+| `ReverseProxy/YarpGatewayReverseProxy.cs` | `IGatewayReverseProxy` impl — `AddReverseProxy().AddBffExtensions().LoadFromConfig()`; maps with `UseAntiforgeryCheck` |
 
 ---
 
@@ -67,12 +68,15 @@ Defined in `GatewayRequestPipelineExtensions.UseGatewayDownstreamPipeline()`:
 UseCors(EdgeCorsPolicyNames.Default)           ← UseGatewayEdgeCors()
   → GatewayRequestCorrelationMiddleware        ← assign X-Request-Id
   → UseRateLimiter                             ← sliding-window buckets
-  → UseAuthentication                          ← JWT Bearer
+  → UseAuthentication                          ← Cookie scheme (default) + OIDC challenge scheme
+  → UseBff                                     ← BFF anti-forgery + session check
   → UseAuthorization
   → GatewayRbacMiddleware                      ← Public/Authenticated/Permission check
-  → GatewayRequestEnrichmentMiddleware         ← inject downstream headers
+  → GatewayRequestEnrichmentMiddleware         ← inject downstream X-User-* headers
   → GatewayStructuredRequestLoggingMiddleware  ← log timing + status
-  → MapGatewayReverseProxy()                   ← YARP forwarding
+
+MapGatewayBff()           ← /bff/login, /bff/logout, /bff/user, /bff/silent-login (auto)
+MapGatewayReverseProxy()  ← YARP forwarding (BFF transforms attach access_token)
 ```
 
 ---
@@ -82,14 +86,15 @@ UseCors(EdgeCorsPolicyNames.Default)           ← UseGatewayEdgeCors()
 | Section | Bound to | Required |
 |---|---|---|
 | `Cors` | `CorsEdgeOptions` | Yes — at least one `AllowedOrigins` |
-| `Jwt` | `GatewayJwtOptions` | Yes — `Authority` (or env `services__identity__*`) |
+| `Bff` | `GatewayBffOptions` | Yes — `ClientId`, `ClientSecret` |
+| `IdentityServer:Authority` | (read by `IdentityAuthorityResolver`) | Yes — issuer URL (or env `services__identity__*`) |
 | `GatewayRbac` | `GatewayRbacOptions` | No — defaults filled by `GatewayRbacOptionsSetup` |
 | `RateLimit` | `RateLimitingOptions` | No — defaults: 1000 req/60 s global |
 | `Kestrel:Edge` | `KestrelEdgeOptions` | No — only needed for in-process TLS |
 | `ReverseProxy` | YARP | Yes — `ReverseProxy:Routes` must have children |
 
 Authority resolution order (first non-null wins):
-`services__identity__https__0` → `services__identity__http__0` → `IdentityServer:Authority` → `Jwt:Authority`
+`services__identity__https__0` → `services__identity__http__0` → `IdentityServer:Authority`
 
 ---
 
@@ -141,7 +146,7 @@ All forwarded to `identity-cluster` (Identity service, port 5005):
 | `identity-signin-google-route` | `/signin-google` (Google OAuth callback) |
 | `identity-api-route` | `/api/v1/identity/{**catch-all}` (authenticated management endpoints — profile, users, roles, audit-logs) |
 
-JWT authority resolved via Aspire env (`services__identity__http__0`) → falls back to `IdentityServer:Authority` → `Jwt:Authority`. Identity service issues JWTs with claims: `sub`, `email`, `role`, `merchant_id`, plus `permission` claims aggregated from role claims.
+Identity authority resolved via Aspire env (`services__identity__http__0`) → falls back to `IdentityServer:Authority`. Identity service issues JWTs with claims: `sub`, `email`, `role`, `merchant_id`, plus `permission` claims aggregated from role claims. Gateway exchange code → cookie session (Duende.BFF), KHÔNG còn JwtBearer scheme.
 
 ---
 

@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | **Catalog** | 5290 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + Outbox |
 | **Search** | dynamic | Active | Elasticsearch | Consumes Catalog events |
-| **Gateway** | dynamic | Active | — | YARP + JWT + Rate limiting |
+| **Gateway** | 5050 | Active | — | YARP + Duende.BFF (cookie session) + Rate limiting |
 | **Identity** | 5005 | Active | PostgreSQL (`urbanx_identity`) | Duende IdentityServer + ASP.NET Identity + Outbox |
 | **Order** | 5002 | Disabled | PostgreSQL | Saga choreography |
 | **Payment** | 5004 | Disabled | PostgreSQL | Stripe + Outbox |
@@ -84,18 +84,20 @@ tests/
 - Sử dụng skill: `command` hoặc `query`
 
 ### Trust-the-Gateway Auth
-- Gateway verify JWT, enrich `X-User-Id` / `X-User-Roles` / `X-Merchant-Id` / `X-Permission-Scope` headers, strip Authorization
+- Gateway dùng **Duende.BFF**: là OIDC client thay SPA, lưu access/refresh token trong server-side session, expose cookie `urbanx.bff` HttpOnly cho browser
+- Browser request → Gateway đọc cookie → User principal → enrich `X-User-Id` / `X-User-Roles` / `X-Merchant-Id` / `X-Permission-Scope` headers, strip Cookie + Authorization
 - Service KHÔNG verify JWT, KHÔNG dùng `RequireAuthorization()` ở endpoints (Identity là exception — nó là JWT issuer)
 - `app.UseUserContext()` + `IUserContext` (scoped) đọc identity từ headers
 - `AuthorizationPipelineBehavior` reflect attribute → check IUserContext
 - Permissions/Roles constants: `Shared.Application/Authorization/Permissions.cs` — `Products`, `Inventory`, `Users`, `Roles`
-- Doc: `docs/auth/trust-gateway-flow.md`
+- Direct API testing với JWT bearer KHÔNG còn hỗ trợ qua Gateway — phải đi qua cookie flow hoặc gọi service trực tiếp với mock `X-User-*` headers
+- Doc: `docs/auth/trust-gateway-flow.md` · `docs/gateway/bff.md`
 
 ### Identity Service (Duende IdentityServer)
 - Issuer JWT cho toàn hệ thống tại port 5005
 - Endpoints public: `/connect/{token,authorize,endsession,userinfo,revocation}`, `/.well-known/*`, `/api/account/{register,confirm-email,forgot-password,reset-password}`, `/signin-google`
 - Endpoints authenticated: `/api/v1/identity/{me,profile,users,roles,audit-logs,...}`
-- 2 clients (in-memory, dev): `urbanx-spa` (Auth Code + PKCE + offline_access), `urbanx-test-password` (resource owner password, dev secret)
+- 3 clients (in-memory, dev): `urbanx-bff` (Auth Code + PKCE + client secret, cho Gateway BFF), `urbanx-spa` (Auth Code + PKCE public client, cho native SPA flow nếu cần), `urbanx-test-password` (ROP, dev only)
 - Permission claims trên Role: claim type `permission`, dùng cho Gateway RBAC + `IUserContext`
 - `LogEmailSender` (dev) ghi log thay gửi email; thay bằng SMTP/SendGrid khi production
 - Outbox publish: `UserRegistered`, `UserProfileUpdated`, `UserRoleAssigned`, `UserRoleRevoked`, `UserDeactivated`, `UserActivated` (`Shared.Contract/Messaging/Identity/`)
@@ -120,7 +122,9 @@ Contracts ở `Shared.Contract/Messaging/`:
 Order → Inventory → Payment → Merchant, mỗi service emit event kế tiếp.
 Base classes: `SagaStateMachineBase`, `CompensatableActivityBase` trong `Shared.Messaging/Saga/`.
 
-### Gateway (YARP)
+### Gateway (YARP + Duende.BFF)
+Port: 5050 (pinned). BFF endpoints (auto-mapped): `/bff/{login,logout,user,silent-login}`, `/signin-oidc`, `/signout-callback-oidc`, `/signout-oidc`.
+
 Routes trong `appsettings.json`:
 - `/api/v1/catalog/**` → Catalog (5290)
 - `/api/orders/**` → Order (5002)
