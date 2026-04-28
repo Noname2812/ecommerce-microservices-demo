@@ -23,7 +23,6 @@ var rabbitMq = builder.AddRabbitMQ("messaging")
 
 // Add Services
 var identityService = builder.AddProject<Projects.UrbanX_Identity_API>("identity")
-    .WithHttpEndpoint(port: 5005)
     .WithReference(identityDb)
     .WithReference(rabbitMq)
     .WaitFor(identityDb)
@@ -71,7 +70,6 @@ var inventoryService = builder.AddProject<Projects.UrbanX_Inventory_API>("invent
 
 // Add Gateway with references to all services
 var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
-    .WithHttpEndpoint(port: 5050)
     .WithReference(catalogService)
     //.WithReference(orderService)
     //.WithReference(merchantService)

@@ -92,13 +92,13 @@ var googleClientId = builder.Configuration["Google:ClientId"];
 var googleClientSecret = builder.Configuration["Google:ClientSecret"];
 if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
 {
-    authenticationBuilder.AddGoogle(IdentityServerConstants.ExternalCookieAuthenticationScheme, options =>
-    {
-        options.SignInScheme = IdentityServerConstants.ExternalCookieAuthenticationScheme;
-        options.ClientId = googleClientId;
-        options.ClientSecret = googleClientSecret;
-        options.CallbackPath = "/signin-google";
-    });
+authenticationBuilder.AddGoogle(options =>
+{
+    options.SignInScheme = IdentityServerConstants.ExternalCookieAuthenticationScheme;
+    options.ClientId = googleClientId;
+    options.ClientSecret = googleClientSecret;
+    options.CallbackPath = "/signin-google";
+});
 }
 
 builder.Services.AddProblemDetails();
