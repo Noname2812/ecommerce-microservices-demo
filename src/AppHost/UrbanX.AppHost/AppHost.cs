@@ -5,7 +5,7 @@ var postgres = builder.AddPostgres("postgres")
     .WithPgWeb();
 
 var catalogDb = postgres.AddDatabase("catalogdb", "urbanx_catalog");
-//var orderDb = postgres.AddDatabase("orderdb", "urbanx_order");
+var orderDb = postgres.AddDatabase("orderdb", "urbanx_order");
 //var merchantDb = postgres.AddDatabase("merchantdb", "urbanx_merchant");
 //var paymentDb = postgres.AddDatabase("paymentdb", "urbanx_payment");
 var inventoryDb = postgres.AddDatabase("inventorydb", "urbanx_inventory");
@@ -42,11 +42,13 @@ var catalogService = builder.AddProject<Projects.UrbanX_Catalog_API>("catalog")
     .WaitFor(identityService)
     .WaitFor(rabbitMq);
 
-//var orderService = builder.AddProject<Projects.UrbanX_Services_Order>("order")
-//    .WithReference(orderDb)
-//    .WithReference(identityService)
-//    .WaitFor(orderDb)
-//    .WaitFor(identityService);
+var orderService = builder.AddProject<Projects.UrbanX_Order_API>("order")
+    .WithReference(orderDb)
+    .WithReference(identityService)
+    .WithReference(rabbitMq)
+    .WaitFor(orderDb)
+    .WaitFor(identityService)
+    .WaitFor(rabbitMq);
 
 //var merchantService = builder.AddProject<Projects.UrbanX_Services_Merchant>("merchant")
 //    .WithReference(merchantDb)
@@ -71,14 +73,14 @@ var inventoryService = builder.AddProject<Projects.UrbanX_Inventory_API>("invent
 // Add Gateway with references to all services
 var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
     .WithReference(catalogService)
-    //.WithReference(orderService)
+    .WithReference(orderService)
     //.WithReference(merchantService)
     //.WithReference(paymentService)
     .WithReference(inventoryService)
     .WithReference(identityService)
     //.WaitFor(searchService)
     .WaitFor(catalogService)
-    //.WaitFor(orderService)
+    .WaitFor(orderService)
     //.WaitFor(merchantService)
     //.WaitFor(paymentService)
     .WaitFor(inventoryService)

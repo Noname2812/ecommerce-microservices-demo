@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Services\Inventory\UrbanX.Inventory.API\UrbanX.Inventory.API.csproj" />
+    <ProjectReference Include="..\..\Services\Order\UrbanX.Order.API\UrbanX.Order.API.csproj" />
     <ProjectReference Include="..\..\Services\Catalog\UrbanX.Catalog.API\UrbanX.Catalog.API.csproj" />
     <ProjectReference Include="..\..\Services\Identity\UrbanX.Identity.API\UrbanX.Identity.API.csproj" />
     <ProjectReference Include="..\..\Gateway\UrbanX.Gateway\UrbanX.Gateway.csproj" />

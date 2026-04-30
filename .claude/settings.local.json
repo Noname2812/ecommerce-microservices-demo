@@ -6,7 +6,10 @@
       "Bash(rtk ls *)",
       "Bash(rtk grep *)",
       "Bash(rtk read *)",
-      "Bash(rtk err *)"
+      "Bash(rtk err *)",
+      "Bash(rtk find *)",
+      "Bash(dotnet sln *)",
+      "Bash(rtk dotnet *)"
     ]
   }
 }
