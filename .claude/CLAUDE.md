@@ -8,14 +8,14 @@
 
 | Service | Port | Status | DB | Notes |
 |---|---|---|---|---|
-| **Catalog** | 5290 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + Outbox |
-| **Search** | dynamic | Active | Elasticsearch | Consumes Catalog events |
-| **Gateway** | 5050 | Active | — | YARP + Duende.BFF (cookie session) + Rate limiting |
+| **Catalog** | 5025 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + Outbox |
+| **Search** | 5035 | Active | Elasticsearch | Consumes Catalog events |
+| **Gateway** | 5000 | Active | — | YARP + Duende.BFF (cookie session) + Rate limiting |
 | **Identity** | 5005 | Active | PostgreSQL (`urbanx_identity`) | Duende IdentityServer + ASP.NET Identity + Outbox |
-| **Order** | 5002 | Disabled | PostgreSQL | Saga choreography |
-| **Payment** | 5004 | Disabled | PostgreSQL | Stripe + Outbox |
-| **Merchant** | 5003 | Disabled | PostgreSQL | — |
-| **Inventory** | dynamic | Active | PostgreSQL (`urbanx_inventory`) | CQRS + Outbox; 4 entities: Warehouse, InventoryItem, Reservation, StockMovement |
+| **Order** | 5010 | Disabled | PostgreSQL | Saga choreography |
+| **Payment** | 5015 | Disabled | PostgreSQL | Stripe + Outbox |
+| **Merchant** | 5030 | Disabled | PostgreSQL | — |
+| **Inventory** | 5020 | Active | PostgreSQL (`urbanx_inventory`) | CQRS + Outbox; 4 entities: Warehouse, InventoryItem, Reservation, StockMovement |
 | **Frontend** | 5173 | Disabled | — | React 19 + Vite |
 
 Infrastructure (Aspire tự quản lý): PostgreSQL, RabbitMQ, Elasticsearch, Redis.
