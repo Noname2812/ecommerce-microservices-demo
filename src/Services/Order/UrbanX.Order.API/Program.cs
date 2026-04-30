@@ -3,12 +3,15 @@ using Microsoft.EntityFrameworkCore;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
+using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
 using UrbanX.Order.Persistence;
+using UrbanX.Order.Persistence.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database
@@ -28,6 +31,11 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<OrderDbContext>(name: "orderdb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
+
+// Add Persistence
+builder.Services.AddPersistence();
+
+// Add Application
 builder.Services.AddApplication(builder.Configuration);
 
 builder.Services

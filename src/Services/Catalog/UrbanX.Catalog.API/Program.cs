@@ -1,16 +1,19 @@
 using Carter;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
+using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Catalog.Application.DependencyInjection.Extensions;
 using UrbanX.Catalog.Persistence;
+using UrbanX.Catalog.Persistence.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire components
 builder.AddServiceDefaults();
+builder.AddSharedCache("redis");
 
 // Add services to the container.
 builder.Services.AddOpenApi();
@@ -32,6 +35,12 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<CatalogDbContext>(name: "catalogdb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
+
+// Add infrastructure
+builder.Services.AddInfrastructure(builder.Configuration);
+
+// Add Persistence
+builder.Services.AddPersistence();
 
 // Add Application
 builder.Services.AddApplication(builder.Configuration);

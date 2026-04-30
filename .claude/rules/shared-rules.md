@@ -27,6 +27,7 @@ Shared.Observability  (standalone)
 | `PageResult<T>` | `Primitives/PageResult.cs` |
 | `IValidationResult`, `ValidationResult`, `ValidationResult<T>` | `Primitives/IValidationResult.cs`, `ValidationResult.cs`, `ValidationResultT.cs` |
 | `AuthorizationErrors` | `Primitives/AuthorizationErrors.cs` — `AUTH_REQUIRED`, `FORBIDDEN` errors dùng bởi `AuthorizationPipelineBehavior` |
+| `IUnitOfWork` | `Primitives/IUnitOfWork.cs` — abstraction transactional boundary; impl `EfUnitOfWork` đặt trong Persistence của mỗi service |
 | `BaseEntity<TKey>` | `Domain/BaseEntity.cs` |
 | `IDateTracking`, `ISoftDelete`, `IUserTracking` | `Domain/I*.cs` |
 | `GatewayHeaderNames` | `Constants/GatewayHeaderNames.cs` — header name constants shared across Gateway + downstream services |
@@ -95,7 +96,7 @@ Shared.Observability  (standalone)
 
 | Component | File |
 |---|---|
-| MediatR behaviors | `Behaviors/Validation|Logging|Idempotency|Authorization|TransactionPipelineBehavior.cs` |
+| MediatR behaviors | `Behaviors/Validation|Logging|Idempotency|Authorization|DistributedLockPipelineBehavior|TransactionPipelineBehavior.cs` |
 | MassTransit setup | `DependencyInjection/Extensions/ServiceCollectionExtensions.cs` |
 | Event publisher impl | `EventPublisher.cs` |
 | Consumer base | `IntegrationEventConsumerBase.cs` |
@@ -106,7 +107,7 @@ Shared.Observability  (standalone)
 
 **DI entry points:**
 - `AddMessaging(...)` — đăng ký MassTransit + RabbitMQ + `IEventPublisher`
-- `AddMediator(...)` — đăng ký MediatR + behaviors + `IHttpContextAccessor` + `IUserContext`
+- `AddMediatorWithPielineDefault(assembly)` — đăng ký MediatR + tất cả behaviors mặc định (Authorization → Idempotency → Validation → DistributedLock → Transaction) + `IHttpContextAccessor` + `IUserContext`
 - `AddConfigMessaging(config)` — bind `RabbitMqOptions` từ config
 
 **App pipeline:**
@@ -114,7 +115,8 @@ Shared.Observability  (standalone)
 
 **Rules:**
 - Consumer mới kế thừa `IntegrationEventConsumerBase<TEvent, TConsumer>`
-- Behavior mới đăng ký trong `AddMediator()`
+- Behavior mới đăng ký trong `AddMediatorWithPielineDefault()`
+- `TransactionPipelineBehavior` dùng `IUnitOfWork` — mỗi service phải register `IUnitOfWork` trong `AddPersistence()` với `EfUnitOfWork<TDbContext>` tương ứng
 - `AuthorizationPipelineBehavior` tự động short-circuit Command/Query có `[RequirePermission]`/`[RequireRole]` mà không pass check — wrap `AuthorizationErrors` thành `Result.Failure` (hoặc `Result<T>.Failure`)
 - `using Shared.Kernel` cho `Result`, `Error`; `using Shared.Application` cho CQRS interfaces; `using Shared.Application.Authorization` cho `IUserContext`
 

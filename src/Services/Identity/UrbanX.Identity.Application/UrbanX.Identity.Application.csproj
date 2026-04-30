@@ -21,6 +21,5 @@
     <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
     <ProjectReference Include="..\UrbanX.Identity.Domain\UrbanX.Identity.Domain.csproj" />
     <ProjectReference Include="..\UrbanX.Identity.Infrastructure\UrbanX.Identity.Infrastructure.csproj" />
-    <ProjectReference Include="..\UrbanX.Identity.Persistence\UrbanX.Identity.Persistence.csproj" />
   </ItemGroup>
 </Project>

@@ -13,6 +13,5 @@
     <ProjectReference Include="..\..\..\Shared\Shared.Application\Shared.Application.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\UrbanX.Inventory.Domain\UrbanX.Inventory.Domain.csproj" />
-    <ProjectReference Include="..\UrbanX.Inventory.Persistence\UrbanX.Inventory.Persistence.csproj" />
   </ItemGroup>
 </Project>

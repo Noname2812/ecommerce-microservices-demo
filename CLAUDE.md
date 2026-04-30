@@ -80,7 +80,7 @@ Each service is split into layers:
 
 **Saga choreography:** The planned order flow (Order → Inventory → Payment → Merchant) uses choreography — each service reacts to integration events from the previous step and emits its own, with compensation events on failure.
 
-**MediatR pipeline:** `CatalogTransactionBehavior` wraps command handlers in a DB transaction. Validation behaviors run FluentValidation before handlers. `AuthorizationPipelineBehavior` reflects `[RequirePermission]`/`[RequireRole]`/`[AllowAnonymous]` attributes on Command/Query and validates against `IUserContext`. `DistributedLockPipelineBehavior` acquires a Redis lock when `[DistributedLock]` is present.
+**MediatR pipeline:** `TransactionPipelineBehavior` wraps command handlers in a DB transaction via `IUnitOfWork` (implemented by `EfUnitOfWork` in each service's Persistence layer). Behaviors registered by default via `AddMediatorWithPielineDefault`: Authorization → Idempotency → Validation → DistributedLock → Transaction. `AuthorizationPipelineBehavior` reflects `[RequirePermission]`/`[RequireRole]`/`[AllowAnonymous]` attributes on Command/Query and validates against `IUserContext`. `DistributedLockPipelineBehavior` acquires a Redis lock when `[DistributedLock]` is present.
 
 **Distributed Cache (Shared.Cache):** Redis-backed cache and distributed lock. `ICacheService` provides get/set/getOrSet/pattern-delete/Lua eval. `IDistributedLockService` provides `TryAcquireAsync` (non-blocking) and `AcquireAsync` (poll with timeout), implemented with `SET NX PX` (cluster-safe). Enable per service: `builder.AddSharedCache("redis")` in `Program.cs`. See `docs/shared/shared-cache.md`.
 

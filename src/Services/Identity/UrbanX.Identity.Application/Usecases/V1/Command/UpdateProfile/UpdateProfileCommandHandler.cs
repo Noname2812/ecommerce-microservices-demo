@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Shared.Application;
 using Shared.Application.Authorization;
@@ -8,24 +9,23 @@ using UrbanX.Identity.Application.Usecases.V1.Errors;
 using UrbanX.Identity.Domain.Models;
 using UrbanX.Identity.Domain.ValueObjects;
 using UrbanX.Identity.Infrastructure.Audit;
-using UrbanX.Identity.Persistence;
 
 namespace UrbanX.Identity.Application.Usecases.V1.Command;
 
 public sealed class UpdateProfileCommandHandler : ICommandHandler<UpdateProfileCommand>
 {
-    private readonly IdentityDbContext _db;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly IUserContext _userContext;
     private readonly IIdentityAuditWriter _audit;
     private readonly IOutboxWriter _outbox;
 
     public UpdateProfileCommandHandler(
-        IdentityDbContext db,
+        UserManager<ApplicationUser> userManager,
         IUserContext userContext,
         IIdentityAuditWriter audit,
         IOutboxWriter outbox)
     {
-        _db = db;
+        _userManager = userManager;
         _userContext = userContext;
         _audit = audit;
         _outbox = outbox;
@@ -37,7 +37,7 @@ public sealed class UpdateProfileCommandHandler : ICommandHandler<UpdateProfileC
             return Result.Failure(AuthErrors.InvalidCredentials);
 
         var userId = _userContext.UserId.Value;
-        var user = await _db.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        var user = await _userManager.Users.Include(u => u.Profile).FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         if (user is null)
             return Result.Failure(AuthErrors.UserNotFound(userId));
 

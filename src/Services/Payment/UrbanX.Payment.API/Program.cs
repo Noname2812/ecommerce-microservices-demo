@@ -3,13 +3,16 @@ using Microsoft.EntityFrameworkCore;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
+using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Payment.Application.DependencyInjection.Extensions;
 using UrbanX.Payment.Application.Messaging;
 using UrbanX.Payment.Persistence;
+using UrbanX.Payment.Persistence.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database
@@ -33,6 +36,11 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<PaymentDbContext>(name: "paymentdb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
+
+// Add Persistence
+builder.Services.AddPersistence();
+
+// Add Application
 builder.Services.AddApplication(builder.Configuration);
 
 builder.Services

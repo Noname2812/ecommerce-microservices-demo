@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Kernel.Primitives;
 using UrbanX.Identity.Domain;
 using UrbanX.Identity.Persistence.Repositories;
 
@@ -8,6 +9,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services)
     {
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IAuthAuditLogRepository, AuthAuditLogRepository>();
         return services;
     }

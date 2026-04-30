@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Kernel.Primitives;
 using UrbanX.Inventory.Domain;
 using UrbanX.Inventory.Persistence.Repositories;
 
@@ -8,6 +9,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services)
     {
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IInventoryItemRepository, InventoryItemRepository>();
         services.AddScoped<IInventoryReservationRepository, InventoryReservationRepository>();
         services.AddScoped<IStockMovementRepository, StockMovementRepository>();

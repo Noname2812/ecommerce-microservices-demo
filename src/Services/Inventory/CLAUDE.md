@@ -69,7 +69,7 @@ Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `invent
 
 ### MediatR Behavior
 
-`InventoryTransactionBehavior<TRequest, TResponse>` — extends `TransactionPipelineBehavior<..., InventoryDbContext>`. Wraps mọi command trong DB transaction.
+`TransactionPipelineBehavior` (từ `Shared.Messaging`) — wraps mọi command trong DB transaction qua `IUnitOfWork` (impl: `EfUnitOfWork` trong Persistence). Behaviors registered mặc định bởi `AddMediatorWithPielineDefault`: Authorization → Idempotency → Validation → DistributedLock → Transaction.
 
 ### Error Codes (`InventoryErrors.cs`)
 

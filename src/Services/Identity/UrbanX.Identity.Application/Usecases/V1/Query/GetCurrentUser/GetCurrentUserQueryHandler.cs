@@ -5,24 +5,20 @@ using Shared.Application.Authorization;
 using Shared.Kernel.Primitives;
 using UrbanX.Identity.Application.Usecases.V1.Errors;
 using UrbanX.Identity.Domain.Models;
-using UrbanX.Identity.Persistence;
 
 namespace UrbanX.Identity.Application.Usecases.V1.Query;
 
 public sealed class GetCurrentUserQueryHandler : IQueryHandler<GetCurrentUserQuery, UserProfileDto>
 {
-    private readonly IdentityDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<ApplicationRole> _roleManager;
     private readonly IUserContext _userContext;
 
     public GetCurrentUserQueryHandler(
-        IdentityDbContext db,
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager,
         IUserContext userContext)
     {
-        _db = db;
         _userManager = userManager;
         _roleManager = roleManager;
         _userContext = userContext;
@@ -34,7 +30,7 @@ public sealed class GetCurrentUserQueryHandler : IQueryHandler<GetCurrentUserQue
             return Result.Failure<UserProfileDto>(AuthErrors.InvalidCredentials);
 
         var userId = _userContext.UserId.Value;
-        var user = await _db.Users
+        var user = await _userManager.Users
             .AsNoTracking()
             .Include(u => u.Profile)
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);

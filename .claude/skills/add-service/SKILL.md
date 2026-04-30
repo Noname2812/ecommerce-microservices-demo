@@ -50,7 +50,6 @@ Hỏi (nếu chưa rõ):
                                 DependencyInjection/Extensions/ServiceCollectionExtensions.cs
 4.  <Service>.Application/      UrbanX.<Service>.Application.csproj
                                 AssemblyReference.cs
-                                Behaviors/<Service>TransactionBehavior.cs
                                 Usecases/V1/Errors/<Service>Errors.cs
                                 DependencyInjection/Extensions/ServiceCollectionExtensions.cs
 5.  <Service>.API/              UrbanX.<Service>.API.csproj
@@ -252,6 +251,7 @@ public sealed class <Service>DbContextFactory : IDesignTimeDbContextFactory<<Ser
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Kernel.Primitives;
 
 namespace UrbanX.<Service>.Persistence.DependencyInjection.Extensions;
 
@@ -259,9 +259,49 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services)
     {
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         // Repository registrations sẽ được thêm theo từng entity
         // services.AddScoped<I<Entity>Repository, <Entity>Repository>();
         return services;
+    }
+}
+```
+
+### File 8b: Persistence — EfUnitOfWork
+
+**Path:** `src/Services/<Service>/UrbanX.<Service>.Persistence/EfUnitOfWork.cs`
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Shared.Kernel.Primitives;
+
+namespace UrbanX.<Service>.Persistence;
+
+public sealed class EfUnitOfWork : IUnitOfWork
+{
+    private readonly <Service>DbContext _dbContext;
+
+    public EfUnitOfWork(<Service>DbContext dbContext) => _dbContext = dbContext;
+
+    public async Task ExecuteInTransactionAsync(Func<Task> operation, CancellationToken ct = default)
+    {
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+            try
+            {
+                await operation();
+                await _dbContext.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
+        });
     }
 }
 ```
@@ -288,7 +328,6 @@ public static class ServiceCollectionExtensions
     <ProjectReference Include="..\..\..\Shared\Shared.Application\Shared.Application.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\UrbanX.<Service>.Domain\UrbanX.<Service>.Domain.csproj" />
-    <ProjectReference Include="..\UrbanX.<Service>.Persistence\UrbanX.<Service>.Persistence.csproj" />
   </ItemGroup>
 </Project>
 ```
@@ -312,29 +351,7 @@ public static class AssemblyReference
 
 ---
 
-### File 11: TransactionBehavior
-
-**Path:** `src/Services/<Service>/UrbanX.<Service>.Application/Behaviors/<Service>TransactionBehavior.cs`
-
-```csharp
-using Microsoft.Extensions.Logging;
-using Shared.Application;
-using Shared.Messaging.Behaviors;
-using UrbanX.<Service>.Persistence;
-
-namespace UrbanX.<Service>.Application.Behaviors;
-
-internal sealed class <Service>TransactionBehavior<TRequest, TResponse>(
-    <Service>DbContext dbContext,
-    ILogger<<Service>TransactionBehavior<TRequest, TResponse>> logger)
-    : TransactionPipelineBehavior<TRequest, TResponse, <Service>DbContext>(dbContext, logger)
-    where TRequest : ICommandBase
-    where TResponse : notnull;
-```
-
----
-
-### File 12: Application — Errors placeholder
+### File 11: Application — Errors placeholder
 
 **Path:** `src/Services/<Service>/UrbanX.<Service>.Application/Usecases/V1/Errors/<Service>Errors.cs`
 
@@ -354,17 +371,14 @@ public static class <Service>Errors
 
 ---
 
-### File 13: Application — DI Extension
+### File 12: Application — DI Extension
 
 **Path:** `src/Services/<Service>/UrbanX.<Service>.Application/DependencyInjection/Extensions/ServiceCollectionExtensions.cs`
 
 ```csharp
-using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shared.Messaging.DependencyInjection.Extensions;
-using UrbanX.<Service>.Application.Behaviors;
-using UrbanX.<Service>.Persistence.DependencyInjection.Extensions;
 
 namespace UrbanX.<Service>.Application.DependencyInjection.Extensions;
 
@@ -372,13 +386,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddMediator(
-            assembly: AssemblyReference.Assembly,
-            cfg =>
-            {
-                cfg.AddOpenBehavior(typeof(<Service>TransactionBehavior<,>));
-        });
-        services.AddPersistence();
+        services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
         return services;
     }
 }
@@ -559,16 +567,19 @@ public class <Entity>Apis : ApiEndpoint, ICarterModule
 
 ```csharp
 using Carter;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Shared.Cache.DependencyInjection.Extensions;
+using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.<Service>.Application.DependencyInjection.Extensions;
 using UrbanX.<Service>.Persistence;
+using UrbanX.<Service>.Persistence.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database
@@ -587,21 +598,12 @@ builder.Services
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<<Service>DbContext>(name: "<servicedb>", tags: ["ready", "db"]);
 
-// JWT auth
-var identityAuthority = builder.Configuration["services__identity__https__0"]
-    ?? builder.Configuration["services__identity__http__0"]
-    ?? builder.Configuration["IdentityServer:Authority"];
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = identityAuthority;
-        options.Audience = builder.Configuration["IdentityServer:Audience"] ?? "urbanx-api";
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-    });
-
 builder.Services.AddProblemDetails();
-builder.Services.AddHttpContextAccessor();
+
+// Add Persistence
+builder.Services.AddPersistence();
+
+// Add Application
 builder.Services.AddApplication(builder.Configuration);
 
 builder.Services
@@ -622,8 +624,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseExceptionHandler();
-app.UseAuthentication();
-app.UseAuthorization();
+
+// Trust-the-Gateway: read identity from X-User-* headers (set by Gateway).
+// Authorization is enforced via AuthorizationPipelineBehavior on each Command/Query.
+app.UseUserContext();
 
 // Auto-migrate on startup
 using (var scope = app.Services.CreateScope())
@@ -736,11 +740,12 @@ Thêm vào `src/Gateway/UrbanX.Gateway/appsettings.json`:
 
 - [ ] 5 project files (.csproj) đúng references — đặc biệt Outbox ref nếu dùng
 - [ ] `AssemblyReference.cs` có trong cả Application và Persistence
-- [ ] `<Service>TransactionBehavior` kế thừa `TransactionPipelineBehavior<TRequest, TResponse, TDbContext>`
+- [ ] `EfUnitOfWork` trong Persistence implement `IUnitOfWork` dùng `<Service>DbContext`
+- [ ] `AddPersistence()` register `IUnitOfWork` + repositories
 - [ ] `<Service>DbContext` kế thừa `OutboxDbContext` (hoặc `DbContext` nếu không dùng Outbox)
 - [ ] `<Service>DbContextFactory` dùng đúng connection string name và DB name
-- [ ] `Program.cs` dùng đúng connection string name (khớp với AppHost)
-- [ ] `AddApplication()` gọi `AddMediator` + TransactionBehavior + `AddPersistence`
+- [ ] `Program.cs` dùng đúng connection string name (khớp với AppHost) và gọi `AddPersistence()` trước `AddApplication()`
+- [ ] `AddApplication()` chỉ gọi `AddMediatorWithPielineDefault` (không có persistence/infra registration)
 - [ ] AppHost đăng ký đúng: database resource → service project → gateway reference
 - [ ] `UrbanX.AppHost.csproj` đã có `ProjectReference` đến API project
 - [ ] Placeholder Carter module tạo đúng URL pattern

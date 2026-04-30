@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Kernel.Primitives;
 using UrbanX.Catalog.Domain;
 
 namespace UrbanX.Catalog.Persistence.DependencyInjection.Extensions
@@ -7,6 +8,7 @@ namespace UrbanX.Catalog.Persistence.DependencyInjection.Extensions
     {
         public static void AddPersistence(this IServiceCollection services)
         {
+            services.AddScoped<IUnitOfWork, EfUnitOfWork>();
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<ICategoryRepository, CategoryRepository>();
             services.AddScoped<IBrandRepository, BrandRepository>();

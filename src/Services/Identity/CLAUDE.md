@@ -15,7 +15,7 @@ Issuer JWT cho toàn hệ thống. Service KHÁC tin tưởng JWT do service nà
 | `UrbanX.Identity.Domain` | Entities (`ApplicationUser`, `ApplicationRole`, `UserProfile`, `AuthAuditLog`), `AuthEventType` constants, `IAuthAuditLogRepository` |
 | `UrbanX.Identity.Infrastructure` | `IEmailSender` + `LogEmailSender`, `IIdentityAuditWriter` + `IdentityAuditWriter` (capture IP/UA via `IHttpContextAccessor`) |
 | `UrbanX.Identity.Persistence` | `IdentityDbContext` (extends `OutboxDbContext`), EF configurations cho Identity tables + outbox + custom tables, `AuthAuditLogRepository` |
-| `UrbanX.Identity.Application` | Commands, queries, validators, `IdentityTransactionBehavior`, `AuthErrors` |
+| `UrbanX.Identity.Application` | Commands, queries, validators, `AuthErrors` |
 | `UrbanX.Identity.API` | Carter modules, `IdentityServer` config, `IdentitySeeder`, Program.cs |
 
 **Dependency order:** Domain ← Infrastructure / Persistence ← Application ← API
@@ -58,7 +58,7 @@ User/Role CRUD đi qua ASP.NET Identity `UserManager<ApplicationUser>` / `RoleMa
 
 ### MediatR Behavior
 
-`IdentityTransactionBehavior<TRequest, TResponse>` — extends `TransactionPipelineBehavior<..., IdentityDbContext>`. Wraps mọi command trong DB transaction (đảm bảo Outbox + business write atomic).
+`TransactionPipelineBehavior` (từ `Shared.Messaging`) — wraps mọi command trong DB transaction qua `IUnitOfWork` (impl: `EfUnitOfWork` trong Persistence, đảm bảo Outbox + business write atomic). Behaviors registered mặc định bởi `AddMediatorWithPielineDefault`: Authorization → Idempotency → Validation → DistributedLock → Transaction.
 
 ### Commands (Usecases/V1/Command/)
 
@@ -313,7 +313,7 @@ Nếu một trong 2 giá trị rỗng, Google handler **không được register
 
 **Trust-the-Gateway** — Identity là special case: tự xác thực user qua password/Google ở `/connect/*`, nhưng các management endpoints `/api/v1/identity/**` vẫn đọc identity từ `X-User-*` headers (qua Gateway).
 
-**Transactional Outbox** — Mọi command commit business data + integration event trong cùng 1 transaction. `IdentityTransactionBehavior` wrap, `IOutboxWriter` ghi outbox, `OutboxRelayWorker` publish.
+**Transactional Outbox** — Mọi command commit business data + integration event trong cùng 1 transaction. `TransactionPipelineBehavior` (qua `IUnitOfWork`) wrap, `IOutboxWriter` ghi outbox, `OutboxRelayWorker` publish.
 
 **Permission Claims** — Permissions là role claims (claim type `permission`). `IdentitySeeder` populate; `GetCurrentUserQueryHandler` aggregate lên `UserProfileDto.Permissions`. Gateway RBAC tự đọc qua `PermissionClaimReader`.
 

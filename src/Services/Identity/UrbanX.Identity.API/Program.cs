@@ -10,7 +10,9 @@ using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Identity.API.Configuration;
 using UrbanX.Identity.Application.DependencyInjection.Extensions;
 using UrbanX.Identity.Domain.Models;
+using UrbanX.Identity.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Identity.Persistence;
+using UrbanX.Identity.Persistence.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -104,6 +106,12 @@ authenticationBuilder.AddGoogle(options =>
 }
 
 builder.Services.AddProblemDetails();
+
+// Add Infrastructure + Persistence
+builder.Services.AddIdentityInfrastructure();
+builder.Services.AddPersistence();
+
+// Add Application
 builder.Services.AddApplication(builder.Configuration);
 
 builder.Services

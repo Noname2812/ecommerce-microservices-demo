@@ -6,6 +6,7 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
 using UrbanX.Inventory.Persistence;
+using UrbanX.Inventory.Persistence.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +31,11 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<InventoryDbContext>(name: "inventorydb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
+
+// Add Persistence
+builder.Services.AddPersistence();
+
+// Add Application
 builder.Services.AddApplication(builder.Configuration);
 
 builder.Services

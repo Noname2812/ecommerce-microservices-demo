@@ -123,10 +123,9 @@ namespace Shared.Messaging.DependencyInjection.Extensions
         /// Registers MediatR with all standard pipeline behaviors.
         /// Call this once, passing all assemblies that contain handlers.
         /// </summary>
-        public static IServiceCollection AddMediator(
+        public static IServiceCollection AddMediatorWithPielineDefault(
             this IServiceCollection services,
-            Assembly assembly,
-            Action<MediatRServiceConfiguration>? configure = null)
+            Assembly assembly)
         {
             services.AddHttpContextAccessor();
             services.AddScoped<IUserContext, UserHttpContext>();
@@ -136,10 +135,11 @@ namespace Shared.Messaging.DependencyInjection.Extensions
                 cfg.RegisterServicesFromAssembly(assembly);
 
                 cfg.AddOpenBehavior(typeof(LoggingPipelineBehavior<,>));
-                cfg.AddOpenBehavior(typeof(IdempotencyPipelineBehavior<,>));
                 cfg.AddOpenBehavior(typeof(AuthorizationPipelineBehavior<,>));
+                cfg.AddOpenBehavior(typeof(IdempotencyPipelineBehavior<,>));
                 cfg.AddOpenBehavior(typeof(ValidationPipelineBehavior<,>));
-                configure?.Invoke(cfg);
+                cfg.AddOpenBehavior(typeof(DistributedLockPipelineBehavior<,>));
+                cfg.AddOpenBehavior(typeof(TransactionPipelineBehavior<,>));
             });
 
 

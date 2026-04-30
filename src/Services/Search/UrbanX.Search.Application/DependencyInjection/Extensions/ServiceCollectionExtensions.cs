@@ -9,7 +9,7 @@ namespace UrbanX.Search.Application.DependencyInjection.Extensions
         public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
         {
             // Add mediatR
-            services.AddMediator(AssemblyReference.Assembly);
+            services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
 
             return services;
         }

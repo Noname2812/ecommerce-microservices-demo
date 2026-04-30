@@ -73,91 +73,54 @@ tests/
 
 ---
 
-## Key Patterns — Quick Reference
+## Key Patterns
 
-### CQRS (Catalog + Search)
-- Command → `Usecases/V1/Command/<Name>/<Name>Command.cs` + `<Name>CommandHandler.cs`
-- Query → `Usecases/V1/Query/<Name>/<Name>Query.cs` + `<Name>QueryHandler.cs`
-- Mỗi Command/Query đi kèm Validator (`FluentValidation`)
-- Gắn `[RequirePermission(Permissions.<Resource>.<Action>, MinScope = PermissionScope.Own|All)]` trên Command/Query class (hoặc `[AllowAnonymous]` cho public). **Bắt buộc dùng constants**, không string literal.
-- Inject `IUserContext` vào handler khi cần `UserId` / ownership check
-- `CatalogTransactionBehavior` tự bọc command trong DB transaction
-- Sử dụng skill: `command` hoặc `query`
+> Architecture rules (layer structure, CQRS, EF, Carter, Authorization): `@.claude/rules/achitecture.md`
+> Shared library APIs và rules: `@.claude/rules/shared-rules.md`
 
 ### Trust-the-Gateway Auth
-- Gateway dùng **Duende.BFF**: là OIDC client thay SPA, lưu access/refresh token trong server-side session, expose cookie `urbanx.bff` HttpOnly cho browser
-- Browser request → Gateway đọc cookie → User principal → enrich `X-User-Id` / `X-User-Roles` / `X-Merchant-Id` / `X-Permission-Scope` headers, strip Cookie + Authorization
-- Service KHÔNG verify JWT, KHÔNG dùng `RequireAuthorization()` ở endpoints (Identity là exception — nó là JWT issuer)
-- `app.UseUserContext()` + `IUserContext` (scoped) đọc identity từ headers
-- `AuthorizationPipelineBehavior` reflect attribute → check IUserContext
-- Permissions/Roles constants: `Shared.Application/Authorization/Permissions.cs` — `Products`, `Inventory`, `Users`, `Roles`
-- Direct API testing với JWT bearer KHÔNG còn hỗ trợ qua Gateway — phải đi qua cookie flow hoặc gọi service trực tiếp với mock `X-User-*` headers
+- Gateway verify JWT → enrich `X-User-Id` / `X-User-Roles` / `X-Merchant-Id` / `X-Permission-Scope` headers, strip Authorization
+- Service KHÔNG verify JWT, KHÔNG `RequireAuthorization()` ở endpoints (Identity là exception)
+- `app.UseUserContext()` + `IUserContext` đọc identity từ headers; `AuthorizationPipelineBehavior` enforce
+- Testing: gọi service trực tiếp với mock `X-User-*` headers (JWT bearer không đi qua Gateway)
 - Doc: `docs/auth/trust-gateway-flow.md` · `docs/gateway/bff.md`
 
-### Identity Service (Duende IdentityServer)
-- Issuer JWT cho toàn hệ thống tại port 5005
-- Endpoints public: `/connect/{token,authorize,endsession,userinfo,revocation}`, `/.well-known/*`, `/api/account/{register,confirm-email,forgot-password,reset-password}`, `/signin-google`
-- Endpoints authenticated: `/api/v1/identity/{me,profile,users,roles,audit-logs,...}`
-- 3 clients (in-memory, dev): `urbanx-bff` (Auth Code + PKCE + client secret, cho Gateway BFF), `urbanx-spa` (Auth Code + PKCE public client, cho native SPA flow nếu cần), `urbanx-test-password` (ROP, dev only)
-- Permission claims trên Role: claim type `permission`, dùng cho Gateway RBAC + `IUserContext`
-- `LogEmailSender` (dev) ghi log thay gửi email; thay bằng SMTP/SendGrid khi production
-- Outbox publish: `UserRegistered`, `UserProfileUpdated`, `UserRoleAssigned`, `UserRoleRevoked`, `UserDeactivated`, `UserActivated` (`Shared.Contract/Messaging/Identity/`)
-- Account lockout: 5 fails → 15 phút (config `Identity:Lockout`)
-- Audit log: bảng `auth_audit_logs`, IP + UA capture qua `IIdentityAuditWriter`
+### Identity Service
+- Issuer JWT tại port 5005; permission claims gắn trên Role (claim type `permission`)
+- `LogEmailSender` (dev) ghi log thay gửi email
+- Account lockout: 5 fails → 15 phút; Audit log: bảng `auth_audit_logs`
 - Doc: `docs/identity/`
 
-### Distributed Cache (Catalog, Identity, Inventory)
-- `ICacheService` — get/set/remove/exists + cache-aside `GetOrSetAsync` + `RemoveByPatternAsync` (SCAN, cluster-safe) + `EvalAsync` (Lua)
-- `IDistributedLockService` — `TryAcquireAsync` (non-blocking) + `AcquireAsync` (poll with timeout); lock via `SET NX PX` (cluster-safe); release via Lua check-and-delete
-- `[DistributedLock("resource:{PropertyName}")]` trên Command/Query → `DistributedLockPipelineBehavior` tự acquire/release
-- `IDistributedCache` (Redis) cũng được register — bắt buộc cho `IdempotencyPipelineBehavior`
-- DI: `builder.AddSharedCache("redis")` trong `Program.cs`; AppHost: `.WithReference(redis)` trên service
-- Key format: `{InstanceName}:{key}` (prefix cấu hình qua `Shared:Cache:InstanceName`)
+### Distributed Cache
+- `[DistributedLock("resource:{PropertyName}")]` trên Command/Query → behavior tự acquire/release
+- DI: `builder.AddSharedCache("redis")`; AppHost: `.WithReference(redis).WaitFor(redis)`
 - Doc: `docs/shared/shared-cache.md`
 
-### Transactional Outbox (Catalog, Payment)
-- Command handler ghi data + `OutboxMessage` trong 1 transaction
-- `OutboxRelayWorker` (background) đọc outbox → publish lên RabbitMQ
-- `IOutboxWriter` inject từ `Shared.Outbox`
-
-### Integration Events (cross-service)
-Contracts ở `Shared.Contract/Messaging/`:
-- `Catalog/ProductCreated.cs`
-- `Catalog/ProductUpdateEvents.cs`
-- Consumer kế thừa `IntegrationEventConsumerBase` từ `Shared.Messaging`
-- Consumer đặt trong `*.Application/Messaging/`, đăng ký qua `bus.AddConsumer<>()` trong `Program.cs`
-- Sử dụng skill: `add-consumer`
+### Transactional Outbox
+- Inject `IOutboxWriter` trong command handler → ghi event cùng transaction với data
+- `OutboxRelayWorker` publish lên RabbitMQ; dùng khi cần at-least-once guarantee
 
 ### Saga Choreography (Order flow — planned)
-Order → Inventory → Payment → Merchant, mỗi service emit event kế tiếp.
-Base classes: `SagaStateMachineBase`, `CompensatableActivityBase` trong `Shared.Messaging/Saga/`.
+Order → Inventory → Payment → Merchant. Base classes: `SagaStateMachineBase`, `CompensatableActivityBase` trong `Shared.Messaging/Saga/`.
 
-### Gateway (YARP + Duende.BFF)
-Port: 5050 (pinned). BFF endpoints (auto-mapped): `/bff/{login,logout,user,silent-login}`, `/signin-oidc`, `/signout-callback-oidc`, `/signout-oidc`.
-
-Routes trong `appsettings.json`:
-- `/api/v1/catalog/**` → Catalog (5290)
-- `/api/orders/**` → Order (5002)
-- `/api/payments/**` → Payment (5004)
-- `/api/account/**`, `/connect/**` → Identity (5005)
-
-Rate limits: global 1000 req/60s · auth 10 req/60s · search 60 req/60s · write 50 req/60s.
+### Gateway Routes (YARP + Duende.BFF)
+- `/api/v1/catalog/**` → Catalog · `/api/v1/inventory/**` → Inventory · `/api/v1/identity/**` → Identity
+- `/api/orders/**` → Order · `/api/payments/**` → Payment
+- BFF: `/bff/{login,logout,user}` · OIDC: `/connect/**`, `/.well-known/**`
+- Rate limits: global 1000/60s · auth 10/60s · write 50/60s
 
 ---
 
-## Thêm Feature Mới — Checklist
+## Thêm Feature Mới — Thứ tự
 
-Thứ tự chuẩn (Domain → Application → Persistence → API):
+Domain → Persistence → Application → API → Gateway → Docs
 
-1. **Domain**: thêm entity/value object/domain event nếu cần
-2. **Application**: tạo Command hoặc Query + Validator + Handler
-   - Gắn `[RequirePermission(Permissions.<Resource>.<Action>)]` (hoặc `[AllowAnonymous]`)
-   - Nếu cần `UserId` / ownership check → inject `IUserContext` vào handler
-3. **Persistence**: cập nhật DbContext config, thêm repo nếu cần
-4. **Migration**: `dotnet ef migrations add <Name>` từ `*.Persistence/`
-5. **API**: thêm Carter module endpoint (KHÔNG `RequireAuthorization()` — authorization qua attribute trên Command/Query)
-6. **Gateway**: cập nhật route nếu path mới
-7. **Docs**: tạo `docs/<service>/<feature>.md`
+1. Entity/value object (Domain)
+2. Command hoặc Query + Validator + Handler (Application) — gắn `[RequirePermission]` hoặc `[AllowAnonymous]`
+3. DbContext config, repo mới nếu cần (Persistence) → `dotnet ef migrations add <Name>`
+4. Carter endpoint (API) — KHÔNG `RequireAuthorization()`
+5. Route mới trong Gateway nếu cần
+6. `docs/<service>/<feature>.md`
 
 ---
 
@@ -202,6 +165,7 @@ Framework: **xUnit 2.9.3** · Mock: **Moq 4.20.72** · Assertions: xUnit `Assert
 
 ## Rules
 @.claude/rules/response-rules.md
+@.claude/rules/achitecture.md
 @.claude/rules/shared-rules.md
 @.claude/rules/rtk-rules.md
 
@@ -220,4 +184,4 @@ Framework: **xUnit 2.9.3** · Mock: **Moq 4.20.72** · Assertions: xUnit `Assert
 
 Skill files: `.claude/skills/<name>/SKILL.md`
 Agent files: `.claude/agents/<name>.md`
-Rules: `.claude/rules/response-rules.md`
+Rules: `.claude/rules/<name>.md`
