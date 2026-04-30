@@ -1,7 +1,7 @@
 using FluentValidation;
 using Shared.Application.Authorization;
 
-namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductVariants
+namespace UrbanX.Catalog.Application.Usecases.V1.Command
 {
     [RequirePermission(Permissions.Products.Write, MinScope = PermissionScope.Own)]
     public record UpdateProductVariantsCommand(

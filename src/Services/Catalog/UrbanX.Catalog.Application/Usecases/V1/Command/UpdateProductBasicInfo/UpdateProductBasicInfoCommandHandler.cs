@@ -10,7 +10,7 @@ using UrbanX.Catalog.Domain.Helpers;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ValueObjects;
 
-namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductBasicInfo
+namespace UrbanX.Catalog.Application.Usecases.V1.Command
 {
     public sealed class UpdateProductBasicInfoCommandHandler : ICommandHandler<UpdateProductBasicInfoCommand>
     {

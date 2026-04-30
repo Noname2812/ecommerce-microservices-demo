@@ -3,25 +3,23 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using UrbanX.Catalog.API.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Command;
-using UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductBasicInfo;
-using UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductVariants;
-using UrbanX.Catalog.Application.Usecases.V1.Query.GetVariantDeleteEligibility;
+using UrbanX.Catalog.Application.Usecases.V1.Query;
 
 namespace UrbanX.Catalog.API.Apis
 {
     public class ProductApis : ApiEndpoint, ICarterModule
     {
-        private const string BaseURL = "/api/v{version:apiVersion}/catalog/products";
+        private const string BaseURL = "/api/v{version:apiVersion}/catalog";
 
         public void AddRoutes(IEndpointRouteBuilder app)
         {
             var group1 = app.NewVersionedApi("Product")
               .MapGroup(BaseURL).HasApiVersion(1);
 
-            group1.MapPost("/", CreateProductV1);
-            group1.MapPatch("/{productId:guid}", UpdateProductBasicInfoV1);
-            group1.MapPut("/{productId:guid}/variants", UpdateProductVariantsV1);
-            group1.MapGet("/{productId:guid}/variants/{variantId:guid}/delete-eligibility", GetVariantDeleteEligibilityV1);
+            group1.MapPost("/product", CreateProductV1);
+            group1.MapPatch("/product/{productId:guid}", UpdateProductBasicInfoV1);
+            group1.MapPut("/product/{productId:guid}/variants", UpdateProductVariantsV1);
+            group1.MapGet("/product/{productId:guid}/variants/{variantId:guid}/delete-eligibility", GetVariantDeleteEligibilityV1);
         }
 
         public static async Task<IResult> CreateProductV1(

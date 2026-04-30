@@ -10,7 +10,7 @@ using UrbanX.Catalog.Domain;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ValueObjects;
 
-namespace UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductVariants
+namespace UrbanX.Catalog.Application.Usecases.V1.Command
 {
     public sealed class UpdateProductVariantsCommandHandler : ICommandHandler<UpdateProductVariantsCommand>
     {

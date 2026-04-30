@@ -5,7 +5,7 @@ using UrbanX.Catalog.Application.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Errors;
 using UrbanX.Catalog.Domain;
 
-namespace UrbanX.Catalog.Application.Usecases.V1.Query.GetVariantDeleteEligibility
+namespace UrbanX.Catalog.Application.Usecases.V1.Query
 {
     public sealed class GetVariantDeleteEligibilityQueryHandler
         : IQueryHandler<GetVariantDeleteEligibilityQuery, VariantDeleteEligibilityResult>
