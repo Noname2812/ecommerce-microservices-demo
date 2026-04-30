@@ -24,8 +24,10 @@ var rabbitMq = builder.AddRabbitMQ("messaging")
 // Add Services
 var identityService = builder.AddProject<Projects.UrbanX_Identity_API>("identity")
     .WithReference(identityDb)
+    .WithReference(redis)
     .WithReference(rabbitMq)
     .WaitFor(identityDb)
+    .WaitFor(redis)
     .WaitFor(rabbitMq);
 
 // var searchService = builder.AddProject<Projects.UrbanX_Search_API>("search")
@@ -36,9 +38,11 @@ var identityService = builder.AddProject<Projects.UrbanX_Identity_API>("identity
 
 var catalogService = builder.AddProject<Projects.UrbanX_Catalog_API>("catalog")
     .WithReference(catalogDb)
+    .WithReference(redis)
     .WithReference(identityService)
     .WithReference(rabbitMq)
     .WaitFor(catalogDb)
+    .WaitFor(redis)
     .WaitFor(identityService)
     .WaitFor(rabbitMq);
 
@@ -66,9 +70,11 @@ var paymentService = builder.AddProject<Projects.UrbanX_Payment_API>("payment")
 
 var inventoryService = builder.AddProject<Projects.UrbanX_Inventory_API>("inventory")
     .WithReference(inventoryDb)
+    .WithReference(redis)
     .WithReference(identityService)
     .WithReference(rabbitMq)
     .WaitFor(inventoryDb)
+    .WaitFor(redis)
     .WaitFor(identityService)
     .WaitFor(rabbitMq);
 
@@ -94,4 +100,11 @@ var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
 //    .WithExternalHttpEndpoints();
 
 
+
+// Redis UI
+var redisCommander = builder.AddContainer("redis-commander", "rediscommander/redis-commander")
+    .WithEnvironment("REDIS_HOSTS", "local:redis:6379")
+    .WithHttpEndpoint(port: 8081, targetPort: 8081)
+    .WithReference(redis);
+    
 builder.Build().Run();

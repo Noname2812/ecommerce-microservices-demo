@@ -8,5 +8,6 @@ namespace Shared.Application
     public interface IIdempotentCommand
     {
         string IdempotencyKey { get; }
+        TimeSpan? IdempotencyTtl { get; }
     }
 }

@@ -4,9 +4,10 @@
 
 ```
 Shared.Kernel  (no deps)
+  ├── Shared.Cache  (→ Shared.Kernel)
   └── Shared.Contract  (no deps — standalone cross-service contracts)
         └── Shared.Application  (→ Shared.Kernel + Shared.Contract)
-              └── Shared.Messaging  (→ Shared.Kernel + Shared.Application)
+              └── Shared.Messaging  (→ Shared.Kernel + Shared.Application + Shared.Cache)
 Shared.Outbox  (→ Shared.Contract)
 Shared.Observability  (standalone)
 ```
@@ -116,6 +117,42 @@ Shared.Observability  (standalone)
 - Behavior mới đăng ký trong `AddMediator()`
 - `AuthorizationPipelineBehavior` tự động short-circuit Command/Query có `[RequirePermission]`/`[RequireRole]` mà không pass check — wrap `AuthorizationErrors` thành `Result.Failure` (hoặc `Result<T>.Failure`)
 - `using Shared.Kernel` cho `Result`, `Error`; `using Shared.Application` cho CQRS interfaces; `using Shared.Application.Authorization` cho `IUserContext`
+
+---
+
+## Shared.Cache
+
+**Namespace:** `Shared.Cache` / `Shared.Cache.Abstractions` / `Shared.Cache.Attributes`  
+**Chứa:** Redis cache, distributed lock, Lua script execution. Không phụ thuộc Shared.Application hay Shared.Messaging.
+
+| Type | File | Mục đích |
+|---|---|---|
+| `ICacheService` | `Abstractions/ICacheService.cs` | Cache ops + Lua eval |
+| `IDistributedLockService` | `Abstractions/IDistributedLockService.cs` | Distributed lock |
+| `ILockHandle` | `Abstractions/IDistributedLockService.cs` | `IAsyncDisposable` — auto-release khi `await using` |
+| `DistributedLockAttribute` | `Attributes/DistributedLockAttribute.cs` | Gắn trên Command/Query để khai báo lock |
+| `CacheErrors` | `CacheErrors.cs` | `LockTimeout(resource)` error |
+| `CacheOptions` | `DependencyInjection/Options/CacheOptions.cs` | `SectionName = "Shared:Cache"` |
+
+**DI entry point:** `builder.AddSharedCache("redis")` — đăng ký `IConnectionMultiplexer` (Aspire), `IDistributedCache` (Redis), `ICacheService`, `IDistributedLockService`.
+
+**AppHost:** mỗi service dùng cache phải có `.WithReference(redis).WaitFor(redis)` trong `AppHost.cs`.
+
+**`DistributedLockPipelineBehavior`** (trong Shared.Messaging):
+- Reflect `[DistributedLock]` trên TRequest
+- Template `{PropertyName}` → replace bằng giá trị property thực
+- Acquire lock → handler chạy → auto-release
+- Timeout → `Result.Failure(CacheErrors.LockTimeout(resource))`
+
+**Key format:** `{InstanceName}:{key}` — prefix đến từ `CacheOptions.InstanceName` (default `"urbanx"`).  
+**Lock key format:** `{InstanceName}:lock:{resource}`
+
+**Rules:**
+- Thêm service mới dùng cache: (1) thêm `ProjectReference` Shared.Cache vào `.csproj`, (2) thêm `.WithReference(redis)` trong AppHost, (3) `builder.AddSharedCache("redis")` trong `Program.cs`
+- `RemoveByPatternAsync` dùng `SCAN` — safe cho Redis Cluster (không dùng `KEYS`)
+- `IDistributedCache` được register tự động — đừng register lại thủ công
+- `IDistributedLockService` → Singleton (IConnectionMultiplexer thread-safe)
+- Doc: `docs/shared/shared-cache.md`
 
 ---
 

@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Shared.Kernel\Shared.Kernel.csproj" />
     <ProjectReference Include="..\Shared.Application\Shared.Application.csproj" />
+    <ProjectReference Include="..\Shared.Cache\Shared.Cache.csproj" />
   </ItemGroup>
 
 </Project>

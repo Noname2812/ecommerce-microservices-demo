@@ -201,7 +201,7 @@ namespace UrbanX.Order.Persistence.Migrations
 
                     b.HasIndex("IdempotencyKey")
                         .IsUnique()
-                        .HasFilter("idempotency_key IS NOT NULL");
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();

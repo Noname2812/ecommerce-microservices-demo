@@ -61,6 +61,7 @@ src/
     ├── Shared.Contract/        # Cross-service contracts: IIntegrationEvent, IntegrationEventBase, integration event DTOs (Catalog)
     ├── Shared.Application/     # CQRS abstractions: ICommand, IQuery, handlers, IDomainEvent, IEventPublisher, ISagaState
     ├── Shared.Messaging/       # MassTransit + RabbitMQ config, MediatR pipeline behaviors, saga base, EventPublisher impl
+    ├── Shared.Cache/           # Redis cache (ICacheService, IDistributedLockService, [DistributedLock], IDistributedCache); DI: builder.AddSharedCache("redis")
     ├── Shared.Outbox/          # OutboxMessage, OutboxRelayWorker, IOutboxWriter
     └── Shared.Observability/   # OpenTelemetry wiring
 
@@ -104,6 +105,15 @@ tests/
 - Account lockout: 5 fails → 15 phút (config `Identity:Lockout`)
 - Audit log: bảng `auth_audit_logs`, IP + UA capture qua `IIdentityAuditWriter`
 - Doc: `docs/identity/`
+
+### Distributed Cache (Catalog, Identity, Inventory)
+- `ICacheService` — get/set/remove/exists + cache-aside `GetOrSetAsync` + `RemoveByPatternAsync` (SCAN, cluster-safe) + `EvalAsync` (Lua)
+- `IDistributedLockService` — `TryAcquireAsync` (non-blocking) + `AcquireAsync` (poll with timeout); lock via `SET NX PX` (cluster-safe); release via Lua check-and-delete
+- `[DistributedLock("resource:{PropertyName}")]` trên Command/Query → `DistributedLockPipelineBehavior` tự acquire/release
+- `IDistributedCache` (Redis) cũng được register — bắt buộc cho `IdempotencyPipelineBehavior`
+- DI: `builder.AddSharedCache("redis")` trong `Program.cs`; AppHost: `.WithReference(redis)` trên service
+- Key format: `{InstanceName}:{key}` (prefix cấu hình qua `Shared:Cache:InstanceName`)
+- Doc: `docs/shared/shared-cache.md`
 
 ### Transactional Outbox (Catalog, Payment)
 - Command handler ghi data + `OutboxMessage` trong 1 transaction
@@ -165,6 +175,8 @@ Thứ tự chuẩn (Domain → Application → Persistence → API):
 | Yarp.ReverseProxy | 2.3.0 | API Gateway |
 | Stripe.net | 50.3.0 | Payments |
 | OpenTelemetry | 1.15.2 | Tracing/metrics |
+| Aspire.StackExchange.Redis | 13.1.3 | Redis client (IConnectionMultiplexer) |
+| Microsoft.Extensions.Caching.StackExchangeRedis | 10.0.0 | IDistributedCache → Redis |
 
 Thêm package mới: **chỉ sửa `Directory.Packages.props`**, không sửa `.csproj` trực tiếp.
 

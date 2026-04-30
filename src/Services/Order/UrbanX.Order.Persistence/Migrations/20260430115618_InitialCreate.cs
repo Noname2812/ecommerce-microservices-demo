@@ -194,7 +194,7 @@ namespace UrbanX.Order.Persistence.Migrations
                 table: "orders",
                 column: "IdempotencyKey",
                 unique: true,
-                filter: "idempotency_key IS NOT NULL");
+                filter: "\"IdempotencyKey\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_orders_OrderNumber",

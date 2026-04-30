@@ -21,6 +21,39 @@ Reviewer chuyên sâu về .NET Clean Architecture. Project dùng Carter (`ICart
 
 **Dependency rule:** Domain ← Application ← Infrastructure / API (không được đảo ngược)
 
+## Custom Attribute & Reflection Checklist
+
+**Cache Rule** — bắt buộc khi dùng reflection trong pipeline/behavior:
+
+| Pattern | Yêu cầu |
+|---|---|
+| `GetCustomAttribute<T>()` trong `Handle()` / hot path | Cache vào `static readonly` field |
+| `GetProperty()` / `GetValue()` lặp theo request | Cache compiled `Expression` delegate |
+| `MethodInfo` để invoke dynamic method | Cache `MethodInfo`, dùng `MakeGenericMethod` một lần |
+
+**Static cache cho attribute** (key là `typeof(TRequest)` — bounded, an toàn):
+```csharp
+// ✅ Khởi tạo một lần per generic type instantiation
+private static readonly TAttribute? _attr =
+    typeof(TRequest).GetCustomAttribute<TAttribute>();
+```
+
+**Compiled delegate thay GetProperty/GetValue**:
+```csharp
+// ✅ Cache vào ConcurrentDictionary, compile Expression một lần
+private static readonly ConcurrentDictionary<string, Func<TRequest, string?>> _accessors = new();
+```
+
+**Flags**:
+- ⚠️ `GetCustomAttribute()` gọi trong `Handle()` / hot path — cache vào `static readonly`
+- ⚠️ `GetProperty()` / `GetValue()` không cache — compile thành delegate
+- ⚠️ `GetMethods().First(...)` không cache `MethodInfo` — tốn CPU mỗi call
+- ⚠️ Key cache không bounded (theo user input, dynamic string) — dùng `static readonly` thay `ConcurrentDictionary`
+
+**Fail-fast Rule** — validate attribute usage tại startup:
+- ⚠️ Attribute conflict (ví dụ `[Cache]` + `[NoCache]` cùng method) không được detect lúc startup
+- ⚠️ `InvalidOperationException` có thể throw lúc runtime do cấu hình sai — nên validate trong `IHostedService` hoặc DI registration
+
 ## SOLID Checklist
 
 - **SRP**: >5 dependencies? Method >20 lines? Nhiều concerns trong 1 class?

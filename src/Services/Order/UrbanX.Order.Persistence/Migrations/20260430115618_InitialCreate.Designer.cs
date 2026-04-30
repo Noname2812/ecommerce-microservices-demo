@@ -12,7 +12,7 @@ using UrbanX.Order.Persistence;
 namespace UrbanX.Order.Persistence.Migrations
 {
     [DbContext(typeof(OrderDbContext))]
-    [Migration("20260430025217_InitialCreate")]
+    [Migration("20260430115618_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -204,7 +204,7 @@ namespace UrbanX.Order.Persistence.Migrations
 
                     b.HasIndex("IdempotencyKey")
                         .IsUnique()
-                        .HasFilter("idempotency_key IS NOT NULL");
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();

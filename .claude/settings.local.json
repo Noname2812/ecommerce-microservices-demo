@@ -10,7 +10,9 @@
       "Bash(rtk find *)",
       "Bash(dotnet sln *)",
       "Bash(rtk dotnet *)",
-      "Bash(dotnet ef *)"
+      "Bash(dotnet ef *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(xargs cat *)"
     ]
   }
 }

@@ -59,7 +59,10 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<OrderEntity>
         builder.Property(o => o.CancelledReason).HasMaxLength(500);
 
         builder.Property(o => o.IdempotencyKey).HasMaxLength(255);
-        builder.HasIndex(o => o.IdempotencyKey).IsUnique().HasFilter("idempotency_key IS NOT NULL");
+
+        builder.HasIndex(o => o.IdempotencyKey)
+            .IsUnique()
+            .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
         builder.HasIndex(o => o.CreatedAt);
 
