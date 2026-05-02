@@ -109,10 +109,10 @@ var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
     .WaitFor(identityService)
     .WaitFor(promotionService);
 
-//var frontend = builder.AddViteApp("frontend", "../../frontend/urbanx-react")
-//    .WithReference(gateway)
-//    .WaitFor(gateway)
-//    .WithExternalHttpEndpoints();
+var frontend = builder.AddViteApp("frontend", "../../front-end")
+   .WithReference(gateway)
+   .WaitFor(gateway)
+   .WithExternalHttpEndpoints();
 
 
 
