@@ -7,6 +7,7 @@ using UrbanX.Order.Application.Usecases.V1.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 using UrbanX.Order.Domain.ValueObjects;
+using UrbanX.Order.Infrastructure.Services;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command;
@@ -14,7 +15,8 @@ namespace UrbanX.Order.Application.Usecases.V1.Command;
 public sealed class PlaceOrderCommandHandler(
     IOrderRepository orderRepository,
     IOutboxWriter outboxWriter,
-    IUserContext userContext)
+    IUserContext userContext,
+    IPromotionServiceClient promotionClient)
     : ICommandHandler<PlaceOrderCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(PlaceOrderCommand request, CancellationToken cancellationToken)
@@ -28,6 +30,29 @@ public sealed class PlaceOrderCommandHandler(
         }
 
         var customerId = userContext.UserId!.Value;
+
+        decimal couponDiscount = 0;
+        var itemDiscountMap = new Dictionary<Guid, decimal>();
+
+        if (!string.IsNullOrWhiteSpace(request.CouponCode))
+        {
+            var subTotal = request.Items.Sum(i => i.UnitPrice * i.Quantity);
+            var redeemItems = request.Items
+                .Select(i => new PromotionRedeemItemDto(i.VariantId, i.ProductId, i.Quantity, i.UnitPrice))
+                .ToList();
+
+            var promotionResult = await promotionClient.RedeemAsync(
+                new PromotionRedeemRequest(null, customerId, request.CouponCode, subTotal, redeemItems),
+                cancellationToken);
+
+            if (promotionResult.IsFailure)
+                return Result.Failure<Guid>(OrderErrors.PromotionInvalid(promotionResult.Error.Message));
+
+            couponDiscount = promotionResult.Value.OrderLevelDiscount;
+            foreach (var d in promotionResult.Value.ItemDiscounts)
+                itemDiscountMap[d.VariantId] = d.DiscountPerUnit;
+        }
+
         var orderNumber = GenerateOrderNumber();
         var address = ShippingAddress.Create(
             request.Street, request.Ward, request.District,
@@ -38,19 +63,21 @@ public sealed class PlaceOrderCommandHandler(
             i.ProductId, i.ProductName, i.ProductSlug,
             i.VariantId, i.VariantSku, i.VariantName,
             i.SellerId, i.SellerName,
-            i.UnitPrice, i.Quantity, i.DiscountAmount, i.ImageUrl
+            i.UnitPrice, i.Quantity,
+            itemDiscountMap.TryGetValue(i.VariantId, out var d) ? d * i.Quantity : i.DiscountAmount,
+            i.ImageUrl
         )).ToList();
 
         var order = OrderEntity.Create(
             orderNumber,
             customerId,
-            customerEmail: string.Empty,   // populated from user profile — placeholder
-            customerName: string.Empty,     // populated from user profile — placeholder
+            customerEmail: string.Empty,
+            customerName: string.Empty,
             customerPhone: null,
             address,
             request.ShippingFee,
             request.CouponCode,
-            request.CouponDiscount,
+            couponDiscount,
             request.CustomerNote,
             request.IdempotencyKey,
             specs);

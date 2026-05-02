@@ -38,6 +38,12 @@ public static class Permissions
         public const string Read = "payment:read";
         public const string Write = "payment:write";
     }
+
+    public static class Promotions
+    {
+        public const string Read = "promotion:read";
+        public const string Write = "promotion:write";
+    }
 }
 
 public static class Roles

@@ -11,7 +11,8 @@
       "Bash(rtk dotnet *)",
       "Bash(dotnet ef *)",
       "Bash(grep -v \"^$\")",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Bash(xargs grep *)"
     ]
   }
 }

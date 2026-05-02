@@ -15,4 +15,7 @@ public static class OrderErrors
 
     public static readonly Error AlreadyExists =
         new("ORDER_ALREADY_EXISTS", "An order with this idempotency key already exists");
+
+    public static Error PromotionInvalid(string message) =>
+        new("ORDER_PROMOTION_INVALID", message);
 }

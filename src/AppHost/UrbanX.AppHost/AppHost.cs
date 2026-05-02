@@ -10,6 +10,7 @@ var orderDb = postgres.AddDatabase("orderdb", "urbanx_order");
 var paymentDb = postgres.AddDatabase("paymentdb", "urbanx_payment");
 var inventoryDb = postgres.AddDatabase("inventorydb", "urbanx_inventory");
 var identityDb = postgres.AddDatabase("identitydb", "urbanx_identity");
+var promotionDb = postgres.AddDatabase("promotiondb", "urbanx_promotion");
 
 // Add Redis
 var redis = builder.AddRedis("redis");
@@ -46,13 +47,25 @@ var catalogService = builder.AddProject<Projects.UrbanX_Catalog_API>("catalog")
     .WaitFor(identityService)
     .WaitFor(rabbitMq);
 
+var promotionService = builder.AddProject<Projects.UrbanX_Promotion_API>("promotion")
+    .WithReference(promotionDb)
+    .WithReference(redis)
+    .WithReference(identityService)
+    .WithReference(rabbitMq)
+    .WaitFor(promotionDb)
+    .WaitFor(redis)
+    .WaitFor(identityService)
+    .WaitFor(rabbitMq);
+
 var orderService = builder.AddProject<Projects.UrbanX_Order_API>("order")
     .WithReference(orderDb)
     .WithReference(identityService)
     .WithReference(rabbitMq)
+    .WithReference(promotionService)
     .WaitFor(orderDb)
     .WaitFor(identityService)
-    .WaitFor(rabbitMq);
+    .WaitFor(rabbitMq)
+    .WaitFor(promotionService);
 
 //var merchantService = builder.AddProject<Projects.UrbanX_Services_Merchant>("merchant")
 //    .WithReference(merchantDb)
@@ -86,13 +99,15 @@ var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
     .WithReference(paymentService)
     .WithReference(inventoryService)
     .WithReference(identityService)
+    .WithReference(promotionService)
     //.WaitFor(searchService)
     .WaitFor(catalogService)
     .WaitFor(orderService)
     //.WaitFor(merchantService)
     .WaitFor(paymentService)
     .WaitFor(inventoryService)
-    .WaitFor(identityService);
+    .WaitFor(identityService)
+    .WaitFor(promotionService);
 
 //var frontend = builder.AddViteApp("frontend", "../../frontend/urbanx-react")
 //    .WithReference(gateway)

@@ -5,6 +5,7 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
+using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Order.Persistence;
 using UrbanX.Order.Persistence.DependencyInjection.Extensions;
 
@@ -31,6 +32,9 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<OrderDbContext>(name: "orderdb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
+
+// Add Infrastructure
+builder.Services.AddInfrastructure();
 
 // Add Persistence
 builder.Services.AddPersistence();
