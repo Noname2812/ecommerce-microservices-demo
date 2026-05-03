@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Kernel;
 using UrbanX.Order.Infrastructure.Services;
 
 namespace UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
@@ -12,6 +13,8 @@ public static class ServiceCollectionExtensions
         {
             client.BaseAddress = new Uri("http://promotion");
         });
+
+        services.AddScoped<ICompensationCollector, CompensationCollector>();
 
         return services;
     }

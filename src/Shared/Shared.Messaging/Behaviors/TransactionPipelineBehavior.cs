@@ -12,9 +12,8 @@ namespace Shared.Messaging.Behaviors
     /// Works with any DbContext passed via generic param.
     /// </summary>
     public sealed class TransactionPipelineBehavior<TRequest, TResponse>
-        : IPipelineBehavior<TRequest, TResponse>
-        where TRequest : ICommandBase
-
+    : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : ICommandBase
     {
         private readonly IUnitOfWork _uow;
         private readonly ILogger<TransactionPipelineBehavior<TRequest, TResponse>> _logger;
@@ -33,16 +32,32 @@ namespace Shared.Messaging.Behaviors
             CancellationToken cancellationToken)
         {
             var requestName = typeof(TRequest).Name;
+
+            cancellationToken.ThrowIfCancellationRequested();
+
             TResponse response = default!;
 
             _logger.LogInformation("Starting transaction for {RequestName}", requestName);
 
-            await _uow.ExecuteInTransactionAsync(async () =>
+            try
             {
-                response = await next();
-            }, cancellationToken);
+                await _uow.ExecuteInTransactionAsync(async () =>
+                {
+                    response = await next(cancellationToken);
+                }, cancellationToken);
 
-            _logger.LogInformation("Committed transaction for {RequestName}", requestName);
+                _logger.LogInformation("Committed transaction for {RequestName}", requestName);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Transaction cancelled for {RequestName}", requestName);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Transaction failed for {RequestName}", requestName);
+                throw;
+            }
 
             return response;
         }

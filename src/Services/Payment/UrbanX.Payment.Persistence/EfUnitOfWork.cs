@@ -13,20 +13,21 @@ public sealed class EfUnitOfWork : IUnitOfWork
     {
         var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        await strategy.ExecuteAsync(async () =>
+        await strategy.ExecuteAsync(async (cancellationToken) =>
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+                CancellationToken.None);
             try
             {
                 await operation();
-                await _dbContext.SaveChangesAsync(ct);
-                await transaction.CommitAsync(ct);
+                await _dbContext.SaveChangesAsync(CancellationToken.None);
+                await transaction.CommitAsync(CancellationToken.None);
             }
             catch
             {
-                await transaction.RollbackAsync(ct);
+                await transaction.RollbackAsync(CancellationToken.None);
                 throw;
             }
-        });
+        }, ct);
     }
 }
