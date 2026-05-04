@@ -22,6 +22,23 @@ namespace Shared.Outbox
             _repository = repository;
         }
 
+        public async Task AddAsync(string type, object payload, CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(type);
+            ArgumentNullException.ThrowIfNull(payload);
+
+            var outboxMessage = new OutboxMessage
+            {
+                Id = Guid.NewGuid(),
+                Type = type,
+                Payload = JsonSerializer.Serialize(payload, payload.GetType(), SerializerOptions),
+                Status = OutboxMessageStatus.Pending,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            await _repository.AddAsync(outboxMessage, cancellationToken);
+        }
+
         public async Task WriteAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
             where TEvent : class, IIntegrationEvent
         {
@@ -32,7 +49,7 @@ namespace Shared.Outbox
             var outboxMessage = new OutboxMessage
             {
                 Id = @event.EventId,
-                EventType = eventType,
+                Type = eventType,
                 Payload = JsonSerializer.Serialize(@event, SerializerOptions),
                 CorrelationId = @event.CorrelationId,
                 Status = OutboxMessageStatus.Pending,

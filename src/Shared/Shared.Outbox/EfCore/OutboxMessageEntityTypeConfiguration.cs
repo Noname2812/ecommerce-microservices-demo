@@ -15,7 +15,8 @@ namespace Shared.Outbox.EfCore
             builder.Property(x => x.Id)
                 .ValueGeneratedNever();
 
-            builder.Property(x => x.EventType)
+            builder.Property(x => x.Type)
+                .HasColumnName("EventType")
                 .HasMaxLength(500)
                 .IsRequired();
 
@@ -31,15 +32,16 @@ namespace Shared.Outbox.EfCore
                 .HasMaxLength(50)
                 .IsRequired();
 
-            builder.Property(x => x.Error)
+            builder.Property(x => x.LastError)
+                .HasColumnName("Error")
                 .HasMaxLength(2000);
 
-            // Index for efficient polling of pending messages
+            // Pending rows are polled by status + created order; NextRetryAt supports deferred retries.
+            builder.HasIndex(x => new { x.Status, x.CreatedAt })
+                .HasDatabaseName("ix_outbox_messages_status_created_at");
+
             builder.HasIndex(x => new { x.Status, x.NextRetryAt })
                 .HasDatabaseName("ix_outbox_messages_status_retry");
-
-            builder.HasIndex(x => x.CreatedAt)
-                .HasDatabaseName("ix_outbox_messages_created_at");
         }
     }
 }

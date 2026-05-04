@@ -12,11 +12,14 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
-    <PackageReference Include="Polly" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Shared.Contract\Shared.Contract.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="UrbanX.Shared.Outbox.UnitTests" />
   </ItemGroup>
 
 </Project>

@@ -3,8 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly;
-using Polly.Retry;
 using Shared.Outbox.Abstractions;
 using System.Text.Json;
 using Shared.Outbox.DependencyInjection.Options;
@@ -15,6 +13,8 @@ namespace Shared.Outbox
     /// <summary>
     /// Background worker (IHostedService) that polls the outbox table on a fixed interval,
     /// resolves the original event type, and publishes it to RabbitMQ via MassTransit.
+    /// One publish attempt per message per cycle; failures increment <see cref="OutboxMessage.RetryCount"/>
+    /// and defer via <see cref="OutboxMessage.NextRetryAt"/> until <see cref="OutboxOptions.MaxRetryAttempts"/>.
     ///
     /// Designed to run as a single instance per service. For high-throughput scenarios,
     /// use a distributed lock (e.g. Redlock) before enabling multiple instances.
@@ -24,7 +24,6 @@ namespace Shared.Outbox
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<OutboxRelayWorker> _logger;
         private readonly OutboxOptions _options;
-        private readonly AsyncRetryPolicy _publishRetry;
 
         public OutboxRelayWorker(
             IServiceScopeFactory scopeFactory,
@@ -34,23 +33,13 @@ namespace Shared.Outbox
             _scopeFactory = scopeFactory;
             _logger = logger;
             _options = options.Value;
-
-            // Polly retry: 3 attempts with exponential back-off before marking failed
-            _publishRetry = Policy
-                .Handle<Exception>()
-                .WaitAndRetryAsync(
-                    retryCount: 3,
-                    sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                    onRetry: (ex, delay, attempt, _) =>
-                        _logger.LogWarning(ex,
-                            "Outbox publish retry {Attempt}/3 after {Delay}s", attempt, delay.TotalSeconds));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation(
-                "OutboxRelayWorker started. BatchSize={BatchSize}, Interval={Interval}s",
-                _options.BatchSize, _options.PollingIntervalSeconds);
+                "OutboxRelayWorker started. BatchSize={BatchSize}, Interval={Interval}s, MaxRetryAttempts={Max}",
+                _options.BatchSize, _options.PollingIntervalSeconds, _options.MaxRetryAttempts);
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -91,7 +80,8 @@ namespace Shared.Outbox
             }
         }
 
-        private async Task ProcessMessageAsync(
+        /// <summary>One publish attempt; failures go through <see cref="IOutboxRepository.MarkAsFailedAsync"/>.</summary>
+        internal async Task ProcessMessageAsync(
             OutboxMessage message,
             IPublishEndpoint publishEndpoint,
             IOutboxRepository repository,
@@ -99,47 +89,45 @@ namespace Shared.Outbox
         {
             try
             {
-                var eventType = Type.GetType(message.EventType);
-                if (eventType is null)
+                var clrType = Type.GetType(message.Type);
+                if (clrType is null)
                 {
                     _logger.LogError(
-                        "Cannot resolve type '{EventType}' for OutboxMessage {MessageId}",
-                        message.EventType, message.Id);
-                    await repository.MarkAsFailedAsync(message.Id, $"Cannot resolve type: {message.EventType}", ct);
+                        "Cannot resolve type '{Type}' for OutboxMessage {MessageId}",
+                        message.Type, message.Id);
+                    await repository.MarkAsFailedAsync(message.Id, $"Cannot resolve type: {message.Type}", ct);
                     return;
                 }
 
-                var payload = JsonSerializer.Deserialize(message.Payload, eventType);
+                var payload = JsonSerializer.Deserialize(message.Payload, clrType);
                 if (payload is null)
                 {
                     await repository.MarkAsFailedAsync(message.Id, "Payload deserialization returned null", ct);
                     return;
                 }
 
-                await _publishRetry.ExecuteAsync(async () =>
+                await publishEndpoint.Publish(payload, clrType, ctx =>
                 {
-                    await publishEndpoint.Publish(payload, eventType, ctx =>
+                    ctx.MessageId = message.Id;
+                    if (message.CorrelationId is not null &&
+                        Guid.TryParse(message.CorrelationId, out var cid))
                     {
-                        ctx.MessageId = message.Id;
-                        if (message.CorrelationId is not null &&
-                            Guid.TryParse(message.CorrelationId, out var cid))
-                        {
-                            ctx.CorrelationId = cid;
-                        }
-                        ctx.Headers.Set("x-outbox-relay", "true");
-                    }, ct);
-                });
+                        ctx.CorrelationId = cid;
+                    }
+
+                    ctx.Headers.Set("x-outbox-relay", "true");
+                }, ct);
 
                 await repository.MarkAsProcessedAsync(message.Id, ct);
 
                 _logger.LogDebug(
-                    "Outbox relayed {EventType} [{MessageId}]", message.EventType, message.Id);
+                    "Outbox relayed {Type} [{MessageId}]", message.Type, message.Id);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Failed to relay OutboxMessage {MessageId} of type {EventType}",
-                    message.Id, message.EventType);
+                _logger.LogWarning(ex,
+                    "Outbox publish failed for message {MessageId} type {Type}",
+                    message.Id, message.Type);
                 await repository.MarkAsFailedAsync(message.Id, ex.Message, ct);
             }
         }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Shared.Outbox.Abstractions;
 using Shared.Outbox;
 using Shared.Outbox.DependencyInjection.Options;
@@ -15,11 +16,16 @@ namespace Shared.Outbox.EfCore
     {
         private readonly OutboxDbContext _dbContext;
         private readonly ILogger<OutboxRepository> _logger;
+        private readonly OutboxOptions _options;
 
-        public OutboxRepository(OutboxDbContext dbContext, ILogger<OutboxRepository> logger)
+        public OutboxRepository(
+            OutboxDbContext dbContext,
+            ILogger<OutboxRepository> logger,
+            IOptions<OutboxOptions> options)
         {
             _dbContext = dbContext;
             _logger = logger;
+            _options = options.Value;
         }
 
         public async Task AddAsync(OutboxMessage message, CancellationToken cancellationToken = default)
@@ -47,15 +53,18 @@ namespace Shared.Outbox.EfCore
 
         public async Task MarkAsProcessedAsync(Guid messageId, CancellationToken cancellationToken = default)
         {
-            var rows = await _dbContext.OutboxMessages
-                .Where(m => m.Id == messageId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(m => m.Status, OutboxMessageStatus.Processed)
-                    .SetProperty(m => m.ProcessedAt, DateTimeOffset.UtcNow),
-                    cancellationToken);
+            var message = await _dbContext.OutboxMessages
+                .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
 
-            if (rows == 0)
+            if (message is null)
+            {
                 _logger.LogWarning("OutboxMessage {MessageId} not found when marking as processed", messageId);
+                return;
+            }
+
+            message.Status = OutboxMessageStatus.Processed;
+            message.ProcessedAt = DateTimeOffset.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
         public async Task MarkAsFailedAsync(Guid messageId, string error, CancellationToken cancellationToken = default)
@@ -70,25 +79,25 @@ namespace Shared.Outbox.EfCore
             }
 
             message.RetryCount++;
-            message.Error = error;
+            message.LastError = error;
             message.FailedAt = DateTimeOffset.UtcNow;
 
             // Exponential back-off: 5s, 25s, 125s, 625s … capped at 1 hour
             var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(5, message.RetryCount), 3600));
 
-            if (message.RetryCount >= OutboxOptions.MaxRetries)
+            if (message.RetryCount >= _options.MaxRetryAttempts)
             {
                 message.Status = OutboxMessageStatus.Failed;
                 _logger.LogError(
-                    "OutboxMessage {MessageId} permanently failed after {Retries} retries. Error: {Error}",
+                    "ALERT: OutboxMessage {MessageId} permanently failed after {Retries} retries. Error: {Error}",
                     messageId, message.RetryCount, error);
             }
             else
             {
                 message.NextRetryAt = DateTimeOffset.UtcNow.Add(delay);
                 _logger.LogWarning(
-                    "OutboxMessage {MessageId} failed (attempt {Attempt}/{Max}). Next retry at {NextRetry}",
-                    messageId, message.RetryCount, OutboxOptions.MaxRetries, message.NextRetryAt);
+                    "OutboxMessage {MessageId} publish failed (attempt {Attempt}/{Max}). Next retry at {NextRetry}. Error: {Error}",
+                    messageId, message.RetryCount, _options.MaxRetryAttempts, message.NextRetryAt, error);
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);

@@ -15,6 +15,13 @@ namespace Shared.Outbox.Abstractions
     /// </summary>
     public interface IOutboxWriter
     {
+        /// <summary>
+        /// Append a raw payload to the outbox. <paramref name="type"/> must be resolvable via <see cref="System.Type.GetType(string)"/> at publish time
+        /// unless you use an assembly-qualified type name.
+        /// Does not call <c>SaveChanges</c>; same transaction rules as <see cref="WriteAsync{TEvent}"/>.
+        /// </summary>
+        Task AddAsync(string type, object payload, CancellationToken cancellationToken = default);
+
         Task WriteAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
             where TEvent : class, IIntegrationEvent;
     }
