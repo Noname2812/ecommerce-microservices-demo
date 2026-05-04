@@ -66,7 +66,15 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<OrderEntity>
 
         builder.HasIndex(o => o.CreatedAt);
 
-        builder.HasMany<OrderItem>().WithOne().HasForeignKey(i => i.OrderId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasMany<OrderStatusHistory>().WithOne().HasForeignKey(h => h.OrderId).OnDelete(DeleteBehavior.Cascade);
+        // Explicit navigations — anonymous HasMany<OrderItem>() caused a second relationship → shadow FK OrderId1
+        builder.HasMany(o => o.Items)
+            .WithOne()
+            .HasForeignKey(i => i.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(o => o.StatusHistory)
+            .WithOne()
+            .HasForeignKey(h => h.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

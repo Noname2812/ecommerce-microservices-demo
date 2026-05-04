@@ -21,10 +21,13 @@ namespace Shared.Outbox.EfCore
 
         public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
+        public DbSet<CompensationOutboxMessage> CompensationOutboxMessages => Set<CompensationOutboxMessage>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.ApplyConfiguration(new OutboxMessageEntityTypeConfiguration());
+            modelBuilder.ApplyConfiguration(new CompensationOutboxMessageEntityTypeConfiguration());
         }
     }
 }

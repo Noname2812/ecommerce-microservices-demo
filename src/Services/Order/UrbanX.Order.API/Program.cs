@@ -23,6 +23,7 @@ builder.Services.AddOutbox<OrderDbContext>(
     configureDb: null,
     builder.Configuration
 );
+builder.Services.AddCompensationOutbox(builder.Configuration);
 
 // Messaging
 builder.Services

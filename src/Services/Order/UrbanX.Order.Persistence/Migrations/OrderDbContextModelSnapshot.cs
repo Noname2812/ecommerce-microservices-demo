@@ -22,6 +22,48 @@ namespace UrbanX.Order.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Shared.Outbox.CompensationOutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("Error");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("EventType");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_compensation_outbox_status_created_at");
+
+                    b.ToTable("compensation_outbox", (string)null);
+                });
+
             modelBuilder.Entity("Shared.Outbox.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -231,9 +273,6 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("OrderId1")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid");
 
@@ -289,8 +328,6 @@ namespace UrbanX.Order.Persistence.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.HasIndex("OrderId1");
-
                     b.HasIndex("ProductId");
 
                     b.HasIndex("SellerId");
@@ -325,9 +362,6 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("OrderId1")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ToStatus")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -336,8 +370,6 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
-
-                    b.HasIndex("OrderId1");
 
                     b.ToTable("order_status_histories", (string)null);
                 });
@@ -415,27 +447,19 @@ namespace UrbanX.Order.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Order.Domain.Models.OrderItem", b =>
                 {
                     b.HasOne("UrbanX.Order.Domain.Models.Order", null)
-                        .WithMany()
+                        .WithMany("Items")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("UrbanX.Order.Domain.Models.Order", null)
-                        .WithMany("Items")
-                        .HasForeignKey("OrderId1");
                 });
 
             modelBuilder.Entity("UrbanX.Order.Domain.Models.OrderStatusHistory", b =>
                 {
                     b.HasOne("UrbanX.Order.Domain.Models.Order", null)
-                        .WithMany()
+                        .WithMany("StatusHistory")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("UrbanX.Order.Domain.Models.Order", null)
-                        .WithMany("StatusHistory")
-                        .HasForeignKey("OrderId1");
                 });
 
             modelBuilder.Entity("UrbanX.Order.Domain.Models.Order", b =>

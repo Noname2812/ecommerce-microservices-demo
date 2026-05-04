@@ -12,6 +12,24 @@ namespace UrbanX.Order.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "compensation_outbox",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EventType = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Payload = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ProcessedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    RetryCount = table.Column<int>(type: "integer", nullable: false),
+                    Error = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_compensation_outbox", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "orders",
                 columns: table => new
                 {
@@ -100,8 +118,7 @@ namespace UrbanX.Order.Persistence.Migrations
                     Subtotal = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
                     ImageUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Status = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    RefundedQuantity = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
-                    OrderId1 = table.Column<Guid>(type: "uuid", nullable: true)
+                    RefundedQuantity = table.Column<int>(type: "integer", nullable: false, defaultValue: 0)
                 },
                 constraints: table =>
                 {
@@ -112,11 +129,6 @@ namespace UrbanX.Order.Persistence.Migrations
                         principalTable: "orders",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_order_items_orders_OrderId1",
-                        column: x => x.OrderId1,
-                        principalTable: "orders",
-                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -130,8 +142,7 @@ namespace UrbanX.Order.Persistence.Migrations
                     Note = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     ChangedById = table.Column<Guid>(type: "uuid", nullable: true),
                     ChangedByName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    OrderId1 = table.Column<Guid>(type: "uuid", nullable: true)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -142,22 +153,17 @@ namespace UrbanX.Order.Persistence.Migrations
                         principalTable: "orders",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_order_status_histories_orders_OrderId1",
-                        column: x => x.OrderId1,
-                        principalTable: "orders",
-                        principalColumn: "Id");
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_compensation_outbox_status_created_at",
+                table: "compensation_outbox",
+                columns: new[] { "Status", "CreatedAt" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_order_items_OrderId",
                 table: "order_items",
                 column: "OrderId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_order_items_OrderId1",
-                table: "order_items",
-                column: "OrderId1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_order_items_ProductId",
@@ -173,11 +179,6 @@ namespace UrbanX.Order.Persistence.Migrations
                 name: "IX_order_status_histories_OrderId",
                 table: "order_status_histories",
                 column: "OrderId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_order_status_histories_OrderId1",
-                table: "order_status_histories",
-                column: "OrderId1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_orders_CreatedAt",
@@ -208,9 +209,9 @@ namespace UrbanX.Order.Persistence.Migrations
                 column: "Status");
 
             migrationBuilder.CreateIndex(
-                name: "ix_outbox_messages_created_at",
+                name: "ix_outbox_messages_status_created_at",
                 table: "outbox_messages",
-                column: "CreatedAt");
+                columns: new[] { "Status", "CreatedAt" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_messages_status_retry",
@@ -221,6 +222,9 @@ namespace UrbanX.Order.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "compensation_outbox");
+
             migrationBuilder.DropTable(
                 name: "order_items");
 
