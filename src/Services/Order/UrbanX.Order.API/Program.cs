@@ -2,6 +2,7 @@ using Carter;
 using Microsoft.EntityFrameworkCore;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
+using Shared.Messaging.Idempotency;
 using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
@@ -13,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddSharedCache("redis");
+builder.Services.AddHttpIdempotency(o => o.ServiceId = "order");
 builder.Services.AddOpenApi();
 
 // Database
@@ -61,6 +63,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 
+app.UseHttpIdempotency();
 app.UseUserContext();
 
 using (var scope = app.Services.CreateScope())
