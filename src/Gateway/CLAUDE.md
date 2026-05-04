@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # Gateway Service — UrbanX
 
 YARP reverse proxy, **Duende.BFF** cookie session (OIDC client thay SPA), RBAC, rate limiting, header enrichment.
