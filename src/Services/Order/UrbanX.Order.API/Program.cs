@@ -25,7 +25,7 @@ builder.Services.AddOutbox<OrderDbContext>(
 // Messaging
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging();
+    .AddMessaging(builder.Configuration);
 
 // Health checks
 builder.Services.AddHealthChecks()

@@ -9,6 +9,7 @@ using Shared.Application.Authorization;
 using Shared.Contract.Abstractions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.Behaviors;
+using Shared.Messaging.DependencyInjection;
 using Shared.Messaging.DependencyInjection.Options;
 using Shared.Messaging.Filters;
 using Shared.Messaging.Fomatters;
@@ -35,9 +36,11 @@ namespace Shared.Messaging.DependencyInjection.Extensions
         /// <summary>
         /// Registers MassTransit with RabbitMQ transport and MediatR pipeline behaviors.
         /// Pass a delegate to register consumers, sagas, and state machines.
+        /// Also registers <c>/health</c> RabbitMQ connectivity when connection can be resolved from configuration.
         /// </summary>
         public static IServiceCollection AddMessaging(
             this IServiceCollection services,
+            IConfiguration configuration,
             Action<IBusRegistrationConfigurator>? configureBus = null,
             params Assembly[] consumerAssemblies)
         {
@@ -115,6 +118,18 @@ namespace Shared.Messaging.DependencyInjection.Extensions
 
             services.AddScoped<IEventPublisher, EventPublisher>();
             services.AddScoped<IMessageRequestClient, MessageRequestClient>();
+
+            var amqpUri = RabbitMqConnectionResolver.ResolveAmqpUri(configuration);
+            if (!string.IsNullOrWhiteSpace(amqpUri))
+            {
+                var uri = amqpUri.Trim();
+                services.AddSingleton(_ => new RabbitMqBrokerHealthConnection(uri));
+                services.AddHealthChecks()
+                    .AddRabbitMQ(
+                        sp => Task.FromResult(sp.GetRequiredService<RabbitMqBrokerHealthConnection>().Connection),
+                        name: "rabbitmq",
+                        tags: ["ready", "messaging"]);
+            }
 
             return services;
         }

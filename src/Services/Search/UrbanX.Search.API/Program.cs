@@ -21,13 +21,15 @@ builder.Services.AddApplication(builder.Configuration);
 // Add Message queue
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(configureBus: bus =>
-    {
-        bus.AddConsumer<ProductCreatedConsumer>();
-        bus.AddConsumer<ProductInfoUpdatedConsumer>();
-        bus.AddConsumer<ProductStatusChangedSearchConsumer>();
-        bus.AddConsumer<ProductDeletedSearchConsumer>();
-    });
+    .AddMessaging(
+        builder.Configuration,
+        configureBus: bus =>
+        {
+            bus.AddConsumer<ProductCreatedConsumer>();
+            bus.AddConsumer<ProductInfoUpdatedConsumer>();
+            bus.AddConsumer<ProductStatusChangedSearchConsumer>();
+            bus.AddConsumer<ProductDeletedSearchConsumer>();
+        });
 var app = builder.Build();
 
 app.MapDefaultEndpoints();

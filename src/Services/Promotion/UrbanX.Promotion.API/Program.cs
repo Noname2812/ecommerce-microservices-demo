@@ -22,7 +22,7 @@ builder.Services.AddOutbox<PromotionDbContext>(
 
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging();
+    .AddMessaging(builder.Configuration);
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PromotionDbContext>(name: "promotiondb", tags: ["ready", "db"]);

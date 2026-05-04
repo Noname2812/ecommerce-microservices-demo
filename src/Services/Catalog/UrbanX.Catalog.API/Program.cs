@@ -28,7 +28,7 @@ builder.Services.AddOutbox<CatalogDbContext>(
 // Add Message queue
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging();
+    .AddMessaging(builder.Configuration);
 
 // Add database health check
 builder.Services.AddHealthChecks()

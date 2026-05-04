@@ -25,11 +25,13 @@ builder.Services.AddOutbox<PaymentDbContext>(
 // Messaging
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(configureBus: bus =>
-    {
-        bus.AddConsumer<OrderCreatedConsumer>();
-        bus.AddConsumer<OrderCancelledConsumer>();
-    });
+    .AddMessaging(
+        builder.Configuration,
+        configureBus: bus =>
+        {
+            bus.AddConsumer<OrderCreatedConsumer>();
+            bus.AddConsumer<OrderCancelledConsumer>();
+        });
 
 // Health checks
 builder.Services.AddHealthChecks()
