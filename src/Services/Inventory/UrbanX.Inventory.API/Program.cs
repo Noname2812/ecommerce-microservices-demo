@@ -7,6 +7,7 @@ using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
 using UrbanX.Inventory.Persistence;
 using UrbanX.Inventory.Persistence.DependencyInjection.Extensions;
+using UrbanX.Inventory.Persistence.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,6 +71,7 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Applying database migrations for InventoryDbContext...");
         await context.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
+        await InventoryDataSeeder.SeedIfEmptyAsync(context);
     }
     catch (Exception ex)
     {

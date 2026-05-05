@@ -9,7 +9,11 @@ internal sealed class InventoryItemConfiguration : IEntityTypeConfiguration<Inve
 {
     public void Configure(EntityTypeBuilder<InventoryItem> builder)
     {
-        builder.ToTable(TableNames.InventoryItems);
+        builder.ToTable(
+            TableNames.InventoryItems,
+            t => t.HasCheckConstraint(
+                "chk_inventory_non_negative",
+                "\"QuantityOnHand\" >= 0 AND \"QuantityReserved\" >= 0"));
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
 
@@ -21,11 +25,18 @@ internal sealed class InventoryItemConfiguration : IEntityTypeConfiguration<Inve
         builder.Property(x => x.QuantityOnHand).IsRequired();
         builder.Property(x => x.QuantityReserved).IsRequired();
         builder.Property(x => x.QuantityAvailable)
-            .HasComputedColumnSql("quantity_on_hand - quantity_reserved", stored: true);
+            .HasComputedColumnSql("\"QuantityOnHand\" - \"QuantityReserved\"", stored: true);
 
         builder.Property(x => x.ReorderPoint).HasDefaultValue(10);
         builder.Property(x => x.ReorderQuantity).HasDefaultValue(50);
         builder.Property(x => x.UpdatedAt).IsRequired();
+
+        // Optimistic concurrency: PostgreSQL xmin (xid). Không dùng int RowVersion — xmin được DB cập nhật mỗi khi row đổi (Npgsql: shadow property uint).
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         builder.HasIndex(x => new { x.VariantId, x.WarehouseId }).IsUnique();
         builder.HasIndex(x => x.ProductId);

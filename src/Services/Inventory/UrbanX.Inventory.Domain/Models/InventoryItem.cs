@@ -2,6 +2,7 @@ using Shared.Kernel.Domain;
 
 namespace UrbanX.Inventory.Domain.Models;
 
+/// <summary>Optimistic concurrency uses PostgreSQL xmin (mapped as EF shadow property), not app-managed RowVersion.</summary>
 public class InventoryItem : BaseEntity<Guid>
 {
     // Denormalized từ Catalog service — không có FK (cross-service boundary)
