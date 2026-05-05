@@ -1,10 +1,14 @@
 using Carter;
+using Hangfire;
+using Hangfire.InMemory;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
+using UrbanX.Inventory.Application.Jobs;
 using UrbanX.Inventory.Application.Messaging;
 using UrbanX.Inventory.Persistence;
 using UrbanX.Inventory.Persistence.DependencyInjection.Extensions;
@@ -55,6 +59,11 @@ builder.Services
 
 builder.Services.AddCarter();
 
+// Hangfire — in-memory storage (swap to Hangfire.PostgreSql for production)
+builder.Services.AddHangfire(config =>
+    config.UseInMemoryStorage());
+builder.Services.AddHangfireServer();
+
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
@@ -85,6 +94,14 @@ using (var scope = app.Services.CreateScope())
         throw;
     }
 }
+
+// Schedule TTL job using configured cron expression
+var jobOptions = app.Services.GetRequiredService<IOptions<ReleaseExpiredReservationsJobOptions>>().Value;
+var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+recurringJobManager.AddOrUpdate<ReleaseExpiredReservationsJob>(
+    recurringJobId: "ttl-release-expired-reservations",
+    methodCall: job => job.ExecuteAsync(),
+    cronExpression: jobOptions.CronExpression);
 
 app.MapCarter();
 app.Run();

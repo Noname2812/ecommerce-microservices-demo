@@ -32,4 +32,17 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
             .Include(r => r.InventoryItem)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
     }
+
+    public async Task<IReadOnlyList<InventoryReservation>> GetExpiredPendingBatchAsync(
+        int batchSize,
+        DateTimeOffset expiredBefore,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.InventoryReservations
+            .Include(r => r.InventoryItem)
+            .Where(r => r.Status == ReservationStatus.Pending && r.ExpiresAt < expiredBefore)
+            .OrderBy(r => r.ExpiresAt)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
+    }
 }

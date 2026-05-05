@@ -16,4 +16,9 @@ public interface IInventoryReservationRepository
     void AddRange(IEnumerable<InventoryReservation> reservations);
 
     Task<InventoryReservation?> GetTrackedByIdWithInventoryItemAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<InventoryReservation>> GetExpiredPendingBatchAsync(
+        int batchSize,
+        DateTimeOffset expiredBefore,
+        CancellationToken cancellationToken);
 }
