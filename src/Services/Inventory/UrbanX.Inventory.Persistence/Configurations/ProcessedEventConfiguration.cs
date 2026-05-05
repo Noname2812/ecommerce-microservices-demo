@@ -15,6 +15,7 @@ internal sealed class ProcessedEventConfiguration : IEntityTypeConfiguration<Pro
         builder.Property(x => x.EventType).HasMaxLength(500).IsRequired();
         builder.Property(x => x.ProcessedAt).IsRequired();
 
+        // Ordered scans for future TTL/archival jobs — no cleanup worker yet.
         builder.HasIndex(x => x.ProcessedAt);
     }
 }

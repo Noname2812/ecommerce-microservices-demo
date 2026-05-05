@@ -5,6 +5,7 @@ using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
+using UrbanX.Inventory.Application.Messaging;
 using UrbanX.Inventory.Persistence;
 using UrbanX.Inventory.Persistence.DependencyInjection.Extensions;
 using UrbanX.Inventory.Persistence.Seeding;
@@ -22,10 +23,18 @@ builder.Services.AddOutbox<InventoryDbContext>(
     builder.Configuration
 );
 
-// Messaging
+// Application (options for ConsumerDefinition, MediatR, …) — register before MassTransit resolves definitions at startup
+builder.Services.AddApplication();
+
+// Messaging — compensation.events fanout (see Shared.Outbox CompensationOutboxRelayWorker)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(builder.Configuration);
+    .AddMessaging(
+        builder.Configuration,
+        configureBus: bus =>
+        {
+            bus.AddConsumer<InventoryReleaseRequestedConsumer>(typeof(InventoryReleaseRequestedConsumerDefinition));
+        });
 
 // Health checks
 builder.Services.AddHealthChecks()
@@ -35,9 +44,6 @@ builder.Services.AddProblemDetails();
 
 // Add Persistence
 builder.Services.AddPersistence();
-
-// Add Application
-builder.Services.AddApplication(builder.Configuration);
 
 builder.Services
     .AddApiVersioning(options => options.ReportApiVersions = true)

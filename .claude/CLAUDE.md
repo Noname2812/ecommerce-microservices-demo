@@ -60,7 +60,7 @@ src/
     ├── Shared.Kernel/          # Domain primitives: Error, Result<T>, DomainException, BaseEntity, IDateTracking, ISoftDelete, IUserTracking, IValidationResult, PageResult<T>; GatewayHeaderNames
     ├── Shared.Contract/        # Cross-service contracts: IIntegrationEvent, IntegrationEventBase, integration event DTOs (Catalog)
     ├── Shared.Application/     # CQRS abstractions: ICommand, IQuery, handlers, IDomainEvent, IEventPublisher, ISagaState
-    ├── Shared.Messaging/       # MassTransit + RabbitMQ config, MediatR pipeline behaviors, saga base, EventPublisher impl
+    ├── Shared.Messaging/       # MassTransit + RabbitMQ (retry/throughput opt-in per consumer), MediatR pipeline behaviors, saga base, EventPublisher impl
     ├── Shared.Cache/           # Redis cache (ICacheService, IDistributedLockService, [DistributedLock], IDistributedCache); DI: builder.AddSharedCache("redis")
     ├── Shared.Outbox/          # OutboxMessage, OutboxRelayWorker, IOutboxWriter
     └── Shared.Observability/   # OpenTelemetry wiring

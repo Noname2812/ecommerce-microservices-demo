@@ -37,6 +37,8 @@ namespace Shared.Messaging.DependencyInjection.Extensions
         /// Registers MassTransit with RabbitMQ transport and MediatR pipeline behaviors.
         /// Pass a delegate to register consumers, sagas, and state machines.
         /// Also registers <c>/health</c> RabbitMQ connectivity when connection can be resolved from configuration.
+        /// Does not register bus-wide <c>UseMessageRetry</c>, <c>PrefetchCount</c>, or <c>ConcurrentMessageLimit</c>;
+        /// configure retry and throughput per receive endpoint or <c>ConsumerDefinition</c> when needed.
         /// </summary>
         public static IServiceCollection AddMessaging(
             this IServiceCollection services,
@@ -94,22 +96,6 @@ namespace Shared.Messaging.DependencyInjection.Extensions
                                     h.PublisherConfirmation = true;
                             });
                     }
-
-                    // ── Throughput ─────
-                    cfg.PrefetchCount = opt?.PrefetchCount ?? 16;
-                    cfg.ConcurrentMessageLimit = opt?.ConcurrentMessageLimit ?? 8;
-
-                    // ── Retry ───────────────────────────────────────
-                    cfg.UseMessageRetry(r =>
-                    {
-                        r.Immediate(opt?.Retry.ImmediateCount ?? 1);
-                        r.Interval(
-                            opt?.Retry.DelayedCount ?? 3,
-                            TimeSpan.FromSeconds(opt?.Retry.DelaySeconds ?? 5));
-
-                        r.Ignore<ArgumentException>();
-                        r.Ignore<InvalidOperationException>();
-                    });
 
                     cfg.UseConsumeFilter(typeof(CorrelationConsumeFilter<>), ctx);
                     cfg.ConfigureEndpoints(ctx);

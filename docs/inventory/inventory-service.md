@@ -46,4 +46,4 @@ dotnet ef migrations add InitialCreate
 
 ## Integration Events
 
-Sẽ được định nghĩa trong `Shared.Contract/Messaging/Inventory/` khi implement các use case.
+Contract place-order: `Shared.Contract/Messaging/PlaceOrder/` (ví dụ `InventoryReleaseRequestedV1`). Consumer compensation đọc cấu hình queue/retry/throughput từ appsettings `Inventory:Messaging:InventoryReleaseRequested` (class `InventoryReleaseRequestedConsumerOptions`), validate lúc startup qua `InventoryReleaseRequestedConsumerOptionsValidator` (`ValidateOnStart`).

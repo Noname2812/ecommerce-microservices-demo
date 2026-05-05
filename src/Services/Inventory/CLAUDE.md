@@ -158,8 +158,8 @@ Chưa có endpoint. Thêm bằng skill `add-command` / `add-query`.
 
 ```
 AddServiceDefaults() → AddOpenApi() → AddNpgsqlDbContext<InventoryDbContext>("inventorydb")
-→ AddOutbox<InventoryDbContext>() → AddConfigMessaging() → AddMessaging()
-→ AddApplication() → Carter
+→ AddOutbox<InventoryDbContext>() → AddApplication()  // options cho ConsumerDefinition, MediatR, …
+→ AddConfigMessaging() → AddMessaging() → AddPersistence() → Carter
 
 app.UseExceptionHandler() → app.UseUserContext() → app.MapCarter()
 ```
@@ -195,10 +195,17 @@ gateway
 
 ---
 
-## Integration Events
+## Integration Events / MassTransit
 
-Sẽ được định nghĩa trong `Shared.Contract/Messaging/Inventory/` khi implement các use case.  
-Consumer kế thừa `IntegrationEventConsumerBase<TEvent, TConsumer>` từ `Shared.Messaging`.
+- Contracts: `Shared.Contract/Messaging/PlaceOrder/` (ví dụ `InventoryReleaseRequestedV1`, `IInventoryReleaseRequested`).
+- Consumer compensation: `InventoryReleaseRequestedConsumer` + `InventoryReleaseRequestedConsumerDefinition` — bind queue tới fanout exchange `compensation.events`. **`InventoryReleaseRequestedProcessor`** chỉ gọi `ReleaseInventoryCommand` (không gọi `ExistsAsync` — tránh double read; dedupe nằm ở `ReleaseInventoryCommandHandler` + `StageInsert` + unique `EventId`). Lỗi `Result` từ handler → `InventoryReleaseCommandFailedException` (consumer `IsTransient` = true) để retry MassTransit ghi **Warning**, không *Fatal* mỗi lần. Retry / queue / throughput: **`InventoryReleaseRequestedConsumerOptions`**, validate startup qua **`InventoryReleaseRequestedConsumerOptionsValidator`**.
+
+### RabbitMQ consumer tuning (retry & throughput, opt-in)
+
+`AddMessaging` **không** đăng ký `UseMessageRetry` toàn bus và **không** set `PrefetchCount` / `ConcurrentMessageLimit` toàn bus.
+
+- **Compensation consumer:** cấu hình cục bộ qua `InventoryReleaseRequestedConsumerOptions` — `QueueName`, `Retry` (`Intervals`, `IntervalSeconds`; đặt một trong hai = 0 để **tắt** broker retry), `PrefetchCount` / `ConcurrentMessageLimit` (chỉ áp dụng khi có giá trị > 0).
+- **Consumer khác:** khai báo trong `ConsumerDefinition.ConfigureConsumer` và/hoặc class options riêng (inject `IOptions<YourConsumerOptions>` trong ctor definition).
 
 ## Key Patterns
 

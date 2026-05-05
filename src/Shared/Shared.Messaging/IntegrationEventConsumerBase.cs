@@ -10,7 +10,8 @@ namespace Shared.Messaging
     /// <summary>
     /// Base class for MassTransit consumers that handle integration events
     /// by dispatching them as domain notifications via MediatR.
-    /// Provides retry-safe error handling and structured logging.
+    /// Provides structured logging; transient exceptions are rethrown so you can opt in to
+    /// per-endpoint <c>UseMessageRetry</c> (e.g. in <c>ConsumerDefinition.ConfigureConsumer</c>) — there is no bus-wide retry in <c>AddMessaging</c>.
     ///
     /// Usage:
     /// <code>
@@ -58,9 +59,9 @@ namespace Shared.Messaging
             catch (Exception ex) when (IsTransient(ex))
             {
                 _logger.LogWarning(ex,
-                    "Transient error processing {EventName} [{EventId}] — will retry",
+                    "Transient error processing {EventName} [{EventId}] — rethrown (use UseMessageRetry on the endpoint if retries are desired)",
                     eventName, eventId);
-                throw; // Let MassTransit retry policy handle it
+                throw;
             }
             catch (Exception ex)
             {

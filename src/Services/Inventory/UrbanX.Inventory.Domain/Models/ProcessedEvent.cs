@@ -1,11 +1,12 @@
 namespace UrbanX.Inventory.Domain.Models;
 
 /// <summary>
-/// Tracks integration events handled exactly-once (inbox / consumer deduplication).
+/// Inbox row for integration-event deduplication (not a rich domain aggregate).
+/// Intentionally does not inherit BaseEntity — same pattern as outbox rows.
 /// </summary>
 public sealed class ProcessedEvent
 {
-    public Guid EventId { get; set; }
-    public string EventType { get; set; } = null!;
-    public DateTimeOffset ProcessedAt { get; set; }
+    public Guid EventId { get; init; }
+    public string EventType { get; init; } = null!;
+    public DateTimeOffset ProcessedAt { get; init; }
 }

@@ -106,7 +106,7 @@ Shared.Observability  (standalone)
 | Builder extension | `Authorization/UserContextApplicationBuilderExtensions.cs` (`app.UseUserContext()`) |
 
 **DI entry points:**
-- `AddMessaging(...)` — đăng ký MassTransit + RabbitMQ + `IEventPublisher`
+- `AddMessaging(...)` — đăng ký MassTransit + RabbitMQ + `IEventPublisher` (không bật `UseMessageRetry`, prefetch, concurrent limit toàn bus; khai báo per-consumer / per-endpoint khi cần)
 - `AddMediatorWithPielineDefault(assembly)` — đăng ký MediatR + tất cả behaviors mặc định (Authorization → Idempotency → Validation → DistributedLock → Transaction) + `IHttpContextAccessor` + `IUserContext`
 - `AddConfigMessaging(config)` — bind `RabbitMqOptions` từ config
 

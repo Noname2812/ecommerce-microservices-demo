@@ -94,6 +94,10 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using UrbanX.<Service>.Application.Messaging;
 ```
 
+**Retry (MassTransit):** `AddMessaging` không bật `UseMessageRetry` toàn bus. Consumer cần retry broker-level cho lỗi transient → thêm `ConsumerDefinition<TConsumer>` và trong `ConfigureConsumer` gọi `endpointConfigurator.UseMessageRetry(...)` (tham khảo `InventoryReleaseRequestedConsumerDefinition` đọc policy từ `IOptions<InventoryReleaseRequestedConsumerOptions>`). `IntegrationEventConsumerBase` chỉ rethrow transient exceptions để policy đó (nếu có) áp dụng được.
+
+**Throughput:** `AddMessaging` không set prefetch / concurrent limit toàn bus. Cần giới hạn song song hoặc prefetch theo queue → cấu hình trên receive endpoint của consumer (`ConsumerDefinition`, thường trong `ConfigureConsumer` với `IRabbitMqReceiveEndpointConfigurator`, hoặc `Endpoint(...)` tùy MassTransit). Có thể bind giá trị từ appsettings qua ctor `ConsumerDefinition(IOptions<T>)` giống Inventory compensation.
+
 ---
 
 ### Bước 3 — Kiểm tra ProjectReference trong .csproj
@@ -178,6 +182,6 @@ builder.Services
 `IntegrationEventConsumerBase<TEvent, TConsumer>` từ `Shared.Messaging`:
 - Implements `IConsumer<TEvent>` (MassTransit)
 - Tự log EventId, EventName, CorrelationId
-- Xử lý retry với transient exceptions (`TimeoutException`, `TaskCanceledException`)
+- Với transient exceptions (`TimeoutException`, `TaskCanceledException`, …): log + **rethrow** — chỉ được retry lại ở MassTransit nếu endpoint có `UseMessageRetry` (không có mặc định toàn bus)
 - Default `HandleAsync`: publish event như MediatR notification (`INotification`)
-- Override `IsTransient(Exception)` để custom retry logic nếu cần
+- Override `IsTransient(Exception)` để phân loại exception transient vs fatal

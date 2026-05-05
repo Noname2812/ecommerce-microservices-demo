@@ -29,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Inventory\UrbanX.Inventory.Application\UrbanX.Inventory.Application.csproj" />
     <ProjectReference Include="..\..\src\Services\Inventory\UrbanX.Inventory.Domain\UrbanX.Inventory.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Shared\Shared.Contract\Shared.Contract.csproj" />
   </ItemGroup>
 
 </Project>
