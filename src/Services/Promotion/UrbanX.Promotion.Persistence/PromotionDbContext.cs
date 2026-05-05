@@ -10,6 +10,9 @@ public sealed class PromotionDbContext(DbContextOptions<PromotionDbContext> opti
     public DbSet<VoucherCode> VoucherCodes => Set<VoucherCode>();
     public DbSet<FlashSaleItem> FlashSaleItems => Set<FlashSaleItem>();
     public DbSet<PromotionUsage> PromotionUsages => Set<PromotionUsage>();
+    public DbSet<Coupon> Coupons => Set<Coupon>();
+    public DbSet<CouponClaim> CouponClaims => Set<CouponClaim>();
+    public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -6,4 +6,7 @@ internal static class TableNames
     internal const string VoucherCodes = "voucher_codes";
     internal const string FlashSaleItems = "flash_sale_items";
     internal const string PromotionUsages = "promotion_usages";
+    internal const string Coupons = "coupons";
+    internal const string CouponClaims = "coupon_claims";
+    internal const string ProcessedEvents = "processed_events";
 }

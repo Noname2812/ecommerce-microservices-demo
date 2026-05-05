@@ -12,6 +12,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IPromotionRepository, PromotionRepository>();
         services.AddScoped<IPromotionUsageRepository, PromotionUsageRepository>();
+        services.AddScoped<ICouponRepository, CouponRepository>();
+        services.AddScoped<ICouponClaimRepository, CouponClaimRepository>();
+        services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         return services;
     }
 }

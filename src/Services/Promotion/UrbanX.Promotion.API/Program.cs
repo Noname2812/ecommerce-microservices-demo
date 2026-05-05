@@ -4,6 +4,8 @@ using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
+using StackExchange.Redis;
+using UrbanX.Promotion.API.SeedData;
 using UrbanX.Promotion.Application.DependencyInjection.Extensions;
 using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Persistence.DependencyInjection.Extensions;
@@ -69,6 +71,13 @@ using (var scope = app.Services.CreateScope())
     {
         logger.LogError(ex, "An error occurred while applying database migrations");
         throw;
+    }
+
+    if (app.Environment.IsDevelopment())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<PromotionDbContext>();
+        var redis = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+        await PromotionDbContextSeed.SeedCouponsAsync(db, redis, logger);
     }
 }
 
