@@ -13,7 +13,7 @@ public sealed class EfUnitOfWork : IUnitOfWork
     {
         var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        await strategy.ExecuteAsync(async (cancellationToken) =>
+        await strategy.ExecuteAsync(async (_) =>
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(
                 CancellationToken.None);

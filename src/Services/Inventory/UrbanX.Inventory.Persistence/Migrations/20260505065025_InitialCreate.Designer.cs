@@ -12,7 +12,7 @@ using UrbanX.Inventory.Persistence;
 namespace UrbanX.Inventory.Persistence.Migrations
 {
     [DbContext(typeof(InventoryDbContext))]
-    [Migration("20260505062939_InitialCreate")]
+    [Migration("20260505065025_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -247,8 +247,9 @@ namespace UrbanX.Inventory.Persistence.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.HasIndex("OrderIdempotencyKey")
-                        .HasDatabaseName("ix_inventory_reservations_order_idempotency_key");
+                    b.HasIndex("OrderIdempotencyKey", "InventoryItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_inventory_reservations_order_idempotency_inventory_item");
 
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("ix_inventory_reservations_status_expires_at");

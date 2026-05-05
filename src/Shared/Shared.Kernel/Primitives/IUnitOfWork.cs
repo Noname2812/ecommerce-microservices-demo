@@ -31,4 +31,13 @@ public interface IUnitOfWork
     /// A task that represents the asynchronous transactional operation.
     /// </returns>
     Task ExecuteInTransactionAsync(Func<Task> operation, CancellationToken ct = default);
+
+    /// <summary>
+    /// Runs the operation in a transaction, retrying optimistic concurrency conflicts when the
+    /// persistence layer supports it. Default: single attempt (same as <see cref="ExecuteInTransactionAsync"/>).
+    /// </summary>
+    Task ExecuteInTransactionWithConcurrencyRetryAsync(Func<Task> operation, CancellationToken ct = default)
+    {
+        return ExecuteInTransactionAsync(operation, ct);
+    }
 }

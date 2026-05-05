@@ -197,11 +197,6 @@ namespace UrbanX.Inventory.Persistence.Migrations
                 column: "InventoryItemId");
 
             migrationBuilder.CreateIndex(
-                name: "ix_inventory_reservations_order_idempotency_key",
-                table: "inventory_reservations",
-                column: "OrderIdempotencyKey");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_inventory_reservations_OrderId",
                 table: "inventory_reservations",
                 column: "OrderId");
@@ -210,6 +205,12 @@ namespace UrbanX.Inventory.Persistence.Migrations
                 name: "ix_inventory_reservations_status_expires_at",
                 table: "inventory_reservations",
                 columns: new[] { "Status", "ExpiresAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_inventory_reservations_order_idempotency_inventory_item",
+                table: "inventory_reservations",
+                columns: new[] { "OrderIdempotencyKey", "InventoryItemId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_messages_status_created_at",

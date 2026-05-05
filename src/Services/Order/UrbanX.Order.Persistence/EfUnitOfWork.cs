@@ -24,7 +24,7 @@ public sealed class EfUnitOfWork : IUnitOfWork
     {
         var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        await strategy.ExecuteAsync(async (cancellationToken) =>
+        await strategy.ExecuteAsync(async (_) =>
         {
             _compensation.Clear();
 

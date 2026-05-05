@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
+using UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
+using UrbanX.Inventory.Application.Usecases.V1.Errors;
 
 namespace UrbanX.Inventory.API.Abstractions;
 
@@ -34,6 +36,29 @@ public abstract class ApiEndpoint
         result.IsSuccess
             ? Results.Ok(result.Value)
             : ToInventoryResult((Result)result);
+
+    protected static IResult ToReserveInventoryResult(Result<ReserveInventoryResponse> result)
+    {
+        if (result.IsSuccess)
+            throw new InvalidOperationException();
+
+        if (result is IValidationResult)
+            return HandleFailure(result);
+
+        return result.Error switch
+        {
+            OutOfStockError o => Results.Json(
+                new { type = "OUT_OF_STOCK", productId = o.ProductId, requested = o.Requested, available = o.Available },
+                statusCode: StatusCodes.Status409Conflict),
+            ProductNotFoundForReservationError p => Results.Json(
+                new { type = "PRODUCT_NOT_FOUND", productId = p.ProductId },
+                statusCode: StatusCodes.Status422UnprocessableEntity),
+            _ => Results.Problem(
+                detail: result.Error.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                type: result.Error.Code)
+        };
+    }
 
     private static ProblemDetails CreateProblemDetails(
         string title, int status, Error error, Error[]? errors = null) => new()

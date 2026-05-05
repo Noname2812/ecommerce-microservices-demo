@@ -12,8 +12,8 @@ public sealed class EfUnitOfWork : IUnitOfWork
     public async Task ExecuteInTransactionAsync(Func<Task> operation, CancellationToken ct = default)
     {
         var strategy = _dbContext.Database.CreateExecutionStrategy();
-        
-        await strategy.ExecuteAsync(async (cancellationToken) =>
+
+        await strategy.ExecuteAsync(async (_) =>
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(
                 CancellationToken.None);
