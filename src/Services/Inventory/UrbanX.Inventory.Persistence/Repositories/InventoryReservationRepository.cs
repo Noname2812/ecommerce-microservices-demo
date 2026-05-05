@@ -23,4 +23,13 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
 
     public void AddRange(IEnumerable<InventoryReservation> reservations) =>
         dbContext.InventoryReservations.AddRange(reservations);
+
+    public async Task<InventoryReservation?> GetTrackedByIdWithInventoryItemAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.InventoryReservations
+            .Include(r => r.InventoryItem)
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    }
 }

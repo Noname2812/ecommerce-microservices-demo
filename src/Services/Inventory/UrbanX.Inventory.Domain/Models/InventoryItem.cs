@@ -1,4 +1,5 @@
 using Shared.Kernel.Domain;
+using Shared.Kernel.Primitives;
 
 namespace UrbanX.Inventory.Domain.Models;
 
@@ -26,4 +27,16 @@ public class InventoryItem : BaseEntity<Guid>
     public Warehouse? Warehouse { get; set; }
     public ICollection<InventoryReservation> Reservations { get; set; } = new List<InventoryReservation>();
     public ICollection<StockMovement> Movements { get; set; } = new List<StockMovement>();
+
+    public Error? ReleaseReservedQuantity(int quantity, DateTimeOffset utcNow)
+    {
+        if (quantity <= 0)
+            return InventoryStockErrors.InvalidReleaseQuantity;
+        if (QuantityReserved < quantity)
+            return InventoryStockErrors.InsufficientReservedForRelease(Id, quantity, QuantityReserved);
+
+        QuantityReserved -= quantity;
+        UpdatedAt = utcNow;
+        return null;
+    }
 }

@@ -24,4 +24,11 @@ public class InventoryReservation : BaseEntity<Guid>
     public DateTimeOffset? ReleasedAt { get; set; }
 
     public InventoryItem? InventoryItem { get; set; }
+
+    public void MarkReleased(DateTimeOffset utcNow)
+    {
+        Status = ReservationStatus.Released;
+        ReleasedAt = utcNow;
+        UpdatedAt = utcNow;
+    }
 }

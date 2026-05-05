@@ -14,4 +14,6 @@ public interface IInventoryReservationRepository
         CancellationToken cancellationToken);
 
     void AddRange(IEnumerable<InventoryReservation> reservations);
+
+    Task<InventoryReservation?> GetTrackedByIdWithInventoryItemAsync(Guid id, CancellationToken cancellationToken);
 }

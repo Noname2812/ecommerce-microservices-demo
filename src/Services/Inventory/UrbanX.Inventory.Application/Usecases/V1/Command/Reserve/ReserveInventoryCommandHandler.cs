@@ -39,7 +39,8 @@ public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInve
         foreach (var pid in productIds)
         {
             if (!lines.ContainsKey(pid))
-                return Result.Failure<ReserveInventoryResponse>(new ProductNotFoundForReservationError(pid));
+                return Result.Failure<ReserveInventoryResponse>(
+                    InventoryReservationErrors.ProductNotFoundForReservation(pid));
         }
 
         foreach (var (pid, qty) in merged)
@@ -47,7 +48,8 @@ public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInve
             var line = lines[pid];
             var available = line.QuantityAvailable;
             if (available < qty)
-                return Result.Failure<ReserveInventoryResponse>(new OutOfStockError(pid, qty, available));
+                return Result.Failure<ReserveInventoryResponse>(
+                    InventoryReservationErrors.OutOfStock(pid, qty, available));
         }
 
         var utc = DateTimeOffset.UtcNow;

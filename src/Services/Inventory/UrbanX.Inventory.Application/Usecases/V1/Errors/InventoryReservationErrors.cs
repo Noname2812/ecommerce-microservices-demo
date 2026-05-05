@@ -2,6 +2,15 @@ using Shared.Kernel.Primitives;
 
 namespace UrbanX.Inventory.Application.Usecases.V1.Errors;
 
+public static class InventoryReservationErrors
+{
+    public static Error OutOfStock(Guid productId, int requested, int available) =>
+        new OutOfStockError(productId, requested, available);
+
+    public static Error ProductNotFoundForReservation(Guid productId) =>
+        new ProductNotFoundForReservationError(productId);
+}
+
 public sealed class OutOfStockError : Error
 {
     public Guid ProductId { get; }

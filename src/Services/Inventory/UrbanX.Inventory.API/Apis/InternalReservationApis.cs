@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Exceptions;
 using UrbanX.Inventory.API.Abstractions;
+using UrbanX.Inventory.Application.Usecases.V1.Command.Release;
 using UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 
 namespace UrbanX.Inventory.API.Apis;
@@ -15,6 +16,7 @@ public sealed class InternalReservationApis : ApiEndpoint, ICarterModule
     {
         var group = app.NewVersionedApi("InternalReservations").MapGroup(BaseUrl).HasApiVersion(1);
         group.MapPost("/", ReserveV1);
+        group.MapDelete("/{reservationId:guid}", ReleaseV1);
     }
 
     private static async Task<IResult> ReserveV1(
@@ -37,5 +39,16 @@ public sealed class InternalReservationApis : ApiEndpoint, ICarterModule
                 new { type = "CONCURRENCY_RETRY_EXHAUSTED", title = "Concurrency conflict" },
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
+    }
+
+    private static async Task<IResult> ReleaseV1(
+        [FromServices] ISender sender,
+        [FromRoute] Guid reservationId,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new ReleaseInventoryCommand(reservationId), cancellationToken);
+        if (result.IsFailure)
+            return ToInventoryResult(result);
+        return Results.Ok();
     }
 }
