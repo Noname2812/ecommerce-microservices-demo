@@ -14,6 +14,11 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri("http://promotion");
         });
 
+        services.AddHttpClient<ICatalogServiceClient, CatalogServiceClient>(client =>
+        {
+            client.BaseAddress = new Uri("http://catalog");
+        });
+
         services.AddScoped<ICompensationCollector, CompensationCollector>();
 
         return services;

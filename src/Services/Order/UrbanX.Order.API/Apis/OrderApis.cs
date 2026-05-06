@@ -1,6 +1,7 @@
 using Carter;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Shared.Application.Authorization;
 using UrbanX.Order.API.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command;
 using UrbanX.Order.Application.Usecases.V1.Query;
@@ -25,10 +26,18 @@ public class OrderApis : ApiEndpoint, ICarterModule
 
     public static async Task<IResult> PlaceOrderV1(
         [FromServices] ISender sender,
+        [FromServices] IUserContext userContext,
         [FromBody] PlaceOrderCommand body,
         CancellationToken cancellationToken)
     {
-        var result = await sender.Send(body, cancellationToken);
+        var userId = userContext.UserId;
+        if (userId is null || userId == Guid.Empty)
+            return Results.Problem(
+                detail: "Authenticated user was not found in request context.",
+                statusCode: StatusCodes.Status401Unauthorized,
+                type: "AUTH_REQUIRED");
+
+        var result = await sender.Send(body with { UserId = userId.Value }, cancellationToken);
         if (result.IsFailure) return HandleFailure(result);
         return Results.Created($"/api/v1/orders/{result.Value}", result.Value);
     }

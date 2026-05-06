@@ -6,6 +6,7 @@ using Shared.Messaging.Idempotency;
 using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
+using UrbanX.Order.API.Middleware;
 using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Order.Persistence;
 using UrbanX.Order.Persistence.DependencyInjection.Extensions;
@@ -35,6 +36,7 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<OrderDbContext>(name: "orderdb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
+builder.Services.AddScoped<PlaceOrderRateLimitMiddleware>();
 
 // Add Infrastructure
 builder.Services.AddInfrastructure();
@@ -66,6 +68,7 @@ app.UseExceptionHandler();
 
 app.UseHttpIdempotency();
 app.UseUserContext();
+app.UseMiddleware<PlaceOrderRateLimitMiddleware>();
 
 using (var scope = app.Services.CreateScope())
 {

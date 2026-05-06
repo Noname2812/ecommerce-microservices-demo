@@ -18,4 +18,32 @@ public static class OrderErrors
 
     public static Error PromotionInvalid(string message) =>
         new("ORDER_PROMOTION_INVALID", message);
+
+    public static Error ProductNotFound(Guid productId) =>
+        new("PRODUCT_NOT_FOUND", $"Product {productId} was not found.");
+
+    public static Error ProductUnavailable(Guid productId) =>
+        new("PRODUCT_UNAVAILABLE", $"Product {productId} is inactive.");
+
+    public static Error ShippingNotAvailable(string city, string district) =>
+        new("SHIPPING_NOT_AVAILABLE", $"Shipping is not available for {district}, {city}.");
+
+    public static Error PriceMismatch(Guid variantId, decimal currentPrice, decimal snapshotPrice) =>
+        new PriceMismatchError(variantId, currentPrice, snapshotPrice);
+}
+
+public sealed class PriceMismatchError : Error
+{
+    public Guid VariantId { get; }
+    public decimal CurrentPrice { get; }
+    public decimal SnapshotPrice { get; }
+
+    public PriceMismatchError(Guid variantId, decimal currentPrice, decimal snapshotPrice)
+        : base("PRICE_MISMATCH",
+            $"Price changed for variant {variantId}. Current price is {currentPrice}, snapshot price is {snapshotPrice}.")
+    {
+        VariantId = variantId;
+        CurrentPrice = currentPrice;
+        SnapshotPrice = snapshotPrice;
+    }
 }

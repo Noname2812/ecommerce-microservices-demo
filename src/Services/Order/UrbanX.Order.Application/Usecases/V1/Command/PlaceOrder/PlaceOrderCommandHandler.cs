@@ -16,7 +16,10 @@ public sealed class PlaceOrderCommandHandler(
     IOrderRepository orderRepository,
     IOutboxWriter outboxWriter,
     IUserContext userContext,
-    IPromotionServiceClient promotionClient)
+    IPromotionServiceClient promotionClient,
+    IProductValidator productValidator,
+    IShippingValidator shippingValidator,
+    IPricingValidator pricingValidator)
     : ICommandHandler<PlaceOrderCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(PlaceOrderCommand request, CancellationToken cancellationToken)
@@ -26,7 +29,23 @@ public sealed class PlaceOrderCommandHandler(
         if (existing is not null)
             return Result.Success(existing.Id);
 
-        var userId = userContext.UserId!.Value;
+        var currentUserId = userContext.UserId;
+        if (currentUserId is null || currentUserId == Guid.Empty)
+            return Result.Failure<Guid>(OrderErrors.Forbidden);
+
+        if (request.UserId != currentUserId.Value)
+            return Result.Failure<Guid>(OrderErrors.Forbidden);
+
+        var userId = currentUserId.Value;
+
+        var validationResult = await ValidateBusinessRulesAsync(
+            request,
+            productValidator,
+            shippingValidator,
+            pricingValidator,
+            cancellationToken);
+        if (validationResult.IsFailure)
+            return Result.Failure<Guid>(validationResult.Error);
 
         decimal couponDiscount = 0;
         var itemDiscountMap = new Dictionary<Guid, decimal>();
@@ -53,9 +72,9 @@ public sealed class PlaceOrderCommandHandler(
 
         var orderNumber = GenerateOrderNumber();
         var address = ShippingAddress.Create(
-            request.Street, request.Ward, request.District,
-            request.City, request.Province, request.Country,
-            request.ZipCode, request.RecipientName, request.RecipientPhone);
+            request.ShippingAddress.Address, request.ShippingAddress.Ward, request.ShippingAddress.District,
+            request.ShippingAddress.City, request.ShippingAddress.Province, request.ShippingAddress.Country,
+            request.ShippingAddress.ZipCode, request.ShippingAddress.FullName, request.ShippingAddress.Phone);
 
         var specs = request.Items.Select(i => new NewOrderItemSpec(
             i.ProductId, i.ProductName, i.ProductSlug,
@@ -69,9 +88,9 @@ public sealed class PlaceOrderCommandHandler(
         var order = OrderEntity.Create(
             orderNumber,
             userId,
-            customerEmail: string.Empty,
-            customerName: string.Empty,
-            customerPhone: null,
+            customerEmail: request.CustomerEmail?.Trim() ?? string.Empty,
+            customerName: request.ShippingAddress.FullName,
+            customerPhone: request.ShippingAddress.Phone,
             address,
             request.ShippingFee,
             request.CouponCode,
@@ -94,6 +113,42 @@ public sealed class PlaceOrderCommandHandler(
             order.TotalAmount, itemSnapshots), cancellationToken);
 
         return Result.Success(order.Id);
+    }
+
+    private static async Task<Result> ValidateBusinessRulesAsync(
+        PlaceOrderCommand request,
+        IProductValidator productValidator,
+        IShippingValidator shippingValidator,
+        IPricingValidator pricingValidator,
+        CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var running = new List<Task<Result>>
+        {
+            productValidator.ValidateAsync(request.Items, cts.Token),
+            shippingValidator.ValidateAsync(request.ShippingAddress, cts.Token),
+            pricingValidator.ValidateAsync(request.PricingSnapshot, request.Items, cts.Token)
+        };
+
+        while (running.Count > 0)
+        {
+            var completed = await Task.WhenAny(running);
+            running.Remove(completed);
+
+            var result = await completed;
+            if (result.IsFailure)
+            {
+                cts.Cancel();
+                _ = Task.WhenAll(running).ContinueWith(
+                    _ => { },
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted,
+                    TaskScheduler.Default);
+                return result;
+            }
+        }
+
+        return Result.Success();
     }
 
     private static string GenerateOrderNumber()

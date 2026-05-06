@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Shared.Kernel.Primitives;
+using System.Reflection;
 
 namespace Shared.Messaging.Behaviors
 {
@@ -14,6 +15,13 @@ namespace Shared.Messaging.Behaviors
     public sealed class ValidationPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
         where TRequest : notnull
     {
+        private static readonly MethodInfo? _withErrorsMethod =
+            typeof(TResponse).IsGenericType && typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>)
+                ? typeof(ValidationResult<>)
+                    .MakeGenericType(typeof(TResponse).GetGenericArguments()[0])
+                    .GetMethod(nameof(ValidationResult<object>.WithErrors), [typeof(Error[])])
+                : null;
+
         private readonly IEnumerable<IValidator<TRequest>> _validators;
         private readonly ILogger<ValidationPipelineBehavior<TRequest, TResponse>> _logger;
 
@@ -51,22 +59,21 @@ namespace Shared.Messaging.Behaviors
                 "Validation failed for {RequestName} with {ErrorCount} error(s): {@Errors}",
                 requestName, failures.Count, failures);
 
-            // Return a Result.Failure if TResponse is a Result type; otherwise throw
+            var errors = failures
+                .Select(f => new Error(
+                    string.IsNullOrWhiteSpace(f.PropertyName) ? "validation" : f.PropertyName,
+                    f.ErrorMessage))
+                .ToArray();
+
+            // Return a ValidationResult if TResponse is a Result type; otherwise throw
             if (typeof(TResponse) == typeof(Result))
             {
-                var error = new Error("Validation", string.Join("; ", failures.Select(f => f.ErrorMessage)));
-                return (TResponse)(object)Result.Failure(error);
+                return (TResponse)(object)ValidationResult.WithErrors(errors);
             }
 
-            if (typeof(TResponse).IsGenericType &&
-                typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>))
+            if (_withErrorsMethod is not null)
             {
-                var innerType = typeof(TResponse).GetGenericArguments()[0];
-                var error = new Error("Validation", string.Join("; ", failures.Select(f => f.ErrorMessage)));
-                var failureMethod = typeof(Result<>)
-                    .MakeGenericType(innerType)
-                    .GetMethod(nameof(Result<object>.Failure), new[] { typeof(Error) })!;
-                return (TResponse)failureMethod.Invoke(null, new object[] { error })!;
+                return (TResponse)_withErrorsMethod.Invoke(null, [errors])!;
             }
 
             throw new ValidationException(failures);
