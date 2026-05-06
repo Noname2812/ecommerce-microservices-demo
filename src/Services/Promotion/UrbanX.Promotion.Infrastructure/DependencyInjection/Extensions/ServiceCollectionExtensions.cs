@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using UrbanX.Promotion.Application.Abstractions;
 using UrbanX.Promotion.Infrastructure.Redis;
 
 namespace UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;

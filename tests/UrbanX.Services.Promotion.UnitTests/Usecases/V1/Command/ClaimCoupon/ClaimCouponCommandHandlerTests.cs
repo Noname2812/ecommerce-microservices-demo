@@ -4,7 +4,7 @@ using UrbanX.Promotion.Application.Usecases.V1.Errors;
 using UrbanX.Promotion.Domain.Models;
 using UrbanX.Promotion.Domain.Repositories;
 using UrbanX.Promotion.Domain.ValueObjects;
-using UrbanX.Promotion.Infrastructure.Redis;
+using UrbanX.Promotion.Application.Abstractions;
 
 namespace UrbanX.Services.Promotion.UnitTests.Usecases.V1.Command.ClaimCoupon;
 
@@ -75,6 +75,7 @@ public sealed class ClaimCouponCommandHandlerTests
         Assert.Equal("WELCOME10", captured!.CouponCode);
         Assert.Equal(userId, captured.UserId);
         Assert.Equal("idem-1", captured.OrderIdempotencyKey);
+        Assert.False(captured.RestoreQuotaSlotOnRelease);
         Assert.Equal(10_000m, result.Value!.DiscountAmount);
 
         _redisGateway.Verify(
@@ -187,7 +188,8 @@ public sealed class ClaimCouponCommandHandlerTests
             DiscountAmount = 500m,
             Status = CouponClaimStatus.Claimed,
             ExpiresAt = expires,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            RestoreQuotaSlotOnRelease = false
         };
 
         _claimRepository
@@ -243,6 +245,61 @@ public sealed class ClaimCouponCommandHandlerTests
         _redisGateway.Verify(
             g => g.TryConsumeQuotaSlotAsync("QUOTA5", It.IsAny<Guid>(), 5, It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenQuotaCoupon_SnapshotSetsRestoreQuotaTrue()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var coupon = new Coupon
+        {
+            Id = "LIMITED10",
+            DiscountType = DiscountType.Percentage,
+            DiscountValue = 10,
+            TotalQuota = 10,
+            UsedQuota = 0,
+            MinOrderValue = 0,
+            ValidFrom = now.AddDays(-1),
+            ExpiresAt = now.AddDays(30),
+            IsActive = true
+        };
+
+        _claimRepository
+            .Setup(r => r.GetByIdempotencyKeyAsync("kq", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CouponClaim?)null);
+
+        _couponRepository
+            .Setup(r => r.GetByCodeAsync("LIMITED10", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(coupon);
+
+        _redisGateway
+            .Setup(g => g.TryAcquireUserHoldAsync("LIMITED10", userId, It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        _redisGateway
+            .Setup(g => g.TryConsumeQuotaSlotAsync("LIMITED10", userId, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        CouponClaim? captured = null;
+        _claimRepository
+            .Setup(r => r.AddAsync(It.IsAny<CouponClaim>(), It.IsAny<CancellationToken>()))
+            .Callback<CouponClaim, CancellationToken>((c, _) => captured = c)
+            .Returns(Task.CompletedTask);
+
+        _couponRepository.Setup(r => r.UpdateAsync(It.IsAny<Coupon>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var cmd = new ClaimCouponCommand("kq", "LIMITED10", userId, 100_000m);
+
+        // Act
+        var result = await _handler.Handle(cmd, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(captured);
+        Assert.True(captured!.RestoreQuotaSlotOnRelease);
     }
 
     private static Coupon ActivePercentageCoupon(

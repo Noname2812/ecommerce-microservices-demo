@@ -1,10 +1,10 @@
 using Shared.Application;
 using Shared.Kernel.Primitives;
 using UrbanX.Promotion.Application.Usecases.V1.Errors;
+using UrbanX.Promotion.Application.Abstractions;
 using UrbanX.Promotion.Domain.Models;
 using UrbanX.Promotion.Domain.Repositories;
 using UrbanX.Promotion.Domain.ValueObjects;
-using UrbanX.Promotion.Infrastructure.Redis;
 
 namespace UrbanX.Promotion.Application.Usecases.V1.Command;
 
@@ -56,7 +56,8 @@ internal sealed class ClaimCouponCommandHandler(
             DiscountAmount = discountAmount,
             Status = CouponClaimStatus.Claimed,
             ExpiresAt = expiresAt,
-            CreatedAt = now
+            CreatedAt = now,
+            RestoreQuotaSlotOnRelease = coupon.TotalQuota.HasValue
         };
 
         await couponClaimRepository.AddAsync(claim, cancellationToken);

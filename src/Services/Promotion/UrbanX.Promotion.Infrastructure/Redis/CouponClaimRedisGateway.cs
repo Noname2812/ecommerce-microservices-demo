@@ -1,5 +1,6 @@
 using Shared.Cache.Abstractions;
 using StackExchange.Redis;
+using UrbanX.Promotion.Application.Abstractions;
 using UrbanX.Promotion.Domain.Constants;
 
 namespace UrbanX.Promotion.Infrastructure.Redis;
@@ -31,6 +32,15 @@ internal sealed class CouponClaimRedisGateway(ICacheService cache) : ICouponClai
         return v
         """;
 
+    /// <summary>Atomic: DEL user hold, then optional INCR quota (one round-trip).</summary>
+    private const string ReleaseClaimScript = """
+        redis.call('DEL', KEYS[1])
+        if tonumber(ARGV[1]) == 1 then
+          return redis.call('INCR', KEYS[2])
+        end
+        return 0
+        """;
+
     public async Task<bool> TryAcquireUserHoldAsync(string couponCode, Guid userId, TimeSpan ttl, CancellationToken ct = default)
     {
         var key = CouponRedisKeys.UserLock(couponCode, userId);
@@ -59,4 +69,23 @@ internal sealed class CouponClaimRedisGateway(ICacheService cache) : ICouponClai
         var code = (long)r;
         return code >= 0;
     }
+
+    public async Task ReleaseClaimRedisStateAsync(
+        string couponCode,
+        Guid userId,
+        bool incrementQuotaRemaining,
+        CancellationToken ct = default)
+    {
+        var userHoldKey = CouponRedisKeys.UserLock(couponCode, userId);
+        var quotaKey = CouponRedisKeys.Quota(couponCode);
+        var flag = incrementQuotaRemaining ? 1 : 0;
+        await cache.EvalAsync(
+            ReleaseClaimScript,
+            new RedisKey[] { userHoldKey, quotaKey },
+            new RedisValue[] { flag },
+            ct);
+    }
+
+    public Task DeleteUserHoldAsync(string couponCode, Guid userId, CancellationToken ct = default) =>
+        cache.RemoveAsync(CouponRedisKeys.UserLock(couponCode, userId), ct);
 }

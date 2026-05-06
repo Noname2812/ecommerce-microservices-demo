@@ -18,6 +18,7 @@ internal sealed class CouponClaimConfiguration : IEntityTypeConfiguration<Coupon
         builder.Property(x => x.OrderIdempotencyKey).HasMaxLength(100).IsRequired();
         builder.Property(x => x.DiscountAmount).HasPrecision(18, 2);
         builder.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.RestoreQuotaSlotOnRelease).IsRequired();
 
         builder.HasOne<Coupon>()
             .WithMany()

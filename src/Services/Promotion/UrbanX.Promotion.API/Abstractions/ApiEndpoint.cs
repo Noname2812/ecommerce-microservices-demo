@@ -41,6 +41,27 @@ public abstract class ApiEndpoint
             ? Results.Ok(result.Value)
             : ToPromotionResult((Result)result);
 
+    /// <summary>
+    /// Maps DELETE release outcomes: 404 missing claim; 409 when status is not <c>CLAIMED</c>/<c>RELEASED</c> semantics (lifecycle conflict, not coupon quota exhaustion).
+    /// </summary>
+    protected static IResult ToReleaseCouponClaimResult(Result result)
+    {
+        if (result.IsSuccess)
+            return Results.Ok();
+
+        if (result is IValidationResult)
+            return HandleFailure(result);
+
+        var statusCode = result.Error.Code switch
+        {
+            var c when c.EndsWith("NotFound") => StatusCodes.Status404NotFound,
+            "CouponClaim.InvalidStatus" => StatusCodes.Status409Conflict,
+            _ => StatusCodes.Status400BadRequest
+        };
+
+        return Results.Problem(detail: result.Error.Message, statusCode: statusCode, type: result.Error.Code);
+    }
+
     protected static IResult ToCouponClaimResult(Result<ClaimCouponResult> result)
     {
         if (result.IsSuccess)

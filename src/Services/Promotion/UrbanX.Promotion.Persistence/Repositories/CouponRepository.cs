@@ -19,4 +19,9 @@ public sealed class CouponRepository(PromotionDbContext db) : ICouponRepository
         db.Entry(coupon).State = EntityState.Modified;
         return Task.CompletedTask;
     }
+
+    public Task<int> TryDecrementUsedQuotaIfPositiveAsync(string couponCode, CancellationToken ct = default) =>
+        db.Coupons
+            .Where(c => c.Id == couponCode && c.UsedQuota > 0)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsedQuota, c => c.UsedQuota - 1), ct);
 }

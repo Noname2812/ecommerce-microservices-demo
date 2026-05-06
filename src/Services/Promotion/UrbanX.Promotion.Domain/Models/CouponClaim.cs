@@ -12,4 +12,7 @@ public class CouponClaim : BaseEntity<Guid>
     public DateTimeOffset ExpiresAt { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? ReleasedAt { get; set; }      // set when claim is released
+
+    /// <summary>Snapshot at claim time: release must INCR Redis quota if the coupon had a total quota when claimed.</summary>
+    public bool RestoreQuotaSlotOnRelease { get; init; }
 }

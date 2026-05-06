@@ -1,5 +1,6 @@
 using Carter;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
 using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
@@ -9,11 +10,14 @@ using UrbanX.Promotion.API.SeedData;
 using UrbanX.Promotion.Application.DependencyInjection.Extensions;
 using UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Promotion.Persistence;
+using UrbanX.Promotion.Application.Telemetry;
 using UrbanX.Promotion.Persistence.DependencyInjection.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
+builder.Services.AddOpenTelemetry().WithMetrics(m => m.AddMeter(PromotionMetrics.MeterName));
 builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 

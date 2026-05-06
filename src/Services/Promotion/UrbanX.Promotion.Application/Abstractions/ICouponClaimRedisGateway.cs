@@ -1,7 +1,7 @@
-namespace UrbanX.Promotion.Infrastructure.Redis;
+namespace UrbanX.Promotion.Application.Abstractions;
 
 /// <summary>
-/// Atomic Redis operations for coupon claim (Lua via Shared.Cache ICacheService.EvalAsync).
+/// Atomic Redis operations for coupon claim (Lua via Shared.Cache).
 /// </summary>
 public interface ICouponClaimRedisGateway
 {
@@ -18,4 +18,14 @@ public interface ICouponClaimRedisGateway
         Guid userId,
         int initialRemainingWhenKeyMissing,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomically removes the per-user hold and optionally increments remaining quota (INCR).
+    /// </summary>
+    Task ReleaseClaimRedisStateAsync(string couponCode, Guid userId, bool incrementQuotaRemaining, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes only <c>coupon:{code}:user:{userId}</c> (DEL). For reconciliation after a partial/failed release — avoids blind INCR retries.
+    /// </summary>
+    Task DeleteUserHoldAsync(string couponCode, Guid userId, CancellationToken ct = default);
 }
