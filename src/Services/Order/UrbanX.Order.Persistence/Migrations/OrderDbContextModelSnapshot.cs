@@ -122,12 +122,14 @@ namespace UrbanX.Order.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Order.Domain.Models.Order", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("CancelledReason")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("CouponClaimId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("CouponCode")
                         .HasMaxLength(50)
@@ -145,9 +147,6 @@ namespace UrbanX.Order.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("CustomerName")
                         .IsRequired()
@@ -176,7 +175,11 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.Property<DateTimeOffset?>("EstimatedDeliveryAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("FinalAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("IdempotencyKey")
+                        .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
@@ -202,8 +205,19 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<string>("PricingSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("ReservationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("ShippedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ShippingAddress")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<decimal>("ShippingFee")
                         .ValueGeneratedOnAdd()
@@ -237,20 +251,23 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt");
 
-                    b.HasIndex("CustomerId");
-
                     b.HasIndex("IdempotencyKey")
-                        .IsUnique()
-                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+                        .IsUnique();
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .IsDescending(false, true);
 
                     b.ToTable("orders", (string)null);
                 });
@@ -258,7 +275,6 @@ namespace UrbanX.Order.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Order.Domain.Models.OrderItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("DiscountAmount")
@@ -338,7 +354,6 @@ namespace UrbanX.Order.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Order.Domain.Models.OrderStatusHistory", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("ChangedById")
@@ -372,76 +387,6 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.HasIndex("OrderId");
 
                     b.ToTable("order_status_histories", (string)null);
-                });
-
-            modelBuilder.Entity("UrbanX.Order.Domain.Models.Order", b =>
-                {
-                    b.OwnsOne("UrbanX.Order.Domain.ValueObjects.ShippingAddress", "ShippingAddress", b1 =>
-                        {
-                            b1.Property<Guid>("OrderId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("City")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("shipping_city");
-
-                            b1.Property<string>("Country")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("shipping_country");
-
-                            b1.Property<string>("District")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("shipping_district");
-
-                            b1.Property<string>("Province")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("shipping_province");
-
-                            b1.Property<string>("RecipientName")
-                                .IsRequired()
-                                .HasMaxLength(255)
-                                .HasColumnType("character varying(255)")
-                                .HasColumnName("shipping_recipient_name");
-
-                            b1.Property<string>("RecipientPhone")
-                                .IsRequired()
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)")
-                                .HasColumnName("shipping_recipient_phone");
-
-                            b1.Property<string>("Street")
-                                .IsRequired()
-                                .HasMaxLength(255)
-                                .HasColumnType("character varying(255)")
-                                .HasColumnName("shipping_street");
-
-                            b1.Property<string>("Ward")
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("shipping_ward");
-
-                            b1.Property<string>("ZipCode")
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)")
-                                .HasColumnName("shipping_zip_code");
-
-                            b1.HasKey("OrderId");
-
-                            b1.ToTable("orders");
-
-                            b1.WithOwner()
-                                .HasForeignKey("OrderId");
-                        });
-
-                    b.Navigation("ShippingAddress")
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("UrbanX.Order.Domain.Models.OrderItem", b =>

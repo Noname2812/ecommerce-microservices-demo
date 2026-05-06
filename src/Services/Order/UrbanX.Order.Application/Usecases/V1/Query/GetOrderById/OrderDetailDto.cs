@@ -3,7 +3,7 @@ namespace UrbanX.Order.Application.Usecases.V1.Query;
 public record OrderDetailDto(
     Guid Id,
     string OrderNumber,
-    Guid CustomerId,
+    Guid UserId,
     string CustomerEmail,
     string CustomerName,
     string Status,

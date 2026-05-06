@@ -12,6 +12,7 @@ internal sealed class OrderStatusHistoryConfiguration : IEntityTypeConfiguration
         builder.ToTable(TableNames.OrderStatusHistories);
 
         builder.HasKey(h => h.Id);
+        builder.Property(h => h.Id).ValueGeneratedNever();
 
         builder.Property(h => h.OrderId).IsRequired();
         builder.Property(h => h.FromStatus).HasMaxLength(30);

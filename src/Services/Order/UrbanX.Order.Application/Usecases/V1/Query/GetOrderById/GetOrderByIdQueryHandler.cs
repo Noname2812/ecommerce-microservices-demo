@@ -18,13 +18,13 @@ public sealed class GetOrderByIdQueryHandler(
             return Result.Failure<OrderDetailDto>(OrderErrors.NotFound(request.OrderId));
 
         var isAdmin = userContext.HasRole(Roles.Admin);
-        if (!isAdmin && order.CustomerId != userContext.UserId)
+        if (!isAdmin && order.UserId != userContext.UserId)
             return Result.Failure<OrderDetailDto>(OrderErrors.Forbidden);
 
         return Result.Success(new OrderDetailDto(
             order.Id,
             order.OrderNumber,
-            order.CustomerId,
+            order.UserId,
             order.CustomerEmail,
             order.CustomerName,
             order.Status,

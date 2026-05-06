@@ -35,24 +35,20 @@ namespace UrbanX.Order.Persistence.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     OrderNumber = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    CustomerId = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ReservationId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CouponClaimId = table.Column<Guid>(type: "uuid", nullable: true),
                     CustomerEmail = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     CustomerName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     CustomerPhone = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    shipping_street = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    shipping_ward = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    shipping_district = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    shipping_city = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    shipping_province = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    shipping_country = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    shipping_zip_code = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    shipping_recipient_name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    shipping_recipient_phone = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    ShippingAddress = table.Column<string>(type: "jsonb", nullable: false),
                     Subtotal = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
                     DiscountAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false, defaultValue: 0m),
                     ShippingFee = table.Column<decimal>(type: "numeric(18,2)", nullable: false, defaultValue: 0m),
                     TaxAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false, defaultValue: 0m),
                     TotalAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    FinalAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    PricingSnapshot = table.Column<string>(type: "jsonb", nullable: false),
                     CouponCode = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
                     CouponDiscount = table.Column<decimal>(type: "numeric(18,2)", nullable: false, defaultValue: 0m),
                     Status = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
@@ -67,7 +63,7 @@ namespace UrbanX.Order.Persistence.Migrations
                     CustomerNote = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     InternalNote = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     CancelledReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    IdempotencyKey = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    IdempotencyKey = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
@@ -186,16 +182,10 @@ namespace UrbanX.Order.Persistence.Migrations
                 column: "CreatedAt");
 
             migrationBuilder.CreateIndex(
-                name: "IX_orders_CustomerId",
-                table: "orders",
-                column: "CustomerId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_orders_IdempotencyKey",
                 table: "orders",
                 column: "IdempotencyKey",
-                unique: true,
-                filter: "\"IdempotencyKey\" IS NOT NULL");
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_orders_OrderNumber",
@@ -207,6 +197,12 @@ namespace UrbanX.Order.Persistence.Migrations
                 name: "IX_orders_Status",
                 table: "orders",
                 column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_orders_UserId_CreatedAt",
+                table: "orders",
+                columns: new[] { "UserId", "CreatedAt" },
+                descending: new[] { false, true });
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_messages_status_created_at",

@@ -17,12 +17,12 @@ internal sealed class OrderRepository(OrderDbContext db) : IOrderRepository
         await db.Orders
             .FirstOrDefaultAsync(o => o.IdempotencyKey == key, ct);
 
-    public async Task<PageResult<OrderEntity>> GetByCustomerIdAsync(
-        Guid customerId, int page, int pageSize, CancellationToken ct = default)
+    public async Task<PageResult<OrderEntity>> GetByUserIdAsync(
+        Guid userId, int page, int pageSize, CancellationToken ct = default)
     {
         var query = db.Orders
             .AsNoTracking()
-            .Where(o => o.CustomerId == customerId && o.DeletedAt == null)
+            .Where(o => o.UserId == userId && o.DeletedAt == null)
             .OrderByDescending(o => o.CreatedAt);
 
         var total = await query.CountAsync(ct);

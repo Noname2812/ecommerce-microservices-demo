@@ -13,9 +13,9 @@ public sealed class ListMyOrdersQueryHandler(
     public async Task<Result<PageResult<OrderSummaryDto>>> Handle(
         ListMyOrdersQuery request, CancellationToken cancellationToken)
     {
-        var customerId = userContext.UserId!.Value;
-        var paged = await orderRepository.GetByCustomerIdAsync(
-            customerId, request.Page, request.PageSize, cancellationToken);
+        var userId = userContext.UserId!.Value;
+        var paged = await orderRepository.GetByUserIdAsync(
+            userId, request.Page, request.PageSize, cancellationToken);
 
         var dtos = paged.Items
             .Select(o => new OrderSummaryDto(

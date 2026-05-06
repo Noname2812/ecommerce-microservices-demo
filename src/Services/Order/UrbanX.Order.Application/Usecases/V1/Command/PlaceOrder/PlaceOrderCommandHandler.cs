@@ -22,14 +22,11 @@ public sealed class PlaceOrderCommandHandler(
     public async Task<Result<Guid>> Handle(PlaceOrderCommand request, CancellationToken cancellationToken)
     {
         // Idempotency check
-        if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
-        {
-            var existing = await orderRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, cancellationToken);
-            if (existing is not null)
-                return Result.Success(existing.Id);
-        }
+        var existing = await orderRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, cancellationToken);
+        if (existing is not null)
+            return Result.Success(existing.Id);
 
-        var customerId = userContext.UserId!.Value;
+        var userId = userContext.UserId!.Value;
 
         decimal couponDiscount = 0;
         var itemDiscountMap = new Dictionary<Guid, decimal>();
@@ -42,14 +39,15 @@ public sealed class PlaceOrderCommandHandler(
                 .ToList();
 
             var promotionResult = await promotionClient.RedeemAsync(
-                new PromotionRedeemRequest(null, customerId, request.CouponCode, subTotal, redeemItems),
+                new PromotionRedeemRequest(null, userId, request.CouponCode, subTotal, redeemItems),
                 cancellationToken);
 
             if (promotionResult.IsFailure)
                 return Result.Failure<Guid>(OrderErrors.PromotionInvalid(promotionResult.Error.Message));
 
-            couponDiscount = promotionResult.Value.OrderLevelDiscount;
-            foreach (var d in promotionResult.Value.ItemDiscounts)
+            var redeemed = promotionResult.Value!;
+            couponDiscount = redeemed.OrderLevelDiscount;
+            foreach (var d in redeemed.ItemDiscounts)
                 itemDiscountMap[d.VariantId] = d.DiscountPerUnit;
         }
 
@@ -70,7 +68,7 @@ public sealed class PlaceOrderCommandHandler(
 
         var order = OrderEntity.Create(
             orderNumber,
-            customerId,
+            userId,
             customerEmail: string.Empty,
             customerName: string.Empty,
             customerPhone: null,
@@ -91,7 +89,7 @@ public sealed class PlaceOrderCommandHandler(
             .ToList();
 
         await outboxWriter.WriteAsync(new OrderIntegrationEvents.OrderCreatedV1(
-            order.Id, order.OrderNumber, order.CustomerId,
+            order.Id, order.OrderNumber, order.UserId,
             order.CustomerEmail, order.CustomerName,
             order.TotalAmount, itemSnapshots), cancellationToken);
 

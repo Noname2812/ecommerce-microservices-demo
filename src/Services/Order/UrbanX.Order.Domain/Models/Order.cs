@@ -1,12 +1,15 @@
 using Shared.Kernel.Domain;
 using UrbanX.Order.Domain.ValueObjects;
+using System.Text.Json;
 
 namespace UrbanX.Order.Domain.Models;
 
 public sealed class Order : BaseEntity<Guid>
 {
     public string OrderNumber { get; private set; } = null!;
-    public Guid CustomerId { get; private set; }
+    public Guid UserId { get; private set; }
+    public Guid? ReservationId { get; private set; }
+    public Guid? CouponClaimId { get; private set; }
     public string CustomerEmail { get; private set; } = null!;
     public string CustomerName { get; private set; } = null!;
     public string? CustomerPhone { get; private set; }
@@ -16,6 +19,8 @@ public sealed class Order : BaseEntity<Guid>
     public decimal ShippingFee { get; private set; }
     public decimal TaxAmount { get; private set; }
     public decimal TotalAmount { get; private set; }
+    public decimal FinalAmount { get; private set; }
+    public string PricingSnapshot { get; private set; } = "{}";
     public string? CouponCode { get; private set; }
     public decimal CouponDiscount { get; private set; }
     public string Status { get; private set; } = OrderStatus.Pending;
@@ -30,10 +35,10 @@ public sealed class Order : BaseEntity<Guid>
     public string? CustomerNote { get; private set; }
     public string? InternalNote { get; private set; }
     public string? CancelledReason { get; private set; }
-    public string? IdempotencyKey { get; private set; }
+    public string IdempotencyKey { get; private set; } = null!;
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
-    public DateTimeOffset? DeletedAt { get; set; }
+    public DateTimeOffset? DeletedAt { get; private set; }
 
     private readonly List<OrderItem> _items = new();
     public IReadOnlyList<OrderItem> Items => _items.AsReadOnly();
@@ -45,7 +50,7 @@ public sealed class Order : BaseEntity<Guid>
 
     public static Order Create(
         string orderNumber,
-        Guid customerId,
+        Guid userId,
         string customerEmail,
         string customerName,
         string? customerPhone,
@@ -54,7 +59,7 @@ public sealed class Order : BaseEntity<Guid>
         string? couponCode,
         decimal couponDiscount,
         string? customerNote,
-        string? idempotencyKey,
+        string idempotencyKey,
         IReadOnlyList<NewOrderItemSpec> items)
     {
         var now = DateTimeOffset.UtcNow;
@@ -64,7 +69,9 @@ public sealed class Order : BaseEntity<Guid>
         {
             Id = orderId,
             OrderNumber = orderNumber,
-            CustomerId = customerId,
+            UserId = userId,
+            ReservationId = null,
+            CouponClaimId = null,
             CustomerEmail = customerEmail,
             CustomerName = customerName,
             CustomerPhone = customerPhone,
@@ -93,17 +100,28 @@ public sealed class Order : BaseEntity<Guid>
 
         order.Subtotal = order._items.Sum(i => i.Subtotal);
         order.DiscountAmount = couponDiscount + order._items.Sum(i => i.DiscountAmount);
-        order.TotalAmount = order.Subtotal + shippingFee - couponDiscount;
+        order.TotalAmount = order.Subtotal + shippingFee + order.TaxAmount - couponDiscount;
+        order.FinalAmount = order.TotalAmount;
+        order.PricingSnapshot = JsonSerializer.Serialize(new
+        {
+            order.Subtotal,
+            order.DiscountAmount,
+            order.ShippingFee,
+            order.TaxAmount,
+            order.TotalAmount,
+            order.FinalAmount,
+            CapturedAt = now
+        });
 
         order._statusHistory.Add(OrderStatusHistory.Create(
-            orderId, null, OrderStatus.Pending, "Order placed", customerId, customerName));
+            orderId, null, OrderStatus.Pending, "Order placed", userId, customerName));
 
         return order;
     }
 
     public bool CanBeCancelledBy(Guid userId) =>
         (Status == OrderStatus.Pending || Status == OrderStatus.Confirmed) &&
-        CustomerId == userId;
+        UserId == userId;
 
     public void Confirm(Guid changedById, string changedByName)
     {
@@ -122,6 +140,12 @@ public sealed class Order : BaseEntity<Guid>
         UpdatedAt = DateTimeOffset.UtcNow;
         _statusHistory.Add(OrderStatusHistory.Create(
             Id, prev, OrderStatus.Cancelled, reason, changedById, changedByName));
+    }
+
+    public void MarkDeleted()
+    {
+        DeletedAt = DateTimeOffset.UtcNow;
+        UpdatedAt = DeletedAt.Value;
     }
 }
 

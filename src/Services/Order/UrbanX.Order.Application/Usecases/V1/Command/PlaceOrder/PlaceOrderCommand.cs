@@ -19,7 +19,7 @@ public record PlaceOrderCommand(
     string? CouponCode,
     decimal CouponDiscount,
     string? CustomerNote,
-    string? IdempotencyKey,
+    string IdempotencyKey,
     IReadOnlyList<PlaceOrderLineDto> Items
 ) : ICommand<Guid>;
 
@@ -50,6 +50,7 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
         RuleFor(x => x.Country).NotEmpty().MaximumLength(100);
         RuleFor(x => x.ShippingFee).GreaterThanOrEqualTo(0);
         RuleFor(x => x.CouponDiscount).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(255);
         RuleFor(x => x.Items).NotEmpty().WithMessage("Order must have at least one item");
         RuleForEach(x => x.Items).ChildRules(item =>
         {

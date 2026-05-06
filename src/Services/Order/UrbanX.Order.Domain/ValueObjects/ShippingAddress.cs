@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace UrbanX.Order.Domain.ValueObjects;
 
 public sealed class ShippingAddress
@@ -14,6 +16,29 @@ public sealed class ShippingAddress
 
     private ShippingAddress() { }
 
+    [JsonConstructor]
+    public ShippingAddress(
+        string street,
+        string? ward,
+        string district,
+        string city,
+        string? province,
+        string country,
+        string? zipCode,
+        string recipientName,
+        string recipientPhone)
+    {
+        Street = street;
+        Ward = ward;
+        District = district;
+        City = city;
+        Province = province;
+        Country = country;
+        ZipCode = zipCode;
+        RecipientName = recipientName;
+        RecipientPhone = recipientPhone;
+    }
+
     public static ShippingAddress Create(
         string street,
         string? ward,
@@ -23,16 +48,6 @@ public sealed class ShippingAddress
         string country,
         string? zipCode,
         string recipientName,
-        string recipientPhone) => new()
-    {
-        Street = street,
-        Ward = ward,
-        District = district,
-        City = city,
-        Province = province,
-        Country = country,
-        ZipCode = zipCode,
-        RecipientName = recipientName,
-        RecipientPhone = recipientPhone
-    };
+        string recipientPhone) =>
+        new(street, ward, district, city, province, country, zipCode, recipientName, recipientPhone);
 }
