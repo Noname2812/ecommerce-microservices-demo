@@ -4,4 +4,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\Shared.Cache\Shared.Cache.csproj" />
+    <ProjectReference Include="..\UrbanX.Promotion.Domain\UrbanX.Promotion.Domain.csproj" />
+  </ItemGroup>
 </Project>

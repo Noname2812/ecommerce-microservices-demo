@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="UrbanX.Services.Promotion.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>
 
@@ -16,5 +20,6 @@
     <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
     <ProjectReference Include="..\UrbanX.Promotion.Domain\UrbanX.Promotion.Domain.csproj" />
+    <ProjectReference Include="..\UrbanX.Promotion.Infrastructure\UrbanX.Promotion.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

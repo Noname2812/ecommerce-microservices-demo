@@ -14,11 +14,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\UrbanX.Promotion.Domain\UrbanX.Promotion.Domain.csproj" />
     <ProjectReference Include="..\..\..\ServiceDefaults\UrbanX.ServiceDefaults\UrbanX.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Cache\Shared.Cache.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
     <ProjectReference Include="..\UrbanX.Promotion.Application\UrbanX.Promotion.Application.csproj" />
+    <ProjectReference Include="..\UrbanX.Promotion.Infrastructure\UrbanX.Promotion.Infrastructure.csproj" />
     <ProjectReference Include="..\UrbanX.Promotion.Persistence\UrbanX.Promotion.Persistence.csproj" />
   </ItemGroup>
 </Project>

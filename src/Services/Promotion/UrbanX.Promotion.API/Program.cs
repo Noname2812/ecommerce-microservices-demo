@@ -7,6 +7,7 @@ using Shared.Outbox.DependencyInjection.Extensions;
 using StackExchange.Redis;
 using UrbanX.Promotion.API.SeedData;
 using UrbanX.Promotion.Application.DependencyInjection.Extensions;
+using UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Persistence.DependencyInjection.Extensions;
 
@@ -32,6 +33,7 @@ builder.Services.AddHealthChecks()
 builder.Services.AddProblemDetails();
 
 builder.Services.AddPersistence();
+builder.Services.AddPromotionInfrastructure();
 builder.Services.AddApplication(builder.Configuration);
 
 builder.Services

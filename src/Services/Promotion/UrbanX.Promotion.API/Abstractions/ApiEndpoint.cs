@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
+using UrbanX.Promotion.Application.Usecases.V1.Command;
+using UrbanX.Promotion.Application.Usecases.V1.Errors;
 
 namespace UrbanX.Promotion.API.Abstractions;
 
@@ -38,6 +40,26 @@ public abstract class ApiEndpoint
         result.IsSuccess
             ? Results.Ok(result.Value)
             : ToPromotionResult((Result)result);
+
+    protected static IResult ToCouponClaimResult(Result<ClaimCouponResult> result)
+    {
+        if (result.IsSuccess)
+        {
+            var v = result.Value!;
+            return Results.Created($"/internal/v1/coupon-claims/{v.ClaimId}", v);
+        }
+
+        if (result is IValidationResult)
+            return HandleFailure(result);
+
+        var status = CouponErrors.MapsToHttp422(result.Error.Code)
+            ? StatusCodes.Status422UnprocessableEntity
+            : CouponErrors.MapsToHttp409(result.Error.Code)
+                ? StatusCodes.Status409Conflict
+                : StatusCodes.Status400BadRequest;
+
+        return Results.Problem(detail: result.Error.Message, statusCode: status, type: result.Error.Code);
+    }
 
     private static ProblemDetails CreateProblemDetails(
         string title, int status, Error error, Error[]? errors = null) => new()

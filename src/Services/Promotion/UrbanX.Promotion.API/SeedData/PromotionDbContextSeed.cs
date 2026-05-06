@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
-using UrbanX.Promotion.Application.Constants;
+using UrbanX.Promotion.Domain.Constants;
 using UrbanX.Promotion.Domain.Models;
 using UrbanX.Promotion.Domain.ValueObjects;
 using UrbanX.Promotion.Persistence;
