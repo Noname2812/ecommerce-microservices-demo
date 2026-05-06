@@ -25,14 +25,24 @@ namespace Shared.Messaging
         : IConsumer<TEvent>
         where TEvent : class, IIntegrationEvent
     {
-        private readonly IMediator _mediator;
+        private readonly IMediator? _mediator;
         private readonly ILogger<TConsumer> _logger;
 
         protected IntegrationEventConsumerBase(
             IMediator mediator,
             ILogger<TConsumer> logger)
         {
+            ArgumentNullException.ThrowIfNull(mediator);
             _mediator = mediator;
+            _logger = logger;
+        }
+
+        /// <summary>
+        /// Use when <see cref="HandleAsync"/> is overridden and the default MediatR publish path is not used.
+        /// </summary>
+        protected IntegrationEventConsumerBase(ILogger<TConsumer> logger)
+        {
+            _mediator = null;
             _logger = logger;
         }
 
@@ -74,7 +84,16 @@ namespace Shared.Messaging
 
         /// <summary>Override to implement your event handling logic.</summary>
         protected virtual Task HandleAsync(TEvent @event, CancellationToken cancellationToken)
-            => _mediator.Publish(new IntegrationEventNotification<TEvent>(@event), cancellationToken);
+        {
+            if (_mediator is null)
+            {
+                throw new InvalidOperationException(
+                    $"{GetType().Name} must override {nameof(HandleAsync)} when constructed with the logger-only constructor, " +
+                    $"or use the constructor that accepts {nameof(IMediator)}.");
+            }
+
+            return _mediator.Publish(new IntegrationEventNotification<TEvent>(@event), cancellationToken);
+        }
 
         /// <summary>Override to classify which exceptions are transient and should trigger retry.</summary>
         protected virtual bool IsTransient(Exception ex) =>

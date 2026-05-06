@@ -11,4 +11,5 @@ All notable changes to this project are documented in this file.
   - `IOrderCreated.cs` — `IOrderCreated`, `IOrderCreatedItem`
   - `IInventoryEvents.cs` — `IInventoryReserved`, `IInventoryReservedItem`, `IInventoryReserveFailed`, `IInventoryReleaseRequested`
   - `ICouponEvents.cs` — `ICouponClaimed`, `ICouponClaimFailed`, `ICouponReleaseRequested`
+  - `CouponReleaseRequestedV1` — concrete compensation message for coupon claim release relays
   - `IOrderConfirmed.cs` — `IOrderConfirmed`

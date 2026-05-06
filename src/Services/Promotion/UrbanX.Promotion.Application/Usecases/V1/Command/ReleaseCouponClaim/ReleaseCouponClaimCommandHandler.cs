@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Shared.Application;
+using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
 using UrbanX.Promotion.Application.Abstractions;
 using UrbanX.Promotion.Application.Logging;
 using UrbanX.Promotion.Application.Telemetry;
 using UrbanX.Promotion.Application.Usecases.V1.Errors;
+using UrbanX.Promotion.Domain.Models;
 using UrbanX.Promotion.Domain.Repositories;
 using UrbanX.Promotion.Domain.ValueObjects;
 
@@ -13,6 +15,7 @@ namespace UrbanX.Promotion.Application.Usecases.V1.Command;
 internal sealed class ReleaseCouponClaimCommandHandler(
     ICouponClaimRepository couponClaimRepository,
     ICouponRepository couponRepository,
+    IProcessedEventRepository processedEvents,
     ICouponClaimRedisGateway couponClaimRedis,
     IPostCommitTaskQueue postCommitTasks,
     ILogger<ReleaseCouponClaimCommandHandler> logger)
@@ -20,12 +23,19 @@ internal sealed class ReleaseCouponClaimCommandHandler(
 {
     public async Task<Result> Handle(ReleaseCouponClaimCommand request, CancellationToken cancellationToken)
     {
+        if (request.EventId is { } inboxEventId &&
+            await processedEvents.ExistsAsync(inboxEventId, cancellationToken))
+            return Result.Success();
+
         var claim = await couponClaimRepository.GetByIdAsync(request.ClaimId, cancellationToken);
         if (claim is null)
             return Result.Failure(CouponClaimErrors.NotFound(request.ClaimId));
 
         if (claim.Status == CouponClaimStatus.Released)
+        {
+            StageProcessedEventIfNeeded(request.EventId);
             return Result.Success();
+        }
 
         if (claim.Status != CouponClaimStatus.Claimed)
             return Result.Failure(CouponClaimErrors.InvalidStatusForRelease(claim.Status));
@@ -51,6 +61,7 @@ internal sealed class ReleaseCouponClaimCommandHandler(
                     request.ClaimId,
                     again.CouponCode);
 
+                StageProcessedEventIfNeeded(request.EventId);
                 return Result.Success();
             }
 
@@ -99,6 +110,21 @@ internal sealed class ReleaseCouponClaimCommandHandler(
             userSnapshot,
             restoreQuota);
 
+        StageProcessedEventIfNeeded(request.EventId);
         return Result.Success();
+    }
+
+    private void StageProcessedEventIfNeeded(Guid? eventId)
+    {
+        if (eventId is null)
+            return;
+
+        processedEvents.StageInsert(
+            new ProcessedEvent
+            {
+                EventId = eventId.Value,
+                EventType = nameof(ICouponReleaseRequested),
+                ProcessedAt = DateTimeOffset.UtcNow
+            });
     }
 }

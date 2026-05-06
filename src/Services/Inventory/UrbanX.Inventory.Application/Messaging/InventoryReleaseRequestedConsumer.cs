@@ -1,4 +1,3 @@
-using MediatR;
 using Microsoft.Extensions.Logging;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Messaging;
@@ -6,14 +5,13 @@ using Shared.Messaging;
 namespace UrbanX.Inventory.Application.Messaging;
 
 /// <summary>
-/// <see cref="IMediator"/> is only passed to <see cref="IntegrationEventConsumerBase{TEvent,TConsumer}"/> (base default would publish notifications);
-/// this consumer overrides <see cref="HandleAsync"/> entirely and delegates work to <see cref="InventoryReleaseRequestedProcessor"/>.
+/// Uses the logger-only <see cref="IntegrationEventConsumerBase{TEvent,TConsumer}"/> constructor; <see cref="HandleAsync"/> delegates to
+/// <see cref="InventoryReleaseRequestedProcessor"/> (scoped <c>IMediator</c> there dispatches the release command).
 /// </summary>
 public sealed class InventoryReleaseRequestedConsumer(
-    IMediator mediator,
     ILogger<InventoryReleaseRequestedConsumer> logger,
     InventoryReleaseRequestedProcessor processor)
-    : IntegrationEventConsumerBase<InventoryReleaseRequestedV1, InventoryReleaseRequestedConsumer>(mediator, logger)
+    : IntegrationEventConsumerBase<InventoryReleaseRequestedV1, InventoryReleaseRequestedConsumer>(logger)
 {
     private readonly InventoryReleaseRequestedProcessor _processor = processor;
 

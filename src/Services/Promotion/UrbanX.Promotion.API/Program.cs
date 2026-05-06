@@ -8,6 +8,7 @@ using Shared.Outbox.DependencyInjection.Extensions;
 using StackExchange.Redis;
 using UrbanX.Promotion.API.SeedData;
 using UrbanX.Promotion.Application.DependencyInjection.Extensions;
+using UrbanX.Promotion.Application.Messaging;
 using UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Application.Telemetry;
@@ -27,10 +28,6 @@ builder.Services.AddOutbox<PromotionDbContext>(
     builder.Configuration
 );
 
-builder.Services
-    .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(builder.Configuration);
-
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PromotionDbContext>(name: "promotiondb", tags: ["ready", "db"]);
 
@@ -39,6 +36,14 @@ builder.Services.AddProblemDetails();
 builder.Services.AddPersistence();
 builder.Services.AddPromotionInfrastructure();
 builder.Services.AddApplication(builder.Configuration);
+
+builder.Services
+    .AddConfigMessaging(builder.Configuration)
+    .AddMessaging(builder.Configuration,
+        configureBus: bus =>
+        {
+            bus.AddConsumer<CouponReleaseRequestedConsumer>(typeof(CouponReleaseRequestedConsumerDefinition));
+        });
 
 builder.Services
     .AddApiVersioning(options => options.ReportApiVersions = true)
