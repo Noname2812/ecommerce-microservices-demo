@@ -27,15 +27,21 @@ internal sealed class ReleaseCouponClaimCommandHandler(
             await processedEvents.ExistsAsync(inboxEventId, cancellationToken))
             return Result.Success();
 
+        var result = await ExecuteReleaseAsync(request, cancellationToken);
+        if (result.IsSuccess)
+            StageProcessedEventIfNeeded(request.EventId);
+
+        return result;
+    }
+
+    private async Task<Result> ExecuteReleaseAsync(ReleaseCouponClaimCommand request, CancellationToken cancellationToken)
+    {
         var claim = await couponClaimRepository.GetByIdAsync(request.ClaimId, cancellationToken);
         if (claim is null)
             return Result.Failure(CouponClaimErrors.NotFound(request.ClaimId));
 
         if (claim.Status == CouponClaimStatus.Released)
-        {
-            StageProcessedEventIfNeeded(request.EventId);
             return Result.Success();
-        }
 
         if (claim.Status != CouponClaimStatus.Claimed)
             return Result.Failure(CouponClaimErrors.InvalidStatusForRelease(claim.Status));
@@ -60,8 +66,6 @@ internal sealed class ReleaseCouponClaimCommandHandler(
                     "Coupon claim release absorbed concurrent winner ClaimId={ClaimId} CouponCode={CouponCode}",
                     request.ClaimId,
                     again.CouponCode);
-
-                StageProcessedEventIfNeeded(request.EventId);
                 return Result.Success();
             }
 
@@ -110,7 +114,6 @@ internal sealed class ReleaseCouponClaimCommandHandler(
             userSnapshot,
             restoreQuota);
 
-        StageProcessedEventIfNeeded(request.EventId);
         return Result.Success();
     }
 

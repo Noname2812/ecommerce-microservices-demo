@@ -208,6 +208,7 @@ public sealed class ReleaseCouponClaimCommandHandlerTests
         _redisGateway.Verify(
             g => g.ReleaseClaimRedisStateAsync("SAVE10", userId, true, It.IsAny<CancellationToken>()),
             Times.Once);
+        _processedEvents.Verify(r => r.StageInsert(It.IsAny<ProcessedEvent>()), Times.Never);
     }
 
     [Fact]

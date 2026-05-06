@@ -11,9 +11,6 @@ public sealed record CouponReleaseRequestedV1 : IntegrationEventBase, ICouponRel
 
     public required string Reason { get; init; }
 
-    /// <summary>Uses <see cref="IntegrationEventBase.CorrelationId"/> for wire serialization.</summary>
-    string ICouponReleaseRequested.CorrelationId => CorrelationId ?? string.Empty;
-
     public override string Source => "order-service";
 
     string IPlaceOrderIntegrationContract.EventId => EventId.ToString();

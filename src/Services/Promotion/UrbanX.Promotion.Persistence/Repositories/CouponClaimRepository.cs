@@ -32,4 +32,15 @@ public sealed class CouponClaimRepository(PromotionDbContext db) : ICouponClaimR
                     .SetProperty(c => c.Status, CouponClaimStatus.Released)
                     .SetProperty(c => c.ReleasedAt, releasedAt),
                 ct);
+
+    public async Task<IReadOnlyList<CouponClaim>> GetExpiredClaimedBatchAsync(
+        int batchSize,
+        DateTimeOffset utcNow,
+        CancellationToken ct = default) =>
+        await db.CouponClaims
+            .AsNoTracking()
+            .Where(c => c.Status == CouponClaimStatus.Claimed && c.ExpiresAt < utcNow)
+            .OrderBy(c => c.ExpiresAt)
+            .Take(batchSize)
+            .ToListAsync(ct);
 }

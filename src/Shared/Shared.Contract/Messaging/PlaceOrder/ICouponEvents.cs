@@ -20,5 +20,5 @@ public interface ICouponReleaseRequested : IPlaceOrderIntegrationContract
 {
     Guid ClaimId { get; }
     string Reason { get; }
-    string CorrelationId { get; }
+    string? CorrelationId { get; }
 }

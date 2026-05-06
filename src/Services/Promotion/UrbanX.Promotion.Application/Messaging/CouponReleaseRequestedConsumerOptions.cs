@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace UrbanX.Promotion.Application.Messaging;
 
 /// <summary>
-/// Receive endpoint tuning for <see cref="CouponReleaseRequestedConsumerDefinition"/> —
+/// Receive endpoint tuning for coupon release requested consumer endpoint:
 /// queue bind to fanout <c>compensation.events</c>, optional retry and RabbitMQ throughput.
 /// </summary>
 public sealed class CouponReleaseRequestedConsumerOptions

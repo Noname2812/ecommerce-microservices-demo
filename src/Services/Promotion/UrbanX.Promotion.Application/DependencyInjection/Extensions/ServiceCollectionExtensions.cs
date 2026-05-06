@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shared.Messaging.DependencyInjection.Extensions;
+using UrbanX.Promotion.Application.Jobs;
 using UrbanX.Promotion.Application.Messaging;
 
 namespace UrbanX.Promotion.Application.DependencyInjection.Extensions;
@@ -18,7 +19,14 @@ public static class ServiceCollectionExtensions
             .BindConfiguration(CouponReleaseRequestedConsumerOptions.SectionName)
             .ValidateOnStart();
 
+        services
+            .AddOptions<ReleaseExpiredCouponClaimsJobOptions>()
+            .BindConfiguration(ReleaseExpiredCouponClaimsJobOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddScoped<CouponReleaseRequestedProcessor>();
+        services.AddScoped<ReleaseExpiredCouponClaimsJob>();
         services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
         return services;
     }

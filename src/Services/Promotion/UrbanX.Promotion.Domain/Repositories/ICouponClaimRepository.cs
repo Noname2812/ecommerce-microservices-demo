@@ -15,4 +15,12 @@ public interface ICouponClaimRepository
 
     /// <returns>Rows updated (1 if transitioned CLAIMED → RELEASED).</returns>
     Task<int> TryMarkReleasedIfClaimedAsync(Guid id, DateTimeOffset releasedAt, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns a batch of expired claims that are still in CLAIMED status.
+    /// </summary>
+    Task<IReadOnlyList<CouponClaim>> GetExpiredClaimedBatchAsync(
+        int batchSize,
+        DateTimeOffset utcNow,
+        CancellationToken ct = default);
 }
