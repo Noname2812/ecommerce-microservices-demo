@@ -26,8 +26,8 @@ public sealed class ReserveInventoryCommandValidator : AbstractValidator<Reserve
         RuleFor(x => x.IdempotencyKey)
             .NotEmpty()
             .MaximumLength(50)
-            .Must(k => Guid.TryParse(k, out _))
-            .WithMessage("IdempotencyKey must be a valid UUID.");
+            .Must(BeValidIdempotencyKey)
+            .WithMessage("IdempotencyKey must be a UUID or '{uuid}:inv' (place-order inventory shard).");
         RuleFor(x => x.Items)
             .NotNull()
             .NotEmpty()
@@ -38,5 +38,18 @@ public sealed class ReserveInventoryCommandValidator : AbstractValidator<Reserve
             line.RuleFor(i => i.ProductId).NotEmpty();
             line.RuleFor(i => i.Quantity).InclusiveBetween(1, 1000);
         });
+    }
+
+    private static bool BeValidIdempotencyKey(string key)
+    {
+        if (Guid.TryParse(key, out _))
+            return true;
+
+        const string suffix = ":inv";
+        if (key.Length <= suffix.Length || !key.EndsWith(suffix, StringComparison.Ordinal))
+            return false;
+
+        var prefix = key[..^suffix.Length];
+        return Guid.TryParse(prefix, out _);
     }
 }

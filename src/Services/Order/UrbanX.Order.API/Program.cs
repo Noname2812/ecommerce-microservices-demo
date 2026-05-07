@@ -39,7 +39,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddScoped<PlaceOrderRateLimitMiddleware>();
 
 // Add Infrastructure
-builder.Services.AddInfrastructure();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // Add Persistence
 builder.Services.AddPersistence();
