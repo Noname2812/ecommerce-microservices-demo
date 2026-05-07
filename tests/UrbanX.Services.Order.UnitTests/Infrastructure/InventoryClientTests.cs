@@ -3,6 +3,7 @@ using System.Text.Json;
 using Refit;
 using UrbanX.Order.Infrastructure.Exceptions;
 using UrbanX.Order.Infrastructure.Services;
+using UrbanX.Services.Order.UnitTests.Infrastructure.Helpers;
 using Xunit;
 
 namespace UrbanX.Services.Order.UnitTests.Infrastructure;
@@ -105,31 +106,5 @@ public sealed class InventoryClientTests
                 [new ReserveLineItem(Guid.NewGuid(), 1)])));
 
         Assert.Contains("timed out", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Simulates HttpClient failing the request with timeout-style cancellation (token not cancelled).
-    /// </summary>
-    private sealed class TimeoutFaultingHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken) =>
-            Task.FromException<HttpResponseMessage>(
-                new TaskCanceledException(
-                    "The request was canceled due to the configured HttpClient.Timeout of 5 seconds elapsing."));
-    }
-
-    private sealed class CallbackHttpMessageHandler(
-        Func<HttpRequestMessage, Task<HttpResponseMessage>> callback) : HttpMessageHandler
-    {
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            var response = await callback(request);
-            response.RequestMessage = request;
-            return response;
-        }
     }
 }
