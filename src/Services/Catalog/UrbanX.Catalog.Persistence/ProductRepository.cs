@@ -79,5 +79,41 @@ namespace UrbanX.Catalog.Persistence
             CancellationToken cancellationToken = default) =>
             await _db.Products.AnyAsync(
                 p => p.Slug == slug && p.Id != productId && p.DeletedAt == null, cancellationToken);
+
+        public async Task<IReadOnlyDictionary<Guid, string>> GetStatusesByProductIdsAsync(
+            IReadOnlyCollection<Guid> productIds,
+            CancellationToken cancellationToken = default)
+        {
+            var ids = productIds
+                .Where(static id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (ids.Length == 0)
+                return new Dictionary<Guid, string>();
+
+            return await _db.Products
+                .AsNoTracking()
+                .Where(p => ids.Contains(p.Id) && p.DeletedAt == null && p.Status != ProductStatus.Deleted)
+                .ToDictionaryAsync(p => p.Id, p => p.Status, cancellationToken);
+        }
+
+        public async Task<IReadOnlyDictionary<Guid, decimal>> GetPricesByVariantIdsAsync(
+            IReadOnlyCollection<Guid> variantIds,
+            CancellationToken cancellationToken = default)
+        {
+            var ids = variantIds
+                .Where(static id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (ids.Length == 0)
+                return new Dictionary<Guid, decimal>();
+
+            return await _db.ProductVariants
+                .AsNoTracking()
+                .Where(v => ids.Contains(v.Id) && v.DeletedAt == null)
+                .ToDictionaryAsync(v => v.Id, v => v.Price, cancellationToken);
+        }
     }
 }

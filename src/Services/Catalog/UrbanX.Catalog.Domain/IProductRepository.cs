@@ -26,6 +26,14 @@ namespace UrbanX.Catalog.Domain
             Guid productId,
             CancellationToken cancellationToken = default);
 
+        Task<IReadOnlyDictionary<Guid, string>> GetStatusesByProductIdsAsync(
+            IReadOnlyCollection<Guid> productIds,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyDictionary<Guid, decimal>> GetPricesByVariantIdsAsync(
+            IReadOnlyCollection<Guid> variantIds,
+            CancellationToken cancellationToken = default);
+
         Task AddAsync(Product product, CancellationToken cancellationToken = default);
         Task AddPriceHistoryAsync(VariantPriceHistory row, CancellationToken cancellationToken = default);
         Task AddSkuHistoryAsync(VariantSkuHistory row, CancellationToken cancellationToken = default);

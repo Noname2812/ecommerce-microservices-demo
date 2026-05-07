@@ -62,11 +62,13 @@ var orderService = builder.AddProject<Projects.UrbanX_Order_API>("order")
     .WithReference(redis)
     .WithReference(identityService)
     .WithReference(rabbitMq)
+    .WithReference(catalogService)
     .WithReference(promotionService)
     .WaitFor(orderDb)
     .WaitFor(redis)
     .WaitFor(identityService)
     .WaitFor(rabbitMq)
+    .WaitFor(catalogService)
     .WaitFor(promotionService);
 
 //var merchantService = builder.AddProject<Projects.UrbanX_Services_Merchant>("merchant")

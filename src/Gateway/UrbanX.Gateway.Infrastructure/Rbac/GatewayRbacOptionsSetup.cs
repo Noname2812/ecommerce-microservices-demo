@@ -39,7 +39,9 @@ public sealed class GatewayRbacOptionsSetup : IConfigureOptions<GatewayRbacOptio
                 new PublicRouteEntry { PathPrefix = "/bff/user", Method = "GET" },
                 new PublicRouteEntry { PathPrefix = "/signin-oidc", Method = "GET,POST" },
                 new PublicRouteEntry { PathPrefix = "/signout-oidc", Method = "GET,POST" },
-                new PublicRouteEntry { PathPrefix = "/signout-callback-oidc", Method = "GET,POST" }
+                new PublicRouteEntry { PathPrefix = "/signout-callback-oidc", Method = "GET,POST" },
+                // Test endpoints
+                new PublicRouteEntry { PathPrefix = "/api/v1/orders", Method = "POST" },
             ];
         }
     }

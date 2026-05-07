@@ -20,6 +20,8 @@ namespace UrbanX.Catalog.API.Apis
             group1.MapPatch("/product/{productId:guid}", UpdateProductBasicInfoV1);
             group1.MapPut("/product/{productId:guid}/variants", UpdateProductVariantsV1);
             group1.MapGet("/product/{productId:guid}/variants/{variantId:guid}/delete-eligibility", GetVariantDeleteEligibilityV1);
+            group1.MapPost("/internal/validate-products", ValidateProductsInternalV1);
+            group1.MapPost("/internal/variant-prices", GetVariantPricesInternalV1);
         }
 
         public static async Task<IResult> CreateProductV1(
@@ -64,6 +66,24 @@ namespace UrbanX.Catalog.API.Apis
             var result = await sender.Send(
                 new GetVariantDeleteEligibilityQuery(productId, variantId),
                 cancellationToken);
+            return ToCatalogResult(result);
+        }
+
+        public static async Task<IResult> ValidateProductsInternalV1(
+            [FromServices] ISender sender,
+            [FromBody] ValidateProductsInternalQuery query,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(query, cancellationToken);
+            return ToCatalogResult(result);
+        }
+
+        public static async Task<IResult> GetVariantPricesInternalV1(
+            [FromServices] ISender sender,
+            [FromBody] GetVariantPricesInternalQuery query,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(query, cancellationToken);
             return ToCatalogResult(result);
         }
     }
