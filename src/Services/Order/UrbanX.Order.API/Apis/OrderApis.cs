@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Shared.Application.Authorization;
 using UrbanX.Order.API.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command;
+using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Application.Usecases.V1.Query;
 
 namespace UrbanX.Order.API.Apis;

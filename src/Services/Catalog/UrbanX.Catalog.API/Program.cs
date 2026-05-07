@@ -8,6 +8,7 @@ using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Catalog.Application.DependencyInjection.Extensions;
 using UrbanX.Catalog.Persistence;
 using UrbanX.Catalog.Persistence.DependencyInjection.Extensions;
+using UrbanX.Catalog.Persistence.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -89,6 +90,12 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Applying database migrations for CatalogDbContext...");
         await context.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
+        if (app.Environment.IsDevelopment())
+        {
+            logger.LogInformation("Seeding catalog data...");
+            await CatalogDataSeeder.SeedIfEmptyAsync(context);
+            logger.LogInformation("Catalog data seeded successfully");
+        }
     }
     catch (Exception ex)
     {

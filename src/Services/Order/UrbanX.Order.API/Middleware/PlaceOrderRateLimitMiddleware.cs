@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Shared.Application.Authorization;
 using Shared.Cache.Abstractions;
 using StackExchange.Redis;
@@ -6,8 +7,7 @@ namespace UrbanX.Order.API.Middleware;
 
 public sealed class PlaceOrderRateLimitMiddleware(
     RequestDelegate next,
-    ICacheService cacheService,
-    IUserContext userContext)
+    ICacheService cacheService)
 {
     private const int LimitPerMinute = 5;
     private const int WindowMilliseconds = 60_000;
@@ -38,6 +38,7 @@ public sealed class PlaceOrderRateLimitMiddleware(
             return;
         }
 
+        var userContext = context.RequestServices.GetRequiredService<IUserContext>();
         var userId = userContext.UserId;
         if (userId is null || userId == Guid.Empty)
         {
@@ -54,7 +55,15 @@ public sealed class PlaceOrderRateLimitMiddleware(
             [now, WindowMilliseconds, LimitPerMinute],
             context.RequestAborted);
 
-        if (redisResult is not RedisResult[] values || values.Length < 2 || (int)values[0] == 1)
+        if (redisResult.IsNull)
+        {
+            await next(context);
+            return;
+        }
+
+        var values = (RedisResult[])redisResult;
+
+        if (values.Length < 2 || (int)values[0] == 1)
         {
             await next(context);
             return;

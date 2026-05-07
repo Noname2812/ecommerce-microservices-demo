@@ -12,8 +12,8 @@ var inventoryDb = postgres.AddDatabase("inventorydb", "urbanx_inventory");
 var identityDb = postgres.AddDatabase("identitydb", "urbanx_identity");
 var promotionDb = postgres.AddDatabase("promotiondb", "urbanx_promotion");
 
-// Add Redis
-var redis = builder.AddRedis("redis");
+// Add Redis (built-in Redis Commander UI — reachable from Aspire Dashboard endpoints)
+var redis = builder.AddRedis("redis").WithRedisCommander();
 
 // Add RabbitMQ
 var rabbitMq = builder.AddRabbitMQ("messaging")
@@ -59,10 +59,12 @@ var promotionService = builder.AddProject<Projects.UrbanX_Promotion_API>("promot
 
 var orderService = builder.AddProject<Projects.UrbanX_Order_API>("order")
     .WithReference(orderDb)
+    .WithReference(redis)
     .WithReference(identityService)
     .WithReference(rabbitMq)
     .WithReference(promotionService)
     .WaitFor(orderDb)
+    .WaitFor(redis)
     .WaitFor(identityService)
     .WaitFor(rabbitMq)
     .WaitFor(promotionService);
@@ -115,11 +117,4 @@ var frontend = builder.AddViteApp("frontend", "../../front-end")
    .WithExternalHttpEndpoints();
 
 
-
-// Redis UI
-var redisCommander = builder.AddContainer("redis-commander", "rediscommander/redis-commander")
-    .WithEnvironment("REDIS_HOSTS", "local:redis:6379")
-    .WithHttpEndpoint(port: 8081, targetPort: 8081)
-    .WithReference(redis);
-    
 builder.Build().Run();

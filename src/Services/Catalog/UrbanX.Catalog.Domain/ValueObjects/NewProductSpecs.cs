@@ -17,6 +17,6 @@ namespace UrbanX.Catalog.Domain.ValueObjects
         string? ImageUrl,
         string? Barcode,
         IReadOnlyList<(Guid AttributeId, string Value)> AttributeValues,
-        IReadOnlyList<NewProductImageSpec> GalleryImages
-    );
+        IReadOnlyList<NewProductImageSpec> GalleryImages,
+        Guid? VariantId = null);
 }

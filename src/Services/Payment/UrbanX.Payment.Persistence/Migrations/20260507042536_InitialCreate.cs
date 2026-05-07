@@ -12,6 +12,24 @@ namespace UrbanX.Payment.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "compensation_outbox",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EventType = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Payload = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ProcessedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    RetryCount = table.Column<int>(type: "integer", nullable: false),
+                    Error = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_compensation_outbox", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "outbox_messages",
                 columns: table => new
                 {
@@ -131,9 +149,14 @@ namespace UrbanX.Payment.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "ix_outbox_messages_created_at",
+                name: "ix_compensation_outbox_status_created_at",
+                table: "compensation_outbox",
+                columns: new[] { "Status", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_outbox_messages_status_created_at",
                 table: "outbox_messages",
-                column: "CreatedAt");
+                columns: new[] { "Status", "CreatedAt" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_messages_status_retry",
@@ -190,6 +213,9 @@ namespace UrbanX.Payment.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "compensation_outbox");
+
             migrationBuilder.DropTable(
                 name: "outbox_messages");
 

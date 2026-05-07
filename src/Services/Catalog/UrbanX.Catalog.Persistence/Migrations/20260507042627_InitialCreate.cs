@@ -37,10 +37,10 @@ namespace UrbanX.Catalog.Persistence.Migrations
                     Slug = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
                     ImageUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    DisplayOrder = table.Column<int>(type: "integer", nullable: false),
+                    DisplayOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     Path = table.Column<string>(type: "text", nullable: true),
-                    Depth = table.Column<int>(type: "integer", nullable: false),
+                    Depth = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
@@ -52,6 +52,24 @@ namespace UrbanX.Catalog.Persistence.Migrations
                         principalTable: "categories",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "compensation_outbox",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EventType = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Payload = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ProcessedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    RetryCount = table.Column<int>(type: "integer", nullable: false),
+                    Error = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_compensation_outbox", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -121,7 +139,9 @@ namespace UrbanX.Catalog.Persistence.Migrations
                     MetaTitle = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     MetaDescription = table.Column<string>(type: "text", nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    RowVersion = table.Column<int>(type: "integer", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -153,7 +173,9 @@ namespace UrbanX.Catalog.Persistence.Migrations
                     ImageUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Barcode = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    RowVersion = table.Column<int>(type: "integer", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -220,6 +242,54 @@ namespace UrbanX.Catalog.Persistence.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "variant_price_history",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    VariantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OldPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    NewPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    OldCompareAt = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    NewCompareAt = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    ChangedById = table.Column<Guid>(type: "uuid", nullable: false),
+                    ChangedByName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    Reason = table.Column<string>(type: "text", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_variant_price_history", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_variant_price_history_product_variants_VariantId",
+                        column: x => x.VariantId,
+                        principalTable: "product_variants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "variant_sku_history",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    VariantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OldSku = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    NewSku = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    ChangedBy = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_variant_sku_history", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_variant_sku_history_product_variants_VariantId",
+                        column: x => x.VariantId,
+                        principalTable: "product_variants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_attribute_definitions_CategoryId_Name",
                 table: "attribute_definitions",
@@ -250,9 +320,14 @@ namespace UrbanX.Catalog.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_outbox_messages_created_at",
+                name: "ix_compensation_outbox_status_created_at",
+                table: "compensation_outbox",
+                columns: new[] { "Status", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_outbox_messages_status_created_at",
                 table: "outbox_messages",
-                column: "CreatedAt");
+                columns: new[] { "Status", "CreatedAt" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_outbox_messages_status_retry",
@@ -275,6 +350,11 @@ namespace UrbanX.Catalog.Persistence.Migrations
                 column: "ProductId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_product_variants_ProductId_IsActive",
+                table: "product_variants",
+                columns: new[] { "ProductId", "IsActive" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_product_variants_Sku",
                 table: "product_variants",
                 column: "Sku",
@@ -289,6 +369,11 @@ namespace UrbanX.Catalog.Persistence.Migrations
                 name: "IX_products_CategoryId",
                 table: "products",
                 column: "CategoryId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_products_DeletedAt",
+                table: "products",
+                column: "DeletedAt");
 
             migrationBuilder.CreateIndex(
                 name: "IX_products_SellerId",
@@ -317,19 +402,23 @@ namespace UrbanX.Catalog.Persistence.Migrations
                 table: "variant_attribute_values",
                 column: "AttributeId");
 
-            // Trigram index for category path prefix / similarity search (see database.md).
-            migrationBuilder.Sql("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
-            migrationBuilder.Sql(
-                """
-                CREATE INDEX IF NOT EXISTS idx_categories_path
-                ON categories
-                USING gin ("Path" gin_trgm_ops);
-                """);
+            migrationBuilder.CreateIndex(
+                name: "idx_price_history_variant",
+                table: "variant_price_history",
+                columns: new[] { "VariantId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_variant_sku_history_VariantId",
+                table: "variant_sku_history",
+                column: "VariantId");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "compensation_outbox");
+
             migrationBuilder.DropTable(
                 name: "outbox_messages");
 
@@ -338,6 +427,12 @@ namespace UrbanX.Catalog.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "variant_attribute_values");
+
+            migrationBuilder.DropTable(
+                name: "variant_price_history");
+
+            migrationBuilder.DropTable(
+                name: "variant_sku_history");
 
             migrationBuilder.DropTable(
                 name: "attribute_definitions");
@@ -350,8 +445,6 @@ namespace UrbanX.Catalog.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "brands");
-
-            migrationBuilder.Sql("DROP INDEX IF EXISTS idx_categories_path;");
 
             migrationBuilder.DropTable(
                 name: "categories");

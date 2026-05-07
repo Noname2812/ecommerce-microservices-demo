@@ -32,11 +32,12 @@ namespace UrbanX.Catalog.Domain.Models
             decimal? compareAtPrice,
             string? imageUrl,
             string? barcode,
-            IReadOnlyList<(Guid AttributeId, string Value)> attributeValues)
+            IReadOnlyList<(Guid AttributeId, string Value)> attributeValues,
+            Guid? variantId = null)
         {
             if (string.IsNullOrWhiteSpace(sku))
                 throw new ProductExceptions.VariantSkuRequired();
-            var id = Guid.NewGuid();
+            var id = variantId ?? Guid.NewGuid();
             var v = new ProductVariant
             {
                 Id = id,

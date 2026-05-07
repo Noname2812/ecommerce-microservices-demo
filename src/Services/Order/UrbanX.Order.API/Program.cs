@@ -36,7 +36,6 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<OrderDbContext>(name: "orderdb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
-builder.Services.AddScoped<PlaceOrderRateLimitMiddleware>();
 
 // Add Infrastructure
 builder.Services.AddInfrastructure(builder.Configuration);

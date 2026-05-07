@@ -57,7 +57,8 @@ namespace UrbanX.Catalog.Domain.Models
             string? metaTitle,
             string? metaDescription,
             IReadOnlyList<NewProductImageSpec> productImages,
-            IReadOnlyList<NewVariantSpec> variantSpecs)
+            IReadOnlyList<NewVariantSpec> variantSpecs,
+            Guid? productId = null)
         {
             if (string.IsNullOrWhiteSpace(sku))
                 throw new ProductExceptions.SkuIsRequired();
@@ -72,7 +73,7 @@ namespace UrbanX.Catalog.Domain.Models
             if (basePrice < 0)
                 throw new ProductExceptions.InvalidBasePrice();
 
-            var id = Guid.NewGuid();
+            var id = productId ?? Guid.NewGuid();
             var now = DateTimeOffset.UtcNow;
             var product = new Product
             {
@@ -125,8 +126,8 @@ namespace UrbanX.Catalog.Domain.Models
                     spec.CompareAtPrice,
                     spec.ImageUrl,
                     spec.Barcode,
-                    spec.AttributeValues
-                );
+                    spec.AttributeValues,
+                    spec.VariantId);
                 product.Variants.Add(v);
                 var vo = 0;
                 foreach (var g in spec.GalleryImages)
