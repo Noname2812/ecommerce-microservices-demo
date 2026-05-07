@@ -1,5 +1,5 @@
 using Moq;
-using UrbanX.Order.Application.Usecases.V1.Command;
+using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Infrastructure.Services;
 
 namespace UrbanX.Services.Order.UnitTests.Usecases.V1.Command.PlaceOrder;

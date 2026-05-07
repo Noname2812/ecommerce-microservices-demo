@@ -1,5 +1,5 @@
 using FluentValidation.TestHelper;
-using UrbanX.Order.Application.Usecases.V1.Command;
+using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 namespace UrbanX.Services.Order.UnitTests.Usecases.V1.Command.PlaceOrder;
 
@@ -107,7 +107,6 @@ public class PlaceOrderCommandValidatorTests
         ShippingAddress: ValidAddress(),
         ShippingFee: 25_000,
         CouponCode: "SPRING-2026",
-        CouponDiscount: 10_000,
         CustomerNote: null,
         IdempotencyKey: Guid.NewGuid().ToString(),
         PricingSnapshot: new PlaceOrderPricingSnapshotDto(DateTimeOffset.UtcNow),
