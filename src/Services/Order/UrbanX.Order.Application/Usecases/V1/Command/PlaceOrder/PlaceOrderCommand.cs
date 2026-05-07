@@ -2,7 +2,7 @@ using FluentValidation;
 using Shared.Application;
 using Shared.Application.Authorization;
 
-namespace UrbanX.Order.Application.Usecases.V1.Command;
+namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 [RequirePermission(Permissions.Orders.Write, MinScope = PermissionScope.Own)]
 public record PlaceOrderCommand(
@@ -10,7 +10,6 @@ public record PlaceOrderCommand(
     PlaceOrderShippingAddressDto ShippingAddress,
     decimal ShippingFee,
     string? CouponCode,
-    decimal CouponDiscount,
     string? CustomerNote,
     string IdempotencyKey,
     PlaceOrderPricingSnapshotDto PricingSnapshot,
@@ -60,8 +59,10 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
         RuleFor(x => x.ShippingAddress).NotNull();
         RuleFor(x => x.PricingSnapshot).NotNull();
         RuleFor(x => x.ShippingFee).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.CouponDiscount).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(255);
+        RuleFor(x => x.IdempotencyKey)
+            .NotEmpty()
+            .Must(key => Guid.TryParseExact(key, "D", out _))
+            .WithMessage("IdempotencyKey must be a valid UUID in format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.");
         RuleFor(x => x.Items)
             .NotEmpty()
             .WithMessage("Order must have at least one item")
@@ -106,7 +107,6 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
             item.RuleFor(i => i.SellerName).NotEmpty().MaximumLength(255);
             item.RuleFor(i => i.UnitPrice).GreaterThan(0);
             item.RuleFor(i => i.Quantity).InclusiveBetween(1, 100);
-            item.RuleFor(i => i.DiscountAmount).GreaterThanOrEqualTo(0);
         });
     }
 }

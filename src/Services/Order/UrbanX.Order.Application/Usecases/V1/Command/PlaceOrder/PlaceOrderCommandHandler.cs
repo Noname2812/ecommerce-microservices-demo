@@ -1,34 +1,34 @@
 using Shared.Application;
 using Shared.Application.Authorization;
-using Shared.Contract.Messaging.Order;
+using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 using UrbanX.Order.Domain.ValueObjects;
+using UrbanX.Order.Infrastructure.Exceptions;
 using UrbanX.Order.Infrastructure.Services;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
-namespace UrbanX.Order.Application.Usecases.V1.Command;
+namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 public sealed class PlaceOrderCommandHandler(
     IOrderRepository orderRepository,
     IOutboxWriter outboxWriter,
+    ICompensationOutboxWriter compensationOutboxWriter,
     IUserContext userContext,
+    IInventoryClient inventoryClient,
+    ICouponClient couponClient,
     IPromotionServiceClient promotionClient,
     IProductValidator productValidator,
     IShippingValidator shippingValidator,
-    IPricingValidator pricingValidator)
+    IPricingValidator pricingValidator,
+    PlaceOrderCompensationContext compensationContext)
     : ICommandHandler<PlaceOrderCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(PlaceOrderCommand request, CancellationToken cancellationToken)
     {
-        // Idempotency check
-        var existing = await orderRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, cancellationToken);
-        if (existing is not null)
-            return Result.Success(existing.Id);
-
         var currentUserId = userContext.UserId;
         if (currentUserId is null || currentUserId == Guid.Empty)
             return Result.Failure<Guid>(OrderErrors.Forbidden);
@@ -49,10 +49,10 @@ public sealed class PlaceOrderCommandHandler(
 
         decimal couponDiscount = 0;
         var itemDiscountMap = new Dictionary<Guid, decimal>();
+        var subTotal = request.Items.Sum(i => i.UnitPrice * i.Quantity);
 
         if (!string.IsNullOrWhiteSpace(request.CouponCode))
         {
-            var subTotal = request.Items.Sum(i => i.UnitPrice * i.Quantity);
             var redeemItems = request.Items
                 .Select(i => new PromotionRedeemItemDto(i.VariantId, i.ProductId, i.Quantity, i.UnitPrice))
                 .ToList();
@@ -70,6 +70,59 @@ public sealed class PlaceOrderCommandHandler(
                 itemDiscountMap[d.VariantId] = d.DiscountPerUnit;
         }
 
+        // Step 4: Reserve inventory
+        Guid reservationId;
+        try
+        {
+            var reserveItems = request.Items
+                .Select(i => new ReserveLineItem(i.ProductId, i.Quantity))
+                .ToList();
+
+            var reservation = await inventoryClient.ReserveAsync(
+                new ReserveRequest(request.IdempotencyKey, reserveItems),
+                cancellationToken);
+
+            reservationId = reservation.ReservationId;
+            compensationContext.ReservationId = reservationId;
+        }
+        catch (OutOfStockException ex)
+        {
+            return Result.Failure<Guid>(OrderErrors.OutOfStock(ex.Message));
+        }
+        catch (InventoryUnavailableException ex)
+        {
+            return Result.Failure<Guid>(OrderErrors.InventoryUnavailable(ex.Message));
+        }
+        catch (HttpRequestException ex)
+        {
+            return Result.Failure<Guid>(OrderErrors.InventoryUnavailable(ex.Message));
+        }
+
+        // Step 5: Claim coupon (only if present)
+        Guid? couponClaimId = null;
+        if (!string.IsNullOrWhiteSpace(request.CouponCode))
+        {
+            try
+            {
+                var claimResponse = await couponClient.ClaimAsync(
+                    new ClaimCouponRequest(request.IdempotencyKey, request.CouponCode!, userId, subTotal),
+                    new CouponClaimReservationContext(reservationId, compensationOutboxWriter),
+                    cancellationToken);
+
+                couponClaimId = claimResponse.ClaimId;
+                compensationContext.CouponClaimId = couponClaimId;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return Result.Failure<Guid>(OrderErrors.CouponClaimFailed(ex.Message));
+            }
+        }
+
+        // Step 6: Build and save order as CONFIRMED
         var orderNumber = GenerateOrderNumber();
         var address = ShippingAddress.Create(
             request.ShippingAddress.Address, request.ShippingAddress.Ward, request.ShippingAddress.District,
@@ -81,7 +134,7 @@ public sealed class PlaceOrderCommandHandler(
             i.VariantId, i.VariantSku, i.VariantName,
             i.SellerId, i.SellerName,
             i.UnitPrice, i.Quantity,
-            itemDiscountMap.TryGetValue(i.VariantId, out var d) ? d * i.Quantity : i.DiscountAmount,
+            itemDiscountMap.TryGetValue(i.VariantId, out var d) ? d * i.Quantity : 0m,
             i.ImageUrl
         )).ToList();
 
@@ -99,18 +152,19 @@ public sealed class PlaceOrderCommandHandler(
             request.IdempotencyKey,
             specs);
 
+        order.SetConfirmedWithReservation(reservationId, couponClaimId, userId, request.ShippingAddress.FullName);
+
         orderRepository.Add(order);
 
-        var itemSnapshots = order.Items
-            .Select(i => new OrderItemSnapshot(
-                i.ProductId, i.ProductName, i.VariantId, i.VariantSku, i.VariantName,
-                i.SellerId, i.SellerName, i.Quantity, i.UnitPrice))
-            .ToList();
-
-        await outboxWriter.WriteAsync(new OrderIntegrationEvents.OrderCreatedV1(
-            order.Id, order.OrderNumber, order.UserId,
-            order.CustomerEmail, order.CustomerName,
-            order.TotalAmount, itemSnapshots), cancellationToken);
+        await outboxWriter.WriteAsync(new OrderConfirmedForPlaceOrderV1
+        {
+            OrderId = order.Id,
+            UserId = order.UserId,
+            ReservationId = reservationId,
+            ClaimId = couponClaimId,
+            FinalAmount = order.FinalAmount,
+            ConfirmedAt = order.UpdatedAt
+        }, CancellationToken.None);
 
         return Result.Success(order.Id);
     }
@@ -154,7 +208,7 @@ public sealed class PlaceOrderCommandHandler(
     private static string GenerateOrderNumber()
     {
         var date = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
-        var suffix = Random.Shared.Next(1000, 9999);
+        var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
         return $"ORD-{date}-{suffix}";
     }
 }

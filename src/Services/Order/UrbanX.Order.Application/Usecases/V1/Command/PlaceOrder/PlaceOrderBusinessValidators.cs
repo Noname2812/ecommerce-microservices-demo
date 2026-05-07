@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Order.Application.Usecases.V1.Command;
+namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 public interface IProductValidator
 {

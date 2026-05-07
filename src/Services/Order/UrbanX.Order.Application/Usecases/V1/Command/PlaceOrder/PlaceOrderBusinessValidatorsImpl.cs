@@ -2,7 +2,7 @@ using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Usecases.V1.Errors;
 using UrbanX.Order.Infrastructure.Services;
 
-namespace UrbanX.Order.Application.Usecases.V1.Command;
+namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 public sealed class ProductValidator(ICatalogServiceClient catalogServiceClient) : IProductValidator
 {

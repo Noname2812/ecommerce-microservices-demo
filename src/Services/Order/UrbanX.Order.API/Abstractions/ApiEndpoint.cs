@@ -21,6 +21,14 @@ public abstract class ApiEndpoint
             detail: result.Error.Message,
             statusCode: StatusCodes.Status403Forbidden,
             type: result.Error.Code),
+        { Error.Code: "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED" } => Results.Problem(
+            detail: result.Error.Message,
+            statusCode: StatusCodes.Status409Conflict,
+            type: result.Error.Code),
+        { Error.Code: "INVENTORY_UNAVAILABLE" } => Results.Problem(
+            detail: result.Error.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            type: result.Error.Code),
         { Error.Code: "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status422UnprocessableEntity,
@@ -45,6 +53,8 @@ public abstract class ApiEndpoint
             "ORDER_RATE_LIMITED" => StatusCodes.Status429TooManyRequests,
             "FORBIDDEN" or "ORDER_FORBIDDEN" => StatusCodes.Status403Forbidden,
             "ORDER_NOT_FOUND" => StatusCodes.Status404NotFound,
+            "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED" => StatusCodes.Status409Conflict,
+            "INVENTORY_UNAVAILABLE" => StatusCodes.Status503ServiceUnavailable,
             "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" or "PRICE_MISMATCH"
                 => StatusCodes.Status422UnprocessableEntity,
             _ => StatusCodes.Status400BadRequest

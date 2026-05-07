@@ -13,9 +13,6 @@ public static class OrderErrors
     public static readonly Error CannotCancel =
         new("ORDER_CANNOT_CANCEL", "This order cannot be cancelled in its current status");
 
-    public static readonly Error AlreadyExists =
-        new("ORDER_ALREADY_EXISTS", "An order with this idempotency key already exists");
-
     public static Error PromotionInvalid(string message) =>
         new("ORDER_PROMOTION_INVALID", message);
 
@@ -30,6 +27,15 @@ public static class OrderErrors
 
     public static Error PriceMismatch(Guid variantId, decimal currentPrice, decimal snapshotPrice) =>
         new PriceMismatchError(variantId, currentPrice, snapshotPrice);
+
+    public static Error OutOfStock(string detail) =>
+        new("INVENTORY_OUT_OF_STOCK", detail);
+
+    public static Error InventoryUnavailable(string message) =>
+        new("INVENTORY_UNAVAILABLE", message);
+
+    public static Error CouponClaimFailed(string message) =>
+        new("COUPON_CLAIM_FAILED", message);
 }
 
 public sealed class PriceMismatchError : Error

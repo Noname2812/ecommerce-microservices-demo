@@ -132,6 +132,17 @@ public sealed class Order : BaseEntity<Guid>
             Id, prev, OrderStatus.Confirmed, null, changedById, changedByName));
     }
 
+    public void SetConfirmedWithReservation(Guid reservationId, Guid? claimId, Guid changedById, string changedByName)
+    {
+        var prev = Status;
+        ReservationId = reservationId;
+        CouponClaimId = claimId;
+        Status = OrderStatus.Confirmed;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        _statusHistory.Add(OrderStatusHistory.Create(
+            Id, prev, OrderStatus.Confirmed, null, changedById, changedByName));
+    }
+
     public void Cancel(string reason, Guid? changedById, string? changedByName)
     {
         var prev = Status;
