@@ -57,18 +57,30 @@ var promotionService = builder.AddProject<Projects.UrbanX_Promotion_API>("promot
     .WaitFor(identityService)
     .WaitFor(rabbitMq);
 
+var inventoryService = builder.AddProject<Projects.UrbanX_Inventory_API>("inventory")
+    .WithReference(inventoryDb)
+    .WithReference(redis)
+    .WithReference(identityService)
+    .WithReference(rabbitMq)
+    .WaitFor(inventoryDb)
+    .WaitFor(redis)
+    .WaitFor(identityService)
+    .WaitFor(rabbitMq);
+
 var orderService = builder.AddProject<Projects.UrbanX_Order_API>("order")
     .WithReference(orderDb)
     .WithReference(redis)
     .WithReference(identityService)
     .WithReference(rabbitMq)
     .WithReference(catalogService)
+    .WithReference(inventoryService)
     .WithReference(promotionService)
     .WaitFor(orderDb)
     .WaitFor(redis)
     .WaitFor(identityService)
     .WaitFor(rabbitMq)
     .WaitFor(catalogService)
+    .WaitFor(inventoryService)
     .WaitFor(promotionService);
 
 //var merchantService = builder.AddProject<Projects.UrbanX_Services_Merchant>("merchant")
@@ -82,16 +94,6 @@ var paymentService = builder.AddProject<Projects.UrbanX_Payment_API>("payment")
     .WithReference(identityService)
     .WithReference(rabbitMq)
     .WaitFor(paymentDb)
-    .WaitFor(identityService)
-    .WaitFor(rabbitMq);
-
-var inventoryService = builder.AddProject<Projects.UrbanX_Inventory_API>("inventory")
-    .WithReference(inventoryDb)
-    .WithReference(redis)
-    .WithReference(identityService)
-    .WithReference(rabbitMq)
-    .WaitFor(inventoryDb)
-    .WaitFor(redis)
     .WaitFor(identityService)
     .WaitFor(rabbitMq);
 
