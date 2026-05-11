@@ -3,7 +3,9 @@ using Shared.Kernel.Primitives;
 
 namespace Shared.Application
 {
-    public interface IQuery<TResponse> : IRequest<Result<TResponse>>
+    public interface IQueryBase { }
+
+    public interface IQuery<TResponse> : IQueryBase, IRequest<Result<TResponse>>
     {
     }
 }

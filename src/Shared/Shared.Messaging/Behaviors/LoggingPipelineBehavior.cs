@@ -2,51 +2,47 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
-namespace Shared.Messaging.Behaviors
+namespace Shared.Messaging.Behaviors;
+
+public sealed class LoggingPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : notnull
 {
-    /// <summary>
-    /// MediatR pipeline behavior that logs request/response with timing and structured metadata.
-    /// Wraps every command and query handler automatically.
-    /// </summary>
-    public sealed class LoggingPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-        where TRequest : notnull
+    private static readonly string _requestName = typeof(TRequest).Name;
+
+    private readonly ILogger<LoggingPipelineBehavior<TRequest, TResponse>> _logger;
+
+    public LoggingPipelineBehavior(ILogger<LoggingPipelineBehavior<TRequest, TResponse>> logger)
     {
-        private readonly ILogger<LoggingPipelineBehavior<TRequest, TResponse>> _logger;
+        _logger = logger;
+    }
 
-        public LoggingPipelineBehavior(ILogger<LoggingPipelineBehavior<TRequest, TResponse>> logger)
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
+    {
+        var sw = Stopwatch.StartNew();
+
+        _logger.LogInformation("Handling {RequestName}", _requestName);
+
+        try
         {
-            _logger = logger;
+            var response = await next();
+            sw.Stop();
+
+            _logger.LogInformation(
+                "Handled {RequestName} in {ElapsedMs}ms",
+                _requestName, sw.ElapsedMilliseconds);
+
+            return response;
         }
-
-        public async Task<TResponse> Handle(
-            TRequest request,
-            RequestHandlerDelegate<TResponse> next,
-            CancellationToken cancellationToken)
+        catch (Exception ex)
         {
-            var requestName = typeof(TRequest).Name;
-            var sw = Stopwatch.StartNew();
-
-            _logger.LogInformation("Handling {RequestName} {@Request}", requestName, request);
-
-            try
-            {
-                var response = await next();
-                sw.Stop();
-
-                _logger.LogInformation(
-                    "Handled {RequestName} in {ElapsedMs}ms",
-                    requestName, sw.ElapsedMilliseconds);
-
-                return response;
-            }
-            catch (Exception ex)
-            {
-                sw.Stop();
-                _logger.LogError(ex,
-                    "Error handling {RequestName} after {ElapsedMs}ms",
-                    requestName, sw.ElapsedMilliseconds);
-                throw;
-            }
+            sw.Stop();
+            _logger.LogError(ex,
+                "Error handling {RequestName} after {ElapsedMs}ms",
+                _requestName, sw.ElapsedMilliseconds);
+            throw;
         }
     }
 }

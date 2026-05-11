@@ -5,7 +5,6 @@ using Shared.Cache.Abstractions;
 using Shared.Cache.Attributes;
 using Shared.Kernel.Primitives;
 using System.Reflection;
-using System.Text.RegularExpressions;
 
 namespace Shared.Messaging.Behaviors;
 
@@ -17,6 +16,9 @@ namespace Shared.Messaging.Behaviors;
 public sealed class DistributedLockPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
+    private static readonly DistributedLockAttribute? _attr =
+        typeof(TRequest).GetCustomAttribute<DistributedLockAttribute>();
+
     private readonly IDistributedLockService _lockService;
     private readonly ILogger<DistributedLockPipelineBehavior<TRequest, TResponse>> _logger;
 
@@ -33,12 +35,11 @@ public sealed class DistributedLockPipelineBehavior<TRequest, TResponse> : IPipe
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        var attr = typeof(TRequest).GetCustomAttribute<DistributedLockAttribute>();
-        if (attr is null) return await next();
+        if (_attr is null) return await next();
 
-        var resource = ResolveResource(attr.ResourceTemplate, request);
-        var expiry = TimeSpan.FromSeconds(attr.ExpirySeconds);
-        var waitTimeout = TimeSpan.FromSeconds(attr.WaitTimeoutSeconds);
+        var resource = TemplateResolver.Resolve(_attr.ResourceTemplate, request);
+        var expiry = TimeSpan.FromSeconds(_attr.ExpirySeconds);
+        var waitTimeout = TimeSpan.FromSeconds(_attr.WaitTimeoutSeconds);
 
         var handle = await _lockService.AcquireAsync(resource, expiry, waitTimeout, cancellationToken);
 
@@ -46,44 +47,13 @@ public sealed class DistributedLockPipelineBehavior<TRequest, TResponse> : IPipe
         {
             _logger.LogWarning(
                 "Could not acquire distributed lock for resource '{Resource}' within {Timeout}s. Request: {Request}",
-                resource, attr.WaitTimeoutSeconds, typeof(TRequest).Name);
-            return MakeFailure(CacheErrors.LockTimeout(resource));
+                resource, _attr.WaitTimeoutSeconds, typeof(TRequest).Name);
+            return ResultHelper.MakeFailure<TResponse>(CacheErrors.LockTimeout(resource));
         }
 
         await using (handle)
         {
             return await next();
         }
-    }
-
-    private static string ResolveResource(string template, TRequest request)
-    {
-        return Regex.Replace(template, @"\{(\w+)\}", m =>
-        {
-            var propName = m.Groups[1].Value;
-            var prop = typeof(TRequest).GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
-            return prop?.GetValue(request)?.ToString() ?? m.Value;
-        });
-    }
-
-    private static TResponse MakeFailure(Error error)
-    {
-        if (typeof(TResponse) == typeof(Result))
-            return (TResponse)(object)Result.Failure(error);
-
-        if (typeof(TResponse).IsGenericType
-            && typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>))
-        {
-            var innerType = typeof(TResponse).GetGenericArguments()[0];
-            var failureMethod = typeof(Result)
-                .GetMethods(BindingFlags.Public | BindingFlags.Static)
-                .First(m => m.Name == nameof(Result.Failure) && m.IsGenericMethod)
-                .MakeGenericMethod(innerType);
-            return (TResponse)failureMethod.Invoke(null, [error])!;
-        }
-
-        throw new InvalidOperationException(
-            $"Distributed lock timed out for '{error.Message}'. " +
-            "TResponse is not a Result type — cannot return a failure value.");
     }
 }

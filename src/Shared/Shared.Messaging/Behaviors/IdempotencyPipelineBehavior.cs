@@ -56,6 +56,9 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
         // Skip all idempotency logic when the response type carries no data (Unit/void commands).
         if (!ShouldCacheResponse)
         {
+            _logger.LogDebug(
+                "Idempotency skipped for {Request} — Unit response carries no data to replay.",
+                typeof(TRequest).Name);
             return await next();
         }
 
@@ -176,7 +179,7 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
         //   1. Per-command override  (IIdempotentCommandWithTtl.IdempotencyTtl)
         //   2. Global setting        (CacheOptions.IdempotencyTtl)
         //   3. Hard-coded default    (24 hours)
-        var ttl = request?.IdempotencyTtl ?? TimeSpan.FromHours(24);
+        var ttl = request.IdempotencyTtl ?? TimeSpan.FromHours(24);
 
         try
         {
