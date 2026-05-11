@@ -7,10 +7,20 @@ public interface IProductReadRepository
 {
     Task<ProductDetailView?> GetByIdAsync(Guid productId, CancellationToken ct = default);
 
-    Task<PageResult<ProductListView>> GetPageAsync(
+    Task<CursorPageResult<ProductListView>> GetPageKeysetAsync(
         Guid? sellerId,
         Guid? categoryId,
         string? status,
+        string? cursor,
+        int pageSize,
+        CancellationToken ct = default);
+
+    Task<PageResult<ProductListView>> SearchAsync(
+        string q,
+        Guid? categoryId,
+        decimal? priceMin,
+        decimal? priceMax,
+        string sort,
         int page,
         int pageSize,
         CancellationToken ct = default);

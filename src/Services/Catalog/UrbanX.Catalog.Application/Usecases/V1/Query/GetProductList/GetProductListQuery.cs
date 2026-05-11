@@ -10,14 +10,13 @@ public record GetProductListQuery(
     Guid? SellerId = null,
     Guid? CategoryId = null,
     string? Status = null,
-    int Page = 1,
-    int PageSize = 20) : IQuery<PageResult<ProductSummaryResponse>>;
+    string? Cursor = null,
+    int PageSize = 20) : IQuery<CursorPageResult<ProductSummaryResponse>>;
 
 public sealed class GetProductListQueryValidator : AbstractValidator<GetProductListQuery>
 {
     public GetProductListQueryValidator()
     {
-        RuleFor(x => x.Page).GreaterThan(0);
         RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
     }
 }

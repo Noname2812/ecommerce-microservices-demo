@@ -6,6 +6,7 @@ using UrbanX.Catalog.Application.Usecases.V1.Command;
 using UrbanX.Catalog.Application.Usecases.V1.Query;
 using UrbanX.Catalog.Application.Usecases.V1.Query.GetProductById;
 using UrbanX.Catalog.Application.Usecases.V1.Query.GetProductList;
+using UrbanX.Catalog.Application.Usecases.V1.Query.SearchProducts;
 
 namespace UrbanX.Catalog.API.Apis
 {
@@ -73,14 +74,27 @@ namespace UrbanX.Catalog.API.Apis
         public static async Task<IResult> GetProductListV1(
             [FromServices] ISender sender,
             CancellationToken cancellationToken,
+            [FromQuery] string? q = null,
             [FromQuery] Guid? sellerId = null,
             [FromQuery] Guid? categoryId = null,
             [FromQuery] string? status = null,
+            [FromQuery] decimal? priceMin = null,
+            [FromQuery] decimal? priceMax = null,
+            [FromQuery] string sort = "relevance",
+            [FromQuery] string? cursor = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var searchResult = await sender.Send(
+                    new SearchProductsQuery(q, categoryId, priceMin, priceMax, sort, page, pageSize),
+                    cancellationToken);
+                return ToCatalogResult(searchResult);
+            }
+
             var result = await sender.Send(
-                new GetProductListQuery(sellerId, categoryId, status, page, pageSize),
+                new GetProductListQuery(sellerId, categoryId, status, cursor, pageSize),
                 cancellationToken);
             return ToCatalogResult(result);
         }
