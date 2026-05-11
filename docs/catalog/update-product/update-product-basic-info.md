@@ -42,7 +42,7 @@ Authorization: Bearer <token>
 
 ## Integration Events
 
-- **`ProductInfoUpdatedV1`** — luôn emit; chứa full product snapshot + danh sách active variants (cho Search re-index)
+- **`ProductInfoUpdatedV1`** — luôn emit; chứa full product snapshot + danh sách active variants; trigger rebuild `read.product_list_view` + `read.product_detail_view`
 - **`ProductStatusChangedV1`** — chỉ emit nếu `Status` thay đổi
 
 Cả hai event đều được ghi vào Outbox trong cùng transaction.

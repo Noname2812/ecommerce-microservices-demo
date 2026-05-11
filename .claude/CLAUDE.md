@@ -8,8 +8,7 @@
 
 | Service | Port | Status | DB | Notes |
 |---|---|---|---|---|
-| **Catalog** | 5025 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + Outbox |
-| **Search** | 5035 | Active | Elasticsearch | Consumes Catalog events |
+| **Catalog** | 5025 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + Outbox; read schema (`read.*`) via Dapper |
 | **Gateway** | 5000 | Active | — | YARP + Duende.BFF (cookie session) + Rate limiting |
 | **Identity** | 5005 | Active | PostgreSQL (`urbanx_identity`) | Duende IdentityServer + ASP.NET Identity + Outbox |
 | **Order** | 5010 | Disabled | PostgreSQL | Saga choreography |
@@ -18,7 +17,7 @@
 | **Inventory** | 5020 | Active | PostgreSQL (`urbanx_inventory`) | CQRS + Outbox; 4 entities: Warehouse, InventoryItem, Reservation, StockMovement |
 | **Frontend** | 5173 | Disabled | — | React 19 + Vite |
 
-Infrastructure (Aspire tự quản lý): PostgreSQL, RabbitMQ, Elasticsearch, Redis.
+Infrastructure (Aspire tự quản lý): PostgreSQL, RabbitMQ, Redis.
 
 ---
 
@@ -35,11 +34,6 @@ src/
 │   │   ├── UrbanX.Catalog.Domain/          # Models, ValueObjects, Repositories (interfaces)
 │   │   ├── UrbanX.Catalog.Infrastructure/  # (trống, dùng Persistence trực tiếp)
 │   │   └── UrbanX.Catalog.Persistence/     # DbContext, Repos, Migrations, SeedData
-│   ├── Search/
-│   │   ├── UrbanX.Search.API/
-│   │   ├── UrbanX.Search.Application/
-│   │   ├── UrbanX.Search.Infrastructure/
-│   │   └── UrbanX.Search.Infrastructure.Elasticsearch/
 │   ├── Inventory/
 │   │   ├── UrbanX.Inventory.API/             # Carter modules (InventoryItemApis.cs)
 │   │   ├── UrbanX.Inventory.Application/     # CQRS: Usecases/V1/Command|Query/
@@ -133,11 +127,11 @@ Domain → Persistence → Application → API → Gateway → Docs
 | FluentValidation | 12.1.1 | Input validation |
 | MassTransit.RabbitMQ | 8.1.3 | Messaging |
 | EF Core / Npgsql | 10.0.x | Data access |
-| Elastic.Clients.Elasticsearch | 9.3.0 | Search |
 | Duende.IdentityServer | 7.4.6 | OAuth2/OIDC |
 | Yarp.ReverseProxy | 2.3.0 | API Gateway |
 | Stripe.net | 50.3.0 | Payments |
 | OpenTelemetry | 1.15.2 | Tracing/metrics |
+| Dapper | 2.1.35 | Micro-ORM cho read schema queries (Catalog) |
 | Aspire.StackExchange.Redis | 13.1.3 | Redis client (IConnectionMultiplexer) |
 | Microsoft.Extensions.Caching.StackExchangeRedis | 10.0.0 | IDistributedCache → Redis |
 

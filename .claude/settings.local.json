@@ -12,7 +12,8 @@
       "Bash(dotnet ef *)",
       "Bash(grep -v \"^$\")",
       "Bash(xargs cat *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(dotnet build *)"
     ]
   }
 }

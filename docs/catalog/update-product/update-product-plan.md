@@ -78,11 +78,11 @@ src/Services/Catalog/UrbanX.Catalog.Application/Usecases/V1/Query/GetVariantDele
 
 | Event | Điều kiện | Consumer |
 |---|---|---|
-| `ProductInfoUpdatedV1` | UC1: luôn emit | Search (re-index), Inventory |
-| `ProductStatusChangedV1` | UC1: nếu status thay đổi | Search, Inventory |
-| `ProductVariantDeletedV1` | UC2: mỗi variant bị xóa | Search (re-index), Inventory (deactivate stock) |
-| `ProductVariantUpdatedV1` | UC2: mỗi variant có thay đổi | Search (re-index), Inventory (nếu SKU/IsActive đổi) |
-| `ProductVariantAddedV1` | UC2: mỗi variant mới | Search (re-index), Inventory (tạo stock record) |
+| `ProductInfoUpdatedV1` | UC1: luôn emit | Catalog projection consumer (read schema rebuild), Inventory |
+| `ProductStatusChangedV1` | UC1: nếu status thay đổi | Catalog projection consumer, Inventory |
+| `ProductVariantDeletedV1` | UC2: mỗi variant bị xóa | Catalog projection consumer, Inventory (deactivate stock) |
+| `ProductVariantUpdatedV1` | UC2: mỗi variant có thay đổi | Catalog projection consumer, Inventory (nếu SKU/IsActive đổi) |
+| `ProductVariantAddedV1` | UC2: mỗi variant mới | Catalog projection consumer, Inventory (tạo stock record) |
 
 **Consume** (Catalog gọi Inventory qua `IMessageRequestClient`):
 - Request/Response: kiểm tra active reservation trước khi xóa variant (UC2 handler + GetVariantDeleteEligibility query)
@@ -91,7 +91,7 @@ src/Services/Catalog/UrbanX.Catalog.Application/Usecases/V1/Query/GetVariantDele
 
 ### Rủi ro / Lưu ý
 
-- **Breaking change events**: Xóa `ProductVariantPriceUpdatedV1`, `ProductVariantSkuChangedV1`, `ProductVariantDisabledV1` — Search + Inventory consumer phải cập nhật để consume `ProductVariantUpdatedV1` thay thế.
+- **Breaking change events**: Xóa `ProductVariantPriceUpdatedV1`, `ProductVariantSkuChangedV1`, `ProductVariantDisabledV1` — Inventory consumer phải cập nhật để consume `ProductVariantUpdatedV1` thay thế.
 - **Inventory service unavailable**: UC2 handler trả `CatalogErrors.InventoryCheckUnavailable` (503) nếu không gọi được Inventory để check reservation. Query eligibility trả partial result.
 - **Defense in depth**: Eligibility query và UC2 handler đều check reservation — query là UX convenience, handler là hard guard.
 - **`product.AddVariant()`**: Method mới trên domain — cần kiểm tra `ProductVariant.Create()` đã có sẵn hay chưa.
@@ -127,7 +127,7 @@ public record ProductInfoUpdatedV1(
     Guid ProductId,
     Guid SellerId,
     ProductDtos.ProductUpdateSnapshot Snapshot,
-    IReadOnlyList<ProductDtos.ProductVariantSnapshot> ActiveVariants  // search re-index đầy đủ
+    IReadOnlyList<ProductDtos.ProductVariantSnapshot> ActiveVariants  // dùng cho projection consumer rebuild read models
 ) : IntegrationEventBase
 {
     public override string Source => "catalog-service";

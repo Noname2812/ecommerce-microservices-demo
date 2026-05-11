@@ -1,6 +1,0 @@
-@UrbanX.Search.API_HostAddress = http://localhost:5157
-
-GET {{UrbanX.Search.API_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

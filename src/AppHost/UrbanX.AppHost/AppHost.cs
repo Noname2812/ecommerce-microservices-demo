@@ -19,9 +19,6 @@ var redis = builder.AddRedis("redis").WithRedisCommander();
 var rabbitMq = builder.AddRabbitMQ("messaging")
     .WithManagementPlugin();
 
-// Add Elasticsearch
-//  var elasticsearch = builder.AddElasticsearch("elasticsearch");
-
 // Add Services
 var identityService = builder.AddProject<Projects.UrbanX_Identity_API>("identity")
     .WithReference(identityDb)
@@ -30,12 +27,6 @@ var identityService = builder.AddProject<Projects.UrbanX_Identity_API>("identity
     .WaitFor(identityDb)
     .WaitFor(redis)
     .WaitFor(rabbitMq);
-
-// var searchService = builder.AddProject<Projects.UrbanX_Search_API>("search")
-//     .WithReference(identityService)
-//     .WithReference(rabbitMq)
-//     .WaitFor(rabbitMq)
-//     .WaitFor(elasticsearch);
 
 var catalogService = builder.AddProject<Projects.UrbanX_Catalog_API>("catalog")
     .WithReference(catalogDb)
@@ -106,7 +97,6 @@ var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
     .WithReference(inventoryService)
     .WithReference(identityService)
     .WithReference(promotionService)
-    //.WaitFor(searchService)
     .WaitFor(catalogService)
     .WaitFor(orderService)
     //.WaitFor(merchantService)

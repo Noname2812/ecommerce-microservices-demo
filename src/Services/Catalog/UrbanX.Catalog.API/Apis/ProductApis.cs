@@ -1,9 +1,11 @@
-﻿using Carter;
+using Carter;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using UrbanX.Catalog.API.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Command;
 using UrbanX.Catalog.Application.Usecases.V1.Query;
+using UrbanX.Catalog.Application.Usecases.V1.Query.GetProductById;
+using UrbanX.Catalog.Application.Usecases.V1.Query.GetProductList;
 
 namespace UrbanX.Catalog.API.Apis
 {
@@ -19,6 +21,8 @@ namespace UrbanX.Catalog.API.Apis
             group1.MapPost("/product", CreateProductV1);
             group1.MapPatch("/product/{productId:guid}", UpdateProductBasicInfoV1);
             group1.MapPut("/product/{productId:guid}/variants", UpdateProductVariantsV1);
+            group1.MapGet("/product/{productId:guid}", GetProductByIdV1);
+            group1.MapGet("/products", GetProductListV1);
             group1.MapGet("/product/{productId:guid}/variants/{variantId:guid}/delete-eligibility", GetVariantDeleteEligibilityV1);
             group1.MapPost("/internal/validate-products", ValidateProductsInternalV1);
             group1.MapPost("/internal/variant-prices", GetVariantPricesInternalV1);
@@ -55,6 +59,30 @@ namespace UrbanX.Catalog.API.Apis
             var command = body with { ProductId = productId };
             var result = await sender.Send(command, cancellationToken);
             return result.IsFailure ? ToCatalogResult(result) : Results.NoContent();
+        }
+
+        public static async Task<IResult> GetProductByIdV1(
+            Guid productId,
+            [FromServices] ISender sender,
+            CancellationToken cancellationToken)
+        {
+            var result = await sender.Send(new GetProductByIdQuery(productId), cancellationToken);
+            return ToCatalogResult(result);
+        }
+
+        public static async Task<IResult> GetProductListV1(
+            [FromServices] ISender sender,
+            CancellationToken cancellationToken,
+            [FromQuery] Guid? sellerId = null,
+            [FromQuery] Guid? categoryId = null,
+            [FromQuery] string? status = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var result = await sender.Send(
+                new GetProductListQuery(sellerId, categoryId, status, page, pageSize),
+                cancellationToken);
+            return ToCatalogResult(result);
         }
 
         public static async Task<IResult> GetVariantDeleteEligibilityV1(

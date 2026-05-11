@@ -177,11 +177,11 @@ PATCH /products/{id}
         ├── product.ApplyEdit(state, utcNow)
         │
         ├── Outbox: ProductInfoUpdatedV1
-        │         └─ Consumer: Search Service → re-index product document
+        │         └─ Consumer: Catalog projection → rebuild read.product_list_view + read.product_detail_view
         │
         └── (nếu status thay đổi)
             Outbox: ProductStatusChangedV1
-                  └─ Consumer: Search Service (deactivate/activate)
+                  └─ Consumer: Catalog projection (rebuild read models)
                              Inventory Service (freeze/unfreeze stock)
 ```
 
@@ -197,17 +197,17 @@ PUT /products/{id}/variants
         │
         ├── variant.MarkSoftDeleted()
         │   └── Outbox: ProductVariantDeletedV1
-        │             └─ Consumer: Search (re-index), Inventory (deactivate stock)
+        │             └─ Consumer: Catalog projection (rebuild read models), Inventory (deactivate stock)
         │
         ├── variant.SetSku / SetPrice / SetIsActive / ...
         │   ├── (SKU đổi) → VariantSkuHistory + AddSkuHistoryAsync
         │   ├── (Price đổi) → VariantPriceHistory + AddPriceHistoryAsync
         │   └── Outbox: ProductVariantUpdatedV1 { PreviousSku?, PreviousPrice?, PreviousIsActive? }
-        │             └─ Consumer: Search (re-index), Inventory (update nếu SKU/IsActive đổi)
+        │             └─ Consumer: Catalog projection (rebuild read models), Inventory (update nếu SKU/IsActive đổi)
         │
         └── product.AddVariant(spec, images, utcNow)
             └── Outbox: ProductVariantAddedV1
-                      └─ Consumer: Search (re-index), Inventory (tạo stock record mới)
+                      └─ Consumer: Catalog projection (rebuild read models), Inventory (tạo stock record mới)
 ```
 
 ---
@@ -219,17 +219,17 @@ Tất cả events được publish qua **Transactional Outbox** (ghi cùng trans
 ### ProductInfoUpdatedV1
 ```
 Khi nào: Mỗi lần UpdateProductBasicInfo thành công
-Consumer: Search Service (re-index toàn bộ product document)
+Consumer: Catalog projection consumer → rebuild read.product_list_view + read.product_detail_view
 Payload:
   - ProductId, SellerId
   - Snapshot (basic info)
-  - ActiveVariants[] (để Search re-index đầy đủ không cần query lại)
+  - ActiveVariants[]
 ```
 
 ### ProductStatusChangedV1
 ```
 Khi nào: Status thay đổi trong UpdateProductBasicInfo
-Consumer: Search Service, Inventory Service
+Consumer: Catalog projection consumer, Inventory Service
 Payload:
   - ProductId, OldStatus, NewStatus, Reason, AffectedVariantIds
 ```
@@ -237,7 +237,7 @@ Payload:
 ### ProductVariantAddedV1
 ```
 Khi nào: Variant mới được thêm vào trong UpdateProductVariants
-Consumer: Search Service, Inventory Service
+Consumer: Catalog projection consumer, Inventory Service
 Payload:
   - ProductId, SellerId
   - Variant (full snapshot: Sku, Name, Price, Attributes, IsActive, ...)
@@ -247,7 +247,7 @@ Inventory action: tạo mới inventory record cho variant này
 ### ProductVariantUpdatedV1
 ```
 Khi nào: Variant bị sửa trong UpdateProductVariants (chỉ emit nếu có thay đổi)
-Consumer: Search Service, Inventory Service
+Consumer: Catalog projection consumer, Inventory Service
 Payload:
   - ProductId, SellerId, VariantId
   - PreviousSku (non-null nếu SKU đổi) → Inventory cập nhật reference

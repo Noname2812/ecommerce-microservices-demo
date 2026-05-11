@@ -92,6 +92,8 @@
     <PackageVersion Include="Stripe.net" Version="50.3.0" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
     <PackageVersion Include="Elastic.Clients.Elasticsearch" Version="9.3.0" />
+    <!-- ========== Dapper ========== -->
+    <PackageVersion Include="Dapper" Version="2.1.35" />
     <!-- ========== Testing ========== -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageVersion Include="bunit" Version="2.5.3" />

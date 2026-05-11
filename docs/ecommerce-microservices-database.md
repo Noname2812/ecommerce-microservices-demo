@@ -1,6 +1,6 @@
 # Ecommerce Microservices — Database Design
 
-> **Stack**: PostgreSQL (per service) + Elasticsearch (Search read model)  
+> **Stack**: PostgreSQL (per service)  
 > **Patterns**: Outbox Pattern, CQRS, Database-per-Service, Event-Driven
 
 ---
@@ -12,8 +12,7 @@
 3. [Inventory Service](#3-inventory-service)
 4. [Order Service](#4-order-service)
 5. [Payment Service](#5-payment-service)
-6. [Search Service](#6-search-service-elasticsearch--postgresql)
-7. [Denormalization Map](#7-denormalization-map)
+6. [Denormalization Map](#6-denormalization-map)
 
 ---
 
@@ -537,142 +536,9 @@ CREATE INDEX idx_outbox_status         ON outbox_messages(status, created_at) WH
 
 ---
 
-## 6. Search Service (Elasticsearch + PostgreSQL)
+## 6. Denormalization Map
 
-**Elasticsearch**: Read model tổng hợp data từ Product + Inventory + Order  
-**PostgreSQL**: Tracking sync state, dead letter queue  
-**Events consume**: `ProductCreated`, `ProductUpdated`, `ProductDeleted`, `StockUpdated` (từ Inventory), `OrderCompleted` (để cập nhật sales_count)
-
-### 6.1 Elasticsearch Index: `products`
-
-```json
-{
-  "mappings": {
-    "properties": {
-      "id": { "type": "keyword" },
-      "sku": { "type": "keyword" },
-      "name": {
-        "type": "text",
-        "analyzer": "standard",
-        "fields": {
-          "keyword": { "type": "keyword" },
-          "vi": { "type": "text", "analyzer": "vi_analyzer" }
-        }
-      },
-      "slug": { "type": "keyword" },
-      "description": { "type": "text" },
-      "short_description": { "type": "text" },
-
-      "category": {
-        "properties": {
-          "id": { "type": "keyword" },
-          "name": { "type": "keyword" },
-          "slug": { "type": "keyword" },
-          "path": { "type": "keyword" }
-        }
-      },
-      "brand": {
-        "properties": {
-          "id": { "type": "keyword" },
-          "name": { "type": "keyword" }
-        }
-      },
-      "seller": {
-        "properties": {
-          "id": { "type": "keyword" },
-          "name": { "type": "keyword" }
-        }
-      },
-
-      "price": { "type": "double" },
-      "compare_at_price": { "type": "double" },
-      "discount_percentage": { "type": "integer" },
-
-      "variants": {
-        "type": "nested",
-        "properties": {
-          "id": { "type": "keyword" },
-          "sku": { "type": "keyword" },
-          "name": { "type": "keyword" },
-          "price": { "type": "double" },
-          "attributes": { "type": "object" }
-        }
-      },
-
-      "attributes": { "type": "object", "dynamic": true },
-      "tags": { "type": "keyword" },
-      "primary_image": { "type": "keyword" },
-      "images": { "type": "keyword" },
-
-      "is_in_stock": { "type": "boolean" },
-      "total_stock": { "type": "integer" },
-      "status": { "type": "keyword" },
-
-      "rating_avg": { "type": "float" },
-      "rating_count": { "type": "integer" },
-      "sales_count": { "type": "integer" },
-
-      "created_at": { "type": "date" },
-      "updated_at": { "type": "date" }
-    }
-  },
-  "settings": {
-    "number_of_shards": 3,
-    "number_of_replicas": 1,
-    "analysis": {
-      "analyzer": {
-        "vi_analyzer": {
-          "type": "custom",
-          "tokenizer": "standard",
-          "filter": ["lowercase", "asciifolding"]
-        }
-      }
-    }
-  }
-}
-```
-
-### 6.2 PostgreSQL: Sync State Tracking
-
-```sql
--- ============================================================
--- SYNC CHECKPOINTS
--- Tracking vị trí đã xử lý của từng topic/queue
--- ============================================================
-CREATE TABLE sync_checkpoints (
-    service_name          VARCHAR(100) PRIMARY KEY,
-    last_processed_offset VARCHAR(255),  -- Kafka offset hoặc message ID
-    last_processed_at     TIMESTAMPTZ,
-    updated_at            TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ============================================================
--- FAILED EVENTS (Dead Letter Queue)
--- Events xử lý thất bại, chờ retry hoặc manual fix
--- ============================================================
-CREATE TABLE failed_events (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    service_name  VARCHAR(100) NOT NULL,
-    event_id      VARCHAR(255) NOT NULL,
-    event_type    VARCHAR(255) NOT NULL,
-    payload       JSONB NOT NULL,
-    error_message TEXT,
-    retry_count   INT DEFAULT 0,
-    max_retries   INT DEFAULT 5,
-    created_at    TIMESTAMPTZ DEFAULT NOW(),
-    last_retry_at TIMESTAMPTZ,
-    resolved_at   TIMESTAMPTZ
-);
-
-CREATE INDEX idx_failed_events_retry ON failed_events(retry_count, last_retry_at)
-    WHERE resolved_at IS NULL;
-```
-
----
-
-## 7. Denormalization Map
-
-Nguyên tắc denormalize: chỉ copy data **ít thay đổi** hoặc khi cần **snapshot tại thời điểm** (như order). Data thay đổi thường xuyên (stock, price) **không** denormalize vào service khác — để Search Service (ES) xử lý việc tổng hợp cho display.
+Nguyên tắc denormalize: chỉ copy data **ít thay đổi** hoặc khi cần **snapshot tại thời điểm** (như order). Data thay đổi thường xuyên (stock, price) **không** denormalize vào service khác — queries đọc trực tiếp từ service owner.
 
 | Service nhận    | Field được denormalize                                   | Nguồn gốc           | Cập nhật khi nào                               |
 | --------------- | -------------------------------------------------------- | ------------------- | ---------------------------------------------- |
@@ -685,8 +551,7 @@ Nguyên tắc denormalize: chỉ copy data **ít thay đổi** hoặc khi cần 
 | **Order**       | `shipping_address` (JSON)                                | Auth                | **Snapshot** lúc đặt hàng — không update       |
 | **Order**       | `payment_method`, `payment_reference`                    | Payment             | `PaymentCompleted` event                       |
 | **Payment**     | `order_number`, `customer_id`, `customer_email`          | Order               | `OrderCreated` event                           |
-| **Search (ES)** | Toàn bộ product document + `is_in_stock`, `total_stock`  | Product + Inventory | `ProductCreated/Updated`, `StockUpdated` event |
-| **Search (ES)** | `sales_count`                                            | Order               | `OrderCompleted` event                         |
+| **Catalog (read schema)** | `read.product_list_view`, `read.product_detail_view` | Catalog write schema | Projection consumers (via Outbox events) |
 
 ### Điều KHÔNG denormalize
 

@@ -6,6 +6,7 @@ using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Catalog.Application.DependencyInjection.Extensions;
+using UrbanX.Catalog.Application.Messaging;
 using UrbanX.Catalog.Persistence;
 using UrbanX.Catalog.Persistence.DependencyInjection.Extensions;
 using UrbanX.Catalog.Persistence.Seeding;
@@ -29,7 +30,15 @@ builder.Services.AddOutbox<CatalogDbContext>(
 // Add Message queue
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(builder.Configuration);
+    .AddMessaging(builder.Configuration, configureBus: bus =>
+    {
+        bus.AddConsumer<ProductCreatedProjectionConsumer>();
+        bus.AddConsumer<ProductInfoUpdatedProjectionConsumer>();
+        bus.AddConsumer<ProductStatusChangedProjectionConsumer>();
+        bus.AddConsumer<ProductVariantAddedProjectionConsumer>();
+        bus.AddConsumer<ProductVariantUpdatedProjectionConsumer>();
+        bus.AddConsumer<ProductVariantDeletedProjectionConsumer>();
+    });
 
 // Add database health check
 builder.Services.AddHealthChecks()

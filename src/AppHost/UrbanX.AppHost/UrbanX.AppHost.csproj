@@ -6,13 +6,11 @@
     <ProjectReference Include="..\..\Services\Catalog\UrbanX.Catalog.API\UrbanX.Catalog.API.csproj" />
     <ProjectReference Include="..\..\Services\Identity\UrbanX.Identity.API\UrbanX.Identity.API.csproj" />
     <ProjectReference Include="..\..\Gateway\UrbanX.Gateway\UrbanX.Gateway.csproj" />
-    <ProjectReference Include="..\..\Services\Search\UrbanX.Search.API\UrbanX.Search.API.csproj" />
     <ProjectReference Include="..\..\Services\Payment\UrbanX.Payment.API\UrbanX.Payment.API.csproj" />
     <ProjectReference Include="..\..\Services\Promotion\UrbanX.Promotion.API\UrbanX.Promotion.API.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.Elasticsearch" />
     <PackageReference Include="Aspire.Hosting.JavaScript" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <PackageReference Include="Aspire.Hosting.RabbitMQ" />

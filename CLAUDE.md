@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-UrbanX is a learning project demonstrating microservices patterns on .NET 10. Catalog, Search, API Gateway, Inventory, and Identity are currently scaffolded and active. Order, Merchant, and Payment are planned but their AppHost registrations are commented out.
+UrbanX is a learning project demonstrating microservices patterns on .NET 10. Catalog, API Gateway, Inventory, and Identity are currently scaffolded and active. Order, Merchant, and Payment are planned but their AppHost registrations are commented out. Search service has been removed — product queries are served directly from the Catalog read schema (PostgreSQL, Dapper).
 
 **Important discrepancy:** The README describes Apache Kafka as the message broker, but the actual implementation uses **RabbitMQ via MassTransit**.
 
@@ -21,7 +21,7 @@ dotnet workload install aspire  # one-time setup
 cd src/AppHost/UrbanX.AppHost
 dotnet run
 ```
-Aspire Dashboard: `http://localhost:15260`. Starts PostgreSQL, RabbitMQ, Elasticsearch, and Redis automatically.
+Aspire Dashboard: `http://localhost:15260`. Starts PostgreSQL, RabbitMQ, and Redis automatically.
 
 ### Run infrastructure only
 ```bash
@@ -81,7 +81,7 @@ Each service is split into layers:
 
 **Transactional Outbox:** Commands save business data + an outbox event in one EF Core transaction. `OutboxRelayService` reads the outbox table and publishes to RabbitMQ, guaranteeing at-least-once delivery. Catalog and Payment use this.
 
-**CQRS (Catalog + Search):** Writes go to PostgreSQL (Catalog service). Catalog publishes events that Search service consumes to update Elasticsearch. Read queries from clients route to the Search API via the Gateway.
+**CQRS (Catalog):** Writes go to the `public` schema (EF Core). Integration events flow via Outbox → RabbitMQ → Catalog's own projection consumers, which rebuild `read.product_list_view` and `read.product_detail_view`. Read queries hit these read-schema tables directly via Dapper.
 
 **Saga choreography:** The planned order flow (Order → Inventory → Payment → Merchant) uses choreography — each service reacts to integration events from the previous step and emits its own, with compensation events on failure.
 

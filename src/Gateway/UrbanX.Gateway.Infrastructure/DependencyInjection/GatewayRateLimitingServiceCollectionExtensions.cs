@@ -74,20 +74,6 @@ public static class GatewayRateLimitingServiceCollectionExtensions
                         });
                 }
 
-                if (p.Value is not null && p.Value.Contains("/search", StringComparison.OrdinalIgnoreCase))
-                {
-                    return RateLimitPartition.GetSlidingWindowLimiter(
-                        $"search:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
-                        _ => new SlidingWindowRateLimiterOptions
-                        {
-                            AutoReplenishment = true,
-                            SegmentsPerWindow = segs,
-                            PermitLimit = rate.SearchEndpoints.PermitLimit,
-                            Window = TimeSpan.FromSeconds(rate.SearchEndpoints.WindowSeconds),
-                            QueueLimit = 0
-                        });
-                }
-
                 if (IsWriteMethod(httpContext.Request.Method))
                 {
                     var wKey = "write:" + GetUserIdOrIp(httpContext);

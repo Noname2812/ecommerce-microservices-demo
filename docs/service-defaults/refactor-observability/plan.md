@@ -66,7 +66,7 @@ Thêm 3 containers vào `AppHost.cs`:
 - **Prometheus** — scrape `/metrics` từ từng service (port 9090)
 - **Grafana** — visualize (port 3000), auto-provision Prometheus + Tempo datasources
 
-Inject `OTEL_EXPORTER_OTLP_ENDPOINT` vào catalog, search, gateway → Tempo endpoint.
+Inject `OTEL_EXPORTER_OTLP_ENDPOINT` vào catalog, inventory, gateway → Tempo endpoint.
 
 Dùng fixed ports cho services (`.WithHttpEndpoint(port: XXXX)`) để Prometheus scrape config tĩnh được.
 
@@ -78,7 +78,7 @@ Dùng fixed ports cho services (`.WithHttpEndpoint(port: XXXX)`) để Prometheu
 
 | File | Mục đích |
 |---|---|
-| `src/AppHost/UrbanX.AppHost/config/prometheus.yml` | Scrape targets cho catalog, search, gateway |
+| `src/AppHost/UrbanX.AppHost/config/prometheus.yml` | Scrape targets cho catalog, inventory, gateway |
 | `src/AppHost/UrbanX.AppHost/config/tempo.yaml` | Tempo storage + OTLP receiver config |
 | `src/AppHost/UrbanX.AppHost/config/grafana/provisioning/datasources/datasources.yaml` | Auto-provision Prometheus + Tempo datasources |
 

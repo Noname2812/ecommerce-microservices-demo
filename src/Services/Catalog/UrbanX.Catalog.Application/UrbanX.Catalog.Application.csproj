@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\Shared.Application\Shared.Application.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Shared.Contract\Shared.Contract.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
     <ProjectReference Include="..\UrbanX.Catalog.Domain\UrbanX.Catalog.Domain.csproj" />

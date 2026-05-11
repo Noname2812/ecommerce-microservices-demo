@@ -8,7 +8,6 @@ public sealed class RateLimitingOptions
     public GlobalLimit GlobalPerIp { get; set; } = new();
     public GlobalLimit AuthEndpoints { get; set; } = new();
     public GlobalLimit AuthenticatedUser { get; set; } = new();
-    public GlobalLimit SearchEndpoints { get; set; } = new();
     public GlobalLimit WriteOperations { get; set; } = new();
     public int SlidingWindowSegments { get; set; } = 6;
 
