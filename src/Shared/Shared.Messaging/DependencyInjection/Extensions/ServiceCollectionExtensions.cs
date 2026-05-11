@@ -140,6 +140,7 @@ namespace Shared.Messaging.DependencyInjection.Extensions
                 cfg.AddOpenBehavior(typeof(IdempotencyPipelineBehavior<,>));
                 cfg.AddOpenBehavior(typeof(ValidationPipelineBehavior<,>));
                 cfg.AddOpenBehavior(typeof(DistributedLockPipelineBehavior<,>));
+                cfg.AddOpenBehavior(typeof(CacheQueryPipelineBehavior<,>));
                 cfg.AddOpenBehavior(typeof(TransactionPipelineBehavior<,>));
             });
 
