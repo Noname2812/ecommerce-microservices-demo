@@ -1,6 +1,6 @@
 namespace Shared.Kernel.Primitives;
 
-public class Result
+public class Result : IResult
 {
     public bool IsSuccess { get; }
     public bool IsFailure => !IsSuccess;

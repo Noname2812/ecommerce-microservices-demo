@@ -73,7 +73,20 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
         var lockKey  = $"{prefix}idempotency-lock:{typeof(TRequest).Name}:{request.IdempotencyKey}";
 
         // Fast path: check the cache before paying the cost of acquiring a lock.
-        var cached = await TryGetCachedResponseAsync(cacheKey, cancellationToken);
+        // Fail-open: if Redis is unavailable, proceed without idempotency rather than failing the request.
+        TResponse? cached;
+        try
+        {
+            cached = await TryGetCachedResponseAsync(cacheKey, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Idempotency cache read failed for {RequestName}. Proceeding without idempotency check.",
+                typeof(TRequest).Name);
+            return await next();
+        }
+
         if (cached is not null)
         {
             return cached;
@@ -82,11 +95,23 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
         // Acquire a distributed lock to serialise concurrent requests that share the same key.
         // Without the lock, two simultaneous requests could both miss the cache and both
         // execute the handler — defeating idempotency.
-        var lockHandle = await _lockService.AcquireAsync(
-            lockKey,
-            expiry: LockExpiry,
-            waitTimeout: LockWaitTimeout,
-            ct: cancellationToken);
+        // Fail-open: if Redis is unavailable, proceed rather than blocking the request indefinitely.
+        ILockHandle? lockHandle;
+        try
+        {
+            lockHandle = await _lockService.AcquireAsync(
+                lockKey,
+                expiry: LockExpiry,
+                waitTimeout: LockWaitTimeout,
+                ct: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Idempotency lock acquisition failed for {RequestName}. Proceeding without idempotency guarantee.",
+                typeof(TRequest).Name);
+            return await next();
+        }
 
         if (lockHandle is null)
         {
