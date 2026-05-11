@@ -128,6 +128,9 @@ namespace Shared.Messaging.DependencyInjection.Extensions
             this IServiceCollection services,
             Assembly assembly)
         {
+            services.AddMemoryCache();
+            services.AddSingleton<RedisCircuitBreaker>();
+
             services.AddHttpContextAccessor();
             services.AddScoped<IUserContext, UserHttpContext>();
 

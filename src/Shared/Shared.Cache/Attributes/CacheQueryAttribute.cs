@@ -38,6 +38,12 @@ public sealed class CacheQueryAttribute : Attribute
     /// </summary>
     public int JitterPercent { get; init; } = 10;
 
+    /// <summary>
+    /// TTL for the in-process L1 memory cache (seconds). Default: 10. Set 0 to disable.
+    /// L1 is checked before Redis to cut round-trip latency on hot keys.
+    /// </summary>
+    public int MemoryTtlSeconds { get; init; } = 5;
+
     public CacheQueryAttribute(string keyTemplate)
     {
         KeyTemplate = keyTemplate;

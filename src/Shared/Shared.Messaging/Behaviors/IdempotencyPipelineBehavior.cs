@@ -19,6 +19,7 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
 {
     private readonly IDistributedCache _cache;
     private readonly IDistributedLockService _lockService;
+    private readonly RedisCircuitBreaker _circuit;
     private readonly ILogger<IdempotencyPipelineBehavior<TRequest, TResponse>> _logger;
     private readonly string _cacheKeyPrefix;
     private readonly string _lockKeyPrefix;
@@ -40,11 +41,13 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
     public IdempotencyPipelineBehavior(
         IDistributedCache cache,
         IDistributedLockService lockService,
+        RedisCircuitBreaker circuit,
         IOptions<CacheOptions> cacheOptions,
         ILogger<IdempotencyPipelineBehavior<TRequest, TResponse>> logger)
     {
         _cache = cache;
         _lockService = lockService;
+        _circuit = circuit;
         _logger = logger;
 
         var prefix = string.IsNullOrWhiteSpace(cacheOptions.Value.InstanceName)
@@ -67,6 +70,16 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
             return await next(cancellationToken);
         }
 
+        // Circuit open → skip Redis entirely, run handler without idempotency guarantee.
+        if (_circuit.ShouldSkipRedis())
+        {
+            _logger.LogWarning(
+                "[Idempotency] Circuit open — skipping idempotency check for {RequestName}. " +
+                "Duplicate requests may re-execute.",
+                _requestName);
+            return await next(cancellationToken);
+        }
+
         var cacheKey = $"{_cacheKeyPrefix}{request.IdempotencyKey}";
         var lockKey = $"{_lockKeyPrefix}{request.IdempotencyKey}";
 
@@ -76,12 +89,14 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
         try
         {
             cached = await TryGetCachedResponseAsync(cacheKey, cancellationToken);
+            _circuit.RecordSuccess();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Idempotency cache read failed for {RequestName}. Proceeding without idempotency check.",
+                "[Idempotency] Cache read failed for {RequestName}. Proceeding without idempotency check.",
                 _requestName);
+            _circuit.RecordFailure();
             return await next(cancellationToken);
         }
 
@@ -101,12 +116,14 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
                 expiry: LockExpiry,
                 waitTimeout: LockWaitTimeout,
                 ct: cancellationToken);
+            _circuit.RecordSuccess();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Idempotency lock acquisition failed for {RequestName}. Proceeding without idempotency guarantee.",
+                "[Idempotency] Lock acquisition failed for {RequestName}. Proceeding without idempotency guarantee.",
                 _requestName);
+            _circuit.RecordFailure();
             return await next(cancellationToken);
         }
 
@@ -213,14 +230,16 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
                 },
                 CancellationToken.None);
 
+            _circuit.RecordSuccess();
             _logger.LogInformation(
-                "Idempotency result stored for {RequestName} key={Key} TTL={TTL}.",
+                "[Idempotency] Result stored for {RequestName} key={Key} TTL={TTL}.",
                 _requestName, cacheKey, ttl);
         }
         catch (Exception ex)
         {
+            _circuit.RecordFailure();
             _logger.LogError(ex,
-                "Failed to store idempotency result for {RequestName} key={Key}. " +
+                "[Idempotency] Failed to store result for {RequestName} key={Key}. " +
                 "Request succeeded but subsequent duplicate calls will re-execute.",
                 _requestName, cacheKey);
         }
