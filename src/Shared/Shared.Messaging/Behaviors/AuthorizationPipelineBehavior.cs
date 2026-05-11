@@ -10,6 +10,7 @@ public sealed class AuthorizationPipelineBehavior<TRequest, TResponse> : IPipeli
     where TRequest : notnull
 {
     // Cached per TRequest type instantiation — safe because attribute sets are immutable.
+    private static readonly string _requestName = typeof(TRequest).Name;
     private static readonly bool _isAnonymous =
         typeof(TRequest).GetCustomAttribute<AllowAnonymousAttribute>() is not null;
     private static readonly RequireRoleAttribute[] _roles =
@@ -35,11 +36,11 @@ public sealed class AuthorizationPipelineBehavior<TRequest, TResponse> : IPipeli
         CancellationToken cancellationToken)
     {
         if (_isAnonymous || _hasNoAuthRequirements)
-            return next();
+            return next(cancellationToken);
 
         if (!_user.IsAuthenticated)
         {
-            _logger.LogWarning("Authorization failed for {Request}: unauthenticated", typeof(TRequest).Name);
+            _logger.LogWarning("Authorization failed for {Request}: unauthenticated", _requestName);
             return Task.FromResult(ResultHelper.MakeFailure<TResponse>(AuthorizationErrors.Unauthenticated));
         }
 
@@ -49,22 +50,25 @@ public sealed class AuthorizationPipelineBehavior<TRequest, TResponse> : IPipeli
             {
                 _logger.LogWarning(
                     "Authorization failed for {Request}: missing role {Role}",
-                    typeof(TRequest).Name, r.Role);
+                    _requestName, r.Role);
                 return Task.FromResult(ResultHelper.MakeFailure<TResponse>(AuthorizationErrors.MissingRole(r.Role)));
             }
         }
 
         foreach (var p in _perms)
         {
+            // Trust-the-Gateway design: permission names are verified by the Gateway RBAC middleware,
+            // which sets X-Permission-Scope based on the user's role claims. This behavior only
+            // enforces minimum scope (Own/All) — not the permission name itself.
             if (_user.Scope < p.MinScope)
             {
                 _logger.LogWarning(
                     "Authorization failed for {Request}: scope {ActualScope} < required {RequiredScope} for {Permission}",
-                    typeof(TRequest).Name, _user.Scope, p.MinScope, p.Permission);
+                    _requestName, _user.Scope, p.MinScope, p.Permission);
                 return Task.FromResult(ResultHelper.MakeFailure<TResponse>(AuthorizationErrors.InsufficientScope(p.Permission)));
             }
         }
 
-        return next();
+        return next(cancellationToken);
     }
 }

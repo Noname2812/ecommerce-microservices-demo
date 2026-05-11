@@ -119,24 +119,25 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
             {
                 // ── 5. Cache success with jitter ──────────────────────────────
                 var jitteredExpiry = AddJitter(expiry, _attr.JitterPercent);
-                await TrySetCacheAsync(cacheKey, response, jitteredExpiry, ct);
+                await TrySetCacheAsync(cacheKey, response, jitteredExpiry);
             }
             else if (result?.IsSuccess == false && _attr.NegativeTtlSeconds > 0)
             {
                 // ── 6. Negative cache (e.g. not-found) with shorter TTL ───────
                 var negativeTtl = TimeSpan.FromSeconds(_attr.NegativeTtlSeconds);
-                await TrySetCacheAsync(cacheKey, response, negativeTtl, ct);
+                await TrySetCacheAsync(cacheKey, response, negativeTtl);
             }
 
             return response;
         }
     }
 
-    private async Task TrySetCacheAsync(string key, TResponse value, TimeSpan ttl, CancellationToken ct)
+    private async Task TrySetCacheAsync(string key, TResponse value, TimeSpan ttl)
     {
         try
         {
-            await _cache.SetAsync(key, value, ttl, ct);
+            // CancellationToken.None: handler already succeeded; client disconnect must not abort the write.
+            await _cache.SetAsync(key, value, ttl, CancellationToken.None);
         }
         catch (Exception ex)
         {
