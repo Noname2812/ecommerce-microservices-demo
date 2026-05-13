@@ -1,6 +1,9 @@
 using System.Net;
 using Refit;
-using UrbanX.Order.Infrastructure.Exceptions;
+using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Application.Exceptions;
+using UrbanX.Order.Infrastructure.RefitApi.Inventory;
+using UrbanX.Order.Infrastructure.RefitApi.Inventory.Dtos;
 
 namespace UrbanX.Order.Infrastructure.Services;
 

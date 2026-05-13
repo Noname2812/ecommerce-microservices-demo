@@ -3,7 +3,7 @@ using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Order;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
-using UrbanX.Order.Application.Usecases.V1.Errors;
+using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 

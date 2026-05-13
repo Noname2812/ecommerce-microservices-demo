@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.Json;
 using Refit;
-using UrbanX.Order.Infrastructure.Exceptions;
+using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Application.Exceptions;
+using UrbanX.Order.Infrastructure.RefitApi.Inventory;
 using UrbanX.Order.Infrastructure.Services;
 using UrbanX.Services.Order.UnitTests.Infrastructure.Helpers;
 using Xunit;

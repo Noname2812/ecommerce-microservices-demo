@@ -3,7 +3,10 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Refit;
 using Shared.Contract.Messaging.PlaceOrder;
-using UrbanX.Order.Infrastructure.Exceptions;
+using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Application.Exceptions;
+using UrbanX.Order.Infrastructure.RefitApi.Coupon;
+using UrbanX.Order.Infrastructure.RefitApi.Coupon.Dtos;
 
 namespace UrbanX.Order.Infrastructure.Services;
 

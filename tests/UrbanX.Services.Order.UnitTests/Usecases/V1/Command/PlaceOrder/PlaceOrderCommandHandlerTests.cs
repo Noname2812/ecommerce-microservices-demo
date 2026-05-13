@@ -4,8 +4,8 @@ using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Repositories;
-using UrbanX.Order.Infrastructure.Exceptions;
-using UrbanX.Order.Infrastructure.Services;
+using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Application.Exceptions;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
 namespace UrbanX.Services.Order.UnitTests.Usecases.V1.Command.PlaceOrder;

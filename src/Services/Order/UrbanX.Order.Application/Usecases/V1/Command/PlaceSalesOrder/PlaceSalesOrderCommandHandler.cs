@@ -5,12 +5,13 @@ using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
-using UrbanX.Order.Application.Usecases.V1.Errors;
+using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 using UrbanX.Order.Domain.ValueObjects;
-using UrbanX.Order.Infrastructure.Exceptions;
-using UrbanX.Order.Infrastructure.Services;
+using UrbanX.Order.Application.Abstractions;
+using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Application.Exceptions;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;

@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\UrbanX.Order.Application\UrbanX.Order.Application.csproj" />
     <ProjectReference Include="..\UrbanX.Order.Domain\UrbanX.Order.Domain.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Cache\Shared.Cache.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Contract\Shared.Contract.csproj" />

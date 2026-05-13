@@ -1,4 +1,4 @@
-namespace UrbanX.Order.Infrastructure.Exceptions;
+namespace UrbanX.Order.Application.Exceptions;
 
 /// <summary>
 /// Inventory reported insufficient stock for reserve (HTTP 409 OUT_OF_STOCK).

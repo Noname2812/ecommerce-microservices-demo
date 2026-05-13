@@ -1,6 +1,6 @@
 using Shared.Outbox.Abstractions;
 
-namespace UrbanX.Order.Infrastructure.Services;
+namespace UrbanX.Order.Application.Clients;
 
 public sealed record ClaimCouponRequest(
     string OrderIdempotencyKey,

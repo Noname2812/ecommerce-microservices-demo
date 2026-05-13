@@ -1,4 +1,4 @@
-namespace UrbanX.Order.Infrastructure.Exceptions;
+namespace UrbanX.Order.Application.Exceptions;
 
 /// <summary>
 /// Coupon claim conflict (quota / already used) — HTTP 409 + problem type coupon code.

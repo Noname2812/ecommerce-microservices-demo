@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Order.Infrastructure.Services;
+namespace UrbanX.Order.Application.Clients;
 
 public record CatalogProductValidationDto(
     Guid ProductId,

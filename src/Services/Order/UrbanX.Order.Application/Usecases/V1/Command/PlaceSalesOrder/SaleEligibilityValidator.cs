@@ -1,7 +1,7 @@
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
-using UrbanX.Order.Application.Usecases.V1.Errors;
-using UrbanX.Order.Infrastructure.Services;
+using UrbanX.Order.Domain.Errors;
+using UrbanX.Order.Application.Clients;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 

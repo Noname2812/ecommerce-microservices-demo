@@ -1,4 +1,4 @@
-namespace UrbanX.Order.Infrastructure.Services;
+namespace UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
 public sealed class InventoryClientOptions
 {

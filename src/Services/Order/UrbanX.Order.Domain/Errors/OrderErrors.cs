@@ -1,7 +1,6 @@
 using Shared.Kernel.Primitives;
-using UrbanX.Order.Domain.Errors;
 
-namespace UrbanX.Order.Application.Usecases.V1.Errors;
+namespace UrbanX.Order.Domain.Errors;
 
 public static class OrderErrors
 {

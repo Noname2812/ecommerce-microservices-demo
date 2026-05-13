@@ -2,7 +2,7 @@ using Shared.Kernel.Primitives;
 
 namespace UrbanX.Order.Domain.Errors;
 
-/// <summary>Shared sale-allocation errors for Order.Application and Order.Infrastructure (single source of truth for code + message).</summary>
+/// <summary>Sale-allocation <see cref="Error"/> values shared by Order.Domain (<see cref="OrderErrors"/>) and infrastructure.</summary>
 public static class OrderSaleAllocationErrors
 {
     public static readonly Error SaleQuotaExceeded =

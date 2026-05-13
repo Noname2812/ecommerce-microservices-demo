@@ -7,32 +7,48 @@ Clean Architecture per-service, .NET 10, CQRS via MediatR, Carter endpoints, EF 
 ## 1. Layer Structure (per service)
 
 ```
-<Service>.Domain/         ← Entity, Value Object, Repository interface, Domain Exception
-<Service>.Infrastructure/ ← External clients, email, third-party adapters
-<Service>.Persistence/    ← DbContext, EF configs, Repository impl, Migrations, EfUnitOfWork
-<Service>.Application/    ← Command, Query, Handler, Validator, Error codes, Consumers
-<Service>.API/            ← Carter modules, Program.cs, appsettings
+<Service>.Domain/
+  Models/, ValueObjects/, Repositories/   ← Entity, VO, repository interfaces
+  Errors/                                 ← Mã lỗi nghiệp vụ (Shared.Kernel Error): OrderErrors, *AllocationErrors, …
+<Service>.Infrastructure/
+  RefitApi/<Context>/                     ← Refit contract + DTO wire JSON (Inventory, Coupon, …)
+  Services/                               ← HttpClient / adapter implement port từ Application
+  DependencyInjection/                     ← AddInfrastructure, Options
+<Service>.Persistence/                    ← DbContext, EF configs, Repository impl, Migrations, EfUnitOfWork
+<Service>.Application/
+  Clients/, Abstractions/                 ← Port interfaces (IInventoryClient, ISaleAllocationGate, …)
+  Exceptions/                             ← Exception biên HTTP/client (handler catch → map Result)
+  Usecases/V1/…                           ← Command, Query, Handler, Validator, Consumers
+<Service>.API/                            ← Carter modules, Program.cs, appsettings
 ```
 
-**Dependency order:**
+**Dependency order (khuyến nghị — tránh Application → Infrastructure):**
 ```
-Domain ← Infrastructure
 Domain ← Persistence
-Domain + Infrastructure + Persistence ← Application
-Application ← API
+Domain ← Infrastructure
+
+Application → Domain only
+  (KHÔNG reference Persistence; KHÔNG reference Infrastructure)
+
+Infrastructure → Application + Domain
+  (implement port trong Application; dùng type Domain/Errors khi cần)
+
+API → Application + Persistence + Infrastructure (+ Domain nếu layer API cần type Domain, ví dụ PriceMismatchError)
 ```
+
+**Lưu ý:** Service cũ có thể cho Application reference Infrastructure (legacy). **Ưu tiên:** port outbound đặt trong **Application** (`Clients` / `Abstractions`), Infrastructure chỉ implement + đăng ký DI trong `Program.cs`.
 
 ### Constraints per layer
 
 **Domain**
-- Business logic thuần — không có EF Core, MediatR, DI framework
-- Entity kế thừa `BaseEntity<TKey>` (Shared.Kernel)
-- Repository interfaces định nghĩa ở đây
+- Business logic thuần — không EF Core, MediatR, host DI
+- **`Domain/Errors/`**: toàn bộ **mã lỗi nghiệp vụ** (`Error`, `readonly Error`, `record` kế `Error`) — handler dùng `Result.Failure(...)` với các hằng/method từ đây
+- Entity kế thừa `BaseEntity<TKey>` (Shared.Kernel); repository interfaces trong `Repositories/`
 
 **Infrastructure**
-- Implementation của external concerns: HTTP clients, email, audit, payment gateway
-- Interface của các service này định nghĩa ngay trong project này (không phải Domain)
-- Application phải reference Infrastructure khi handlers inject interface từ đây (ví dụ: `IEmailSender`, `IIdentityAuditWriter`)
+- Adapters: HTTP (`HttpClient`), **Refit** (`Infrastructure/RefitApi/...`), Redis, email, gateway…
+- **Implement** interface từ `Application/Clients` hoặc `Application/Abstractions` — không duplicate port chỉ để tránh reference Application (trừ legacy)
+- Refit: interface + request/response DTO nằm **Infrastructure**; response có thể map sang DTO/aggregate đã định nghĩa ở Application hoặc Domain tùy luồng
 
 **Persistence**
 - `<Service>DbContext` kế thừa `OutboxDbContext` (hoặc `DbContext` nếu không dùng Outbox)
@@ -42,8 +58,10 @@ Application ← API
 - **Application KHÔNG được reference Persistence**
 
 **Application**
-- `AddApplication()` chỉ gọi `AddMediatorWithPielineDefault(AssemblyReference.Assembly)` — KHÔNG đăng ký Persistence hay Infrastructure
-- KHÔNG reference Persistence project
+- **`Application/Clients`**, **`Application/Abstractions`**: port (interface) mà handler inject — Infrastructure implement
+- **`Application/Exceptions`**: exception dùng khi **HTTP/client** báo lỗi (timeout, 4xx/5xx mapping); handler `catch` rồi chuyển sang `Result.Failure(Domain/Errors/...)` — **không** đặt các type này trong Domain
+- `AddApplication()`: MediatR + pipeline behaviors — **không** đăng ký DbContext, Outbox relay, hay implementation Infrastructure
+- KHÔNG reference **Persistence**; **không** reference **Infrastructure** (pattern khuyến nghị)
 
 **API**
 - Carter modules trong `Apis/` — không chứa business logic, không inject repository
@@ -94,12 +112,16 @@ app.MapCarter();
 Application/Usecases/V1/
   Command/<Name>/
     <Name>Command.cs          ← record Command + Validator (cùng file)
-    <Name>CommandHandler.cs   ← Handler
+    <Name>CommandHandler.cs ← Handler
   Query/<Name>/
     <Name>Query.cs            ← record Query + Validator (cùng file)
     <Name>QueryHandler.cs     ← Handler
-  Errors/
-    <Service>Errors.cs        ← static error codes
+Application/Clients/         ← Port interfaces (HTTP clients gọi service khác)
+Application/Abstractions/    ← Port khác (ví dụ allocation gate)
+Application/Exceptions/      ← Exception biên (HTTP/client), không thay cho Domain/Errors
+
+Domain/Errors/
+  <Service>Errors.cs         ← Mã lỗi nghiệp vụ (Error) — nguồn chân lý cho Result.Failure
 ```
 
 ### Command template
@@ -127,7 +149,7 @@ internal sealed class <Name>CommandHandler(
 {
     public async Task<Result<Guid>> Handle(<Name>Command cmd, CancellationToken ct)
     {
-        // business rules → Result.Failure(<Service>Errors.X) nếu fail
+        // business rules → Result.Failure(<Service>Errors.X) với <Service>Errors trong Domain/Errors
         // mutate entity
         // await repo.AddAsync(entity, ct);
         return Result.Success(entity.Id);
@@ -154,10 +176,16 @@ public sealed class <Name>QueryValidator : AbstractValidator<<Name>Query>
 
 ---
 
-## 4. Error Codes
+## 4. Error codes & boundary exceptions
+
+### 4.1 Mã lỗi nghiệp vụ (`Error`) — **Domain**
+
+Đặt trong **`Domain/Errors/`** (ví dụ `OrderErrors.cs`, `OrderSaleAllocationErrors.cs`). Dùng `Shared.Kernel.Primitives.Error`.
 
 ```csharp
-// Application/Usecases/V1/Errors/<Service>Errors.cs
+// Domain/Errors/<Service>Errors.cs
+namespace UrbanX.<Service>.Domain.Errors;
+
 public static class <Service>Errors
 {
     public static Error NotFound(Guid id) =>
@@ -169,9 +197,20 @@ public static class <Service>Errors
 ```
 
 **Rules:**
-- Error code format: `"<Entity>.<PascalCase>"`
-- Handler trả `Result.Failure(...)` — KHÔNG throw exception cho business errors
-- KHÔNG hardcode string error — luôn dùng static readonly hoặc static method
+- Code message: ưu tiên `"<Entity>.<PascalCase>"` hoặc mã ổn định đã thống nhất với API (`ORDER_NOT_FOUND`, …) — nhất quán trong service
+- Luật nghiệp vụ → `Result.Failure(<Service>Errors.…)` — **không** `throw` cho lỗi nghiệp vụ đã quy ước trả `Result`
+- Không hardcode chuỗi lỗi rải rác — luôn qua static trong `Domain/Errors`
+- **Legacy:** service chưa gom (ví dụ Catalog) có thể còn `Application/Usecases/V1/Errors/*Errors.cs` — khi sửa lớn nên chuyển dần sang **`Domain/Errors/`** cho thống nhất
+
+### 4.2 Exception biên HTTP / client — **Application**
+
+Đặt trong **`Application/Exceptions/`** (ví dụ `OutOfStockException`, `CouponUnavailableException`). Infrastructure (adapter) **có thể** `throw` các type này; handler **catch** rồi map sang `Result.Failure(Domain/Errors/...)`.
+
+- **Không** đưa các exception mang semantic HTTP/Refit vào Domain — Domain giữ `Error` và luật aggregate.
+
+### 4.3 API layer
+
+- Nếu endpoint cần `is` / pattern trên subtype của `Error` (ví dụ `PriceMismatchError`), **API** có thể `ProjectReference` **Domain** — chỉ khi thật sự cần; còn không thì map theo `Error.Code` string.
 
 ---
 
@@ -333,8 +372,16 @@ public sealed class <Event>Consumer(ISender sender)
 <ProjectReference Include="Shared.Application" />
 <ProjectReference Include="Shared.Messaging" />
 <ProjectReference Include="<Service>.Domain" />
-<!-- Thêm nếu cần: Shared.Contract, Shared.Outbox, <Service>.Infrastructure -->
+<!-- Thêm nếu cần: Shared.Contract, Shared.Outbox, Shared.Cache -->
 <!-- KHÔNG reference <Service>.Persistence -->
+<!-- KHÔNG reference <Service>.Infrastructure (pattern khuyến nghị — ports trong Application) -->
+```
+
+**Infrastructure.csproj** (khi có):
+```xml
+<ProjectReference Include="<Service>.Application" />
+<ProjectReference Include="<Service>.Domain" />
+<!-- Shared.* theo adapter: Contract, Outbox, Cache, … -->
 ```
 
 **API.csproj** — references tối thiểu:
@@ -344,7 +391,7 @@ public sealed class <Event>Consumer(ISender sender)
 <ProjectReference Include="Shared.Messaging" />
 <ProjectReference Include="<Service>.Application" />
 <ProjectReference Include="<Service>.Persistence" />
-<!-- Thêm nếu cần: Shared.Outbox, <Service>.Infrastructure -->
+<!-- Thêm nếu cần: Shared.Outbox, <Service>.Infrastructure, <Service>.Domain -->
 ```
 
-**NuGet:** thêm package mới chỉ sửa `Directory.Packages.props` — KHÔNG sửa `.csproj` trực tiếp.
+**NuGet:** thêm package phiên bản centralized trong `Directory.Packages.props` — không thêm `<Version>` trùng trong `.csproj` (tránh drift phiên bản).

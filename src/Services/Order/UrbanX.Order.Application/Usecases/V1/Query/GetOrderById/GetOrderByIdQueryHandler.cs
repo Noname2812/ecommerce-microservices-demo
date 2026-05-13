@@ -1,7 +1,7 @@
 using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Kernel.Primitives;
-using UrbanX.Order.Application.Usecases.V1.Errors;
+using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Repositories;
 
 namespace UrbanX.Order.Application.Usecases.V1.Query;

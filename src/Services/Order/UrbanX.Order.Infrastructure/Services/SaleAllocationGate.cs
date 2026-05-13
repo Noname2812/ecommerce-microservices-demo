@@ -2,7 +2,9 @@ using Microsoft.Extensions.Options;
 using Shared.Cache.Abstractions;
 using Shared.Kernel.Primitives;
 using StackExchange.Redis;
+using UrbanX.Order.Application.Abstractions;
 using UrbanX.Order.Domain.Errors;
+using UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
 namespace UrbanX.Order.Infrastructure.Services;
 

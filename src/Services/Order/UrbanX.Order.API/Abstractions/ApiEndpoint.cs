@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
-using UrbanX.Order.Application.Usecases.V1.Errors;
+using UrbanX.Order.Domain.Errors;
 using HttpResult = Microsoft.AspNetCore.Http.IResult;
 
 namespace UrbanX.Order.API.Abstractions;

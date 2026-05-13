@@ -1,24 +1,23 @@
 ﻿using Shared.Kernel;
 
-namespace UrbanX.Order.Infrastructure
+namespace UrbanX.Order.Infrastructure;
+
+public sealed class CompensationCollector : ICompensationCollector
 {
-    public class CompensationCollector : ICompensationCollector
+    private readonly List<RegisteredCompensation> _compensations = [];
+
+    public void Register(
+        Func<CancellationToken, Task> compensation,
+        string reason)
     {
-        private readonly List<RegisteredCompensation> _compensations = [];
+        _compensations.Add(new RegisteredCompensation(compensation, reason));
+    }
 
-        public void Register(
-            Func<CancellationToken, Task> compensation,
-            string reason)
-        {
-            _compensations.Add(new RegisteredCompensation(compensation, reason));
-        }
+    public IReadOnlyList<RegisteredCompensation> GetAll()
+        => _compensations.AsReadOnly();
 
-        public IReadOnlyList<RegisteredCompensation> GetAll()
-            => _compensations.AsReadOnly();
-
-        public void Clear()
-        {
-            _compensations.Clear();
-        }
+    public void Clear()
+    {
+        _compensations.Clear();
     }
 }

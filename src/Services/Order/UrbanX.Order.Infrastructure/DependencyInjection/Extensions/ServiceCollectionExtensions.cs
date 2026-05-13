@@ -1,14 +1,17 @@
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Polly;
 using Refit;
-using UrbanX.Order.Infrastructure.Services;
 using Shared.Kernel;
+using UrbanX.Order.Application.Abstractions;
+using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Infrastructure.DependencyInjection.Options;
+using UrbanX.Order.Infrastructure.RefitApi.Coupon;
+using UrbanX.Order.Infrastructure.RefitApi.Inventory;
+using UrbanX.Order.Infrastructure.Services;
 
 namespace UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
 

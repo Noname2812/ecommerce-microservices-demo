@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\..\ServiceDefaults\UrbanX.ServiceDefaults\UrbanX.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
+    <ProjectReference Include="..\UrbanX.Order.Domain\UrbanX.Order.Domain.csproj" />
     <ProjectReference Include="..\UrbanX.Order.Application\UrbanX.Order.Application.csproj" />
     <ProjectReference Include="..\UrbanX.Order.Infrastructure\UrbanX.Order.Infrastructure.csproj" />
     <ProjectReference Include="..\UrbanX.Order.Persistence\UrbanX.Order.Persistence.csproj" />

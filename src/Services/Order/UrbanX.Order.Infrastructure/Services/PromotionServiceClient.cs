@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Shared.Kernel.Primitives;
+using UrbanX.Order.Application.Clients;
 
 namespace UrbanX.Order.Infrastructure.Services;
 
