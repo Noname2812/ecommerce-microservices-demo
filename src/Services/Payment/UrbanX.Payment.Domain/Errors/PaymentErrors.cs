@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Payment.Application.Usecases.V1.Errors;
+namespace UrbanX.Payment.Domain.Errors;
 
 public static class PaymentErrors
 {

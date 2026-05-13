@@ -1,6 +1,6 @@
 using Shared.Application;
 using Shared.Kernel.Primitives;
-using UrbanX.Payment.Application.Usecases.V1.Errors;
+using UrbanX.Payment.Domain.Errors;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.ValueObjects;
 

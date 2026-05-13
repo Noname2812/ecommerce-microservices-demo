@@ -2,7 +2,7 @@ using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
-using UrbanX.Payment.Application.Usecases.V1.Errors;
+using UrbanX.Payment.Domain.Errors;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.ValueObjects;
 

@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
+using HttpIResult = Microsoft.AspNetCore.Http.IResult;
 
 namespace UrbanX.Payment.API.Abstractions;
 
 public abstract class ApiEndpoint
 {
-    protected static IResult HandleFailure(Result result) => result switch
+    protected static HttpIResult HandleFailure(Result result) => result switch
     {
         { IsSuccess: true } => throw new InvalidOperationException(),
         IValidationResult validationResult => Results.BadRequest(CreateProblemDetails(
@@ -13,7 +14,7 @@ public abstract class ApiEndpoint
         _ => Results.BadRequest(CreateProblemDetails("Bad Request", 400, result.Error))
     };
 
-    protected static IResult ToPaymentResult(Result result)
+    protected static HttpIResult ToPaymentResult(Result result)
     {
         if (result is IValidationResult)
             return HandleFailure(result);
@@ -30,7 +31,7 @@ public abstract class ApiEndpoint
         return Results.Problem(detail: result.Error.Message, statusCode: status, type: result.Error.Code);
     }
 
-    protected static IResult ToPaymentResult<T>(Result<T> result) =>
+    protected static HttpIResult ToPaymentResult<T>(Result<T> result) =>
         result.IsSuccess
             ? Results.Ok(result.Value)
             : ToPaymentResult((Result)result);
