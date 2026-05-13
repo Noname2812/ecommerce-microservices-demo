@@ -18,6 +18,7 @@ public sealed class GatewayRbacOptionsSetup : IConfigureOptions<GatewayRbacOptio
                 new PublicRouteEntry { PathPrefix = "/.well-known", Method = "*" },
                 new PublicRouteEntry { PathPrefix = "/api/v1/catalog", Method = "GET" },
                 new PublicRouteEntry { PathPrefix = "/api/v1/promotions/preview", Method = "POST" },
+                new PublicRouteEntry { PathPrefix = "/api/v1/payments/webhook", Method = "POST" },
                 // Identity (OIDC / management) — must be reachable before any JWT
                 new PublicRouteEntry { PathPrefix = "/connect/authorize", Method = "GET,HEAD" },
                 new PublicRouteEntry { PathPrefix = "/connect/token", Method = "POST" },

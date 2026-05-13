@@ -22,11 +22,14 @@ public sealed class GetPaymentByIdQueryHandler(IPaymentRepository paymentReposit
             payment.CustomerEmail,
             payment.ProviderName,
             payment.Amount,
+            payment.PaidAmount,
+            payment.RemainingAmount,
             payment.Currency,
             payment.ProviderTransactionId,
             payment.Status,
             payment.FailureReason,
             payment.PaidAt,
+            payment.ExpiresAt,
             payment.CreatedAt,
             payment.UpdatedAt);
 

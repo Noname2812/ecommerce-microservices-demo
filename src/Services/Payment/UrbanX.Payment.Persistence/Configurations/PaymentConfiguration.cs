@@ -20,7 +20,9 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<PaymentEnt
         builder.Property(x => x.ProviderName).HasMaxLength(100).IsRequired();
 
         builder.Property(x => x.Amount).HasColumnType("decimal(18,2)").IsRequired();
-        builder.Property(x => x.Currency).HasMaxLength(10).HasDefaultValue("VND").IsRequired();
+        builder.Property(x => x.PaidAmount).HasColumnType("decimal(18,2)").IsRequired();
+        builder.Property(x => x.RemainingAmount).HasColumnType("decimal(18,2)").IsRequired();
+        builder.Property(x => x.Currency).HasMaxLength(10).HasDefaultValue(PaymentCurrency.Vnd).IsRequired();
 
         builder.Property(x => x.ProviderTransactionId).HasMaxLength(255);
         builder.Property(x => x.ProviderResponse).HasColumnType("jsonb");
@@ -37,6 +39,9 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<PaymentEnt
         builder.HasIndex(x => x.OrderId);
         builder.HasIndex(x => x.CustomerId);
         builder.HasIndex(x => x.Status);
+        builder.HasIndex(x => new { x.Status, x.ExpiresAt });
+
+        builder.Property(x => x.ExpiresAt);
         builder.HasIndex(x => x.ProviderTransactionId);
 
         builder.HasOne(x => x.Provider)

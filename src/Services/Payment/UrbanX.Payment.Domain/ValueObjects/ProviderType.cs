@@ -6,4 +6,5 @@ public static class ProviderType
     public const string EWallet = "EWALLET";
     public const string BankTransfer = "BANK_TRANSFER";
     public const string Cod = "COD";
+    public const string Sepay = "SEPAY";
 }

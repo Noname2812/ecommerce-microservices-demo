@@ -29,6 +29,7 @@ public sealed class CompletePaymentCommandHandler(
             payment.OrderNumber,
             payment.CustomerId,
             payment.Amount,
+            payment.Amount,
             payment.Currency,
             payment.ProviderName,
             payment.ProviderTransactionId,

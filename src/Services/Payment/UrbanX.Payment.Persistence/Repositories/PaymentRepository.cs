@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Shared.Kernel.Primitives;
 using UrbanX.Payment.Domain;
+using UrbanX.Payment.Domain.ValueObjects;
 using PaymentEntity = UrbanX.Payment.Domain.Models.Payment;
 
 namespace UrbanX.Payment.Persistence.Repositories;
@@ -49,5 +50,35 @@ internal sealed class PaymentRepository(PaymentDbContext dbContext) : IPaymentRe
             .ToListAsync(cancellationToken);
 
         return PageResult<PaymentEntity>.Create(items, page, pageSize, total);
+    }
+
+    public async Task<IReadOnlyList<PaymentEntity>> FindSePayMatchCandidatesAsync(
+        string transferContent,
+        int maxCandidates,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(transferContent))
+            return [];
+
+        var take = Math.Clamp(maxCandidates, 1, PaymentQueryLimits.SePayMemoMatchCandidatesUpperBound);
+        return await dbContext.Payments
+            .AsNoTracking()
+            .Where(p => EF.Functions.ILike(transferContent, "%" + p.OrderNumber + "%"))
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetExpiredPaymentIdsAsync(int take, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return await dbContext.Payments
+            .Where(p =>
+                (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.PartiallyPaid) &&
+                p.ExpiresAt != null &&
+                p.ExpiresAt < now)
+            .OrderBy(p => p.ExpiresAt)
+            .Take(take)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
     }
 }

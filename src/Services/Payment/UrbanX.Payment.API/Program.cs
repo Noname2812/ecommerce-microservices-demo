@@ -44,6 +44,7 @@ builder.Services.AddPersistence();
 
 // Add Application
 builder.Services.AddApplication(builder.Configuration);
+builder.Services.AddHostedService<UrbanX.Payment.API.BackgroundJobs.PaymentExpirySweepHostedService>();
 
 builder.Services
     .AddApiVersioning(options => options.ReportApiVersions = true)

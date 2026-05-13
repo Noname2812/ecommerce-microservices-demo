@@ -21,8 +21,8 @@ public sealed class ListPaymentsQueryHandler(IPaymentRepository paymentRepositor
 
         var dtos = page.Items.Select(p => new PaymentDetailDto(
             p.Id, p.OrderId, p.OrderNumber, p.CustomerId, p.CustomerEmail,
-            p.ProviderName, p.Amount, p.Currency, p.ProviderTransactionId,
-            p.Status, p.FailureReason, p.PaidAt, p.CreatedAt, p.UpdatedAt))
+            p.ProviderName, p.Amount, p.PaidAmount, p.RemainingAmount, p.Currency, p.ProviderTransactionId,
+            p.Status, p.FailureReason, p.PaidAt, p.ExpiresAt, p.CreatedAt, p.UpdatedAt))
             .ToList();
 
         return Result.Success(PageResult<PaymentDetailDto>.Create(dtos, page.PageIndex, page.PageSize, page.TotalCount));

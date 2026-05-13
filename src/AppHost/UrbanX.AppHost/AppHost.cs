@@ -82,9 +82,11 @@ var orderService = builder.AddProject<Projects.UrbanX_Order_API>("order")
 
 var paymentService = builder.AddProject<Projects.UrbanX_Payment_API>("payment")
     .WithReference(paymentDb)
+    .WithReference(redis)
     .WithReference(identityService)
     .WithReference(rabbitMq)
     .WaitFor(paymentDb)
+    .WaitFor(redis)
     .WaitFor(identityService)
     .WaitFor(rabbitMq);
 

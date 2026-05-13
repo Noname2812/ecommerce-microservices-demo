@@ -23,11 +23,14 @@ public record PaymentDetailDto(
     string CustomerEmail,
     string ProviderName,
     decimal Amount,
+    decimal PaidAmount,
+    decimal RemainingAmount,
     string Currency,
     string? ProviderTransactionId,
     string Status,
     string? FailureReason,
     DateTimeOffset? PaidAt,
+    DateTimeOffset? ExpiresAt,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt
 );

@@ -14,7 +14,9 @@ public class Payment : BaseEntity<Guid>
     public string ProviderName { get; set; } = null!;
 
     public decimal Amount { get; set; }
-    public string Currency { get; set; } = "VND";
+    public decimal PaidAmount { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public string Currency { get; set; } = PaymentCurrency.Vnd;
 
     public string? ProviderTransactionId { get; set; }
     public string? ProviderResponse { get; set; }
@@ -26,6 +28,7 @@ public class Payment : BaseEntity<Guid>
     public string? IpAddress { get; set; }
 
     public DateTimeOffset? PaidAt { get; set; }
+    public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
@@ -43,6 +46,8 @@ public class Payment : BaseEntity<Guid>
     {
         Status = PaymentStatus.Completed;
         ProviderTransactionId = providerTransactionId;
+        PaidAmount = Amount;
+        RemainingAmount = 0;
         PaidAt = DateTimeOffset.UtcNow;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
@@ -57,6 +62,27 @@ public class Payment : BaseEntity<Guid>
     public void MarkCancelled()
     {
         Status = PaymentStatus.Cancelled;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>Bank transfer partial receipt (SePay). <see cref="RemainingAmount"/> may be positive until fully paid.</summary>
+    public void MarkPartiallyPaid(decimal transferAmount)
+    {
+        PaidAmount += transferAmount;
+        RemainingAmount = Amount - PaidAmount;
+        Status = PaymentStatus.PartiallyPaid;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>Bank transfer settled (exact or overpayment). <see cref="RemainingAmount"/> may be negative when overpaid.</summary>
+    public void MarkCompletedViaBankTransfer(decimal paidAmount, string providerResponse, string externalTransactionId)
+    {
+        PaidAmount = paidAmount;
+        RemainingAmount = Amount - paidAmount;
+        Status = PaymentStatus.Completed;
+        ProviderResponse = providerResponse;
+        ProviderTransactionId = externalTransactionId;
+        PaidAt = DateTimeOffset.UtcNow;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

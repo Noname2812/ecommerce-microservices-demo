@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.Models;
 using UrbanX.Payment.Domain.ValueObjects;
 using UrbanX.Payment.Persistence.Constants;
@@ -22,6 +23,14 @@ internal sealed class PaymentEventConfiguration : IEntityTypeConfiguration<Payme
             .HasMaxLength(50)
             .HasDefaultValue(EventSource.Internal)
             .IsRequired();
+
+        builder.Property(x => x.ExternalTransactionId).HasMaxLength(PaymentEventConstraints.ExternalTransactionIdMaxLength);
+        builder.Property(x => x.TransferAmount).HasColumnType("decimal(18,2)");
+
+        builder.HasIndex(x => x.ExternalTransactionId)
+            .IsUnique()
+            .HasDatabaseName("idx_payment_event_ext_tx_id")
+            .HasFilter("\"ExternalTransactionId\" IS NOT NULL");
 
         builder.HasIndex(x => new { x.PaymentId, x.CreatedAt });
 

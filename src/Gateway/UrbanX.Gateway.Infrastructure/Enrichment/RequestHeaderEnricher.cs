@@ -50,8 +50,11 @@ public sealed class RequestHeaderEnricher : IRequestHeaderEnricher
             http.Request.Headers[GatewayHeaderNames.XPermissionScope] = scope;
         }
 
+        var isSePayWebhook = http.Request.Path.StartsWithSegments("/api/v1/payments/webhook", StringComparison.OrdinalIgnoreCase);
+
         http.Request.Headers.Remove("Cookie");
-        http.Request.Headers.Remove("Authorization");
+        if (!isSePayWebhook)
+            http.Request.Headers.Remove("Authorization");
 
         if (string.IsNullOrEmpty(http.Request.Headers[GatewayHeaderNames.XForwardedFor].ToString()) && http.Connection.RemoteIpAddress is { } client)
         {

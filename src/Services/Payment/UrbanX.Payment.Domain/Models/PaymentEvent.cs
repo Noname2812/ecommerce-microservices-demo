@@ -9,6 +9,8 @@ public class PaymentEvent : BaseEntity<Guid>
     public string EventType { get; set; } = null!;
     public string? Payload { get; set; }
     public string Source { get; set; } = EventSource.Internal;
+    public string? ExternalTransactionId { get; set; }
+    public decimal? TransferAmount { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public Payment? Payment { get; set; }

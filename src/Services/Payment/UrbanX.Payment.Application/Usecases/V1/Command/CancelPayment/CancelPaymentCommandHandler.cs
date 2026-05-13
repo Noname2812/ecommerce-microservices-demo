@@ -14,7 +14,7 @@ public sealed class CancelPaymentCommandHandler(IPaymentRepository paymentReposi
         if (payment is null)
             return Result.Failure(PaymentErrors.PaymentNotFound);
 
-        if (payment.Status is not (PaymentStatus.Pending or PaymentStatus.Processing))
+        if (payment.Status is not (PaymentStatus.Pending or PaymentStatus.Processing or PaymentStatus.PartiallyPaid))
             return Result.Failure(PaymentErrors.InvalidStatusTransition);
 
         payment.MarkCancelled();

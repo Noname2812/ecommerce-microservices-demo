@@ -26,6 +26,8 @@ public abstract class ApiEndpoint
             var c when c.EndsWith("NotFound") => StatusCodes.Status404NotFound,
             "FORBIDDEN" => StatusCodes.Status403Forbidden,
             "OPTIMISTIC_LOCK_CONFLICT" => StatusCodes.Status409Conflict,
+            "Cache.LockTimeout" => StatusCodes.Status503ServiceUnavailable,
+            "Cache.LockUnavailable" => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status400BadRequest
         };
         return Results.Problem(detail: result.Error.Message, statusCode: status, type: result.Error.Code);
