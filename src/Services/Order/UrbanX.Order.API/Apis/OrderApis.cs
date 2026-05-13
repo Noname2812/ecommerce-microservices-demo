@@ -5,6 +5,7 @@ using Shared.Application.Authorization;
 using UrbanX.Order.API.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
+using UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 using UrbanX.Order.Application.Usecases.V1.Query;
 
 namespace UrbanX.Order.API.Apis;
@@ -19,6 +20,8 @@ public class OrderApis : ApiEndpoint, ICarterModule
             .MapGroup(BaseUrl).HasApiVersion(1);
 
         group.MapPost("/", PlaceOrderV1);
+        group.MapPost("/sales", PlaceSalesOrderV1)
+            .WithSummary("Place a flash-sale order");
         group.MapGet("/my", ListMyOrdersV1);
         group.MapGet("/{id:guid}", GetOrderByIdV1);
         group.MapPut("/{id:guid}/confirm", ConfirmOrderV1);
@@ -39,6 +42,24 @@ public class OrderApis : ApiEndpoint, ICarterModule
                 type: "AUTH_REQUIRED");
 
         var result = await sender.Send(body with { UserId = userId.Value }, cancellationToken);
+        if (result.IsFailure) return HandleFailure(result);
+        return Results.Created($"/api/v1/orders/{result.Value}", result.Value);
+    }
+
+    private static async Task<IResult> PlaceSalesOrderV1(
+        [FromServices] ISender sender,
+        [FromServices] IUserContext userContext,
+        [FromBody] PlaceSalesOrderCommand body,
+        CancellationToken ct)
+    {
+        var userId = userContext.UserId;
+        if (userId is null || userId == Guid.Empty)
+            return Results.Problem(
+                detail: "Authenticated user was not found in request context.",
+                statusCode: StatusCodes.Status401Unauthorized,
+                type: "AUTH_REQUIRED");
+
+        var result = await sender.Send(body with { UserId = userId.Value }, ct);
         if (result.IsFailure) return HandleFailure(result);
         return Results.Created($"/api/v1/orders/{result.Value}", result.Value);
     }

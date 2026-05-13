@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Shared.Application;
 using Shared.Cache.Abstractions;
 using Shared.Cache.DependencyInjection.Options;
+using Shared.Kernel.Primitives;
 using System.Text.Json;
 
 namespace Shared.Messaging.Behaviors;
@@ -181,6 +182,39 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
         if (cachedJson is null)
             return default;
 
+        if (typeof(TResponse) == typeof(Result<Guid>))
+        {
+            try
+            {
+                var trimmed = cachedJson.Trim();
+                if (Guid.TryParse(trimmed, out var orderId))
+                {
+                    _logger.LogInformation(
+                        "Idempotency cache hit for {RequestName} key={Key}. Returning cached order id.",
+                        _requestName, cacheKey);
+                    return (TResponse)(object)Result.Success(orderId);
+                }
+
+                var legacy = JsonSerializer.Deserialize<Result<Guid>>(cachedJson);
+                if (legacy is { IsSuccess: true })
+                {
+                    _logger.LogInformation(
+                        "Idempotency cache hit (legacy JSON) for {RequestName} key={Key}.",
+                        _requestName, cacheKey);
+                    return (TResponse)(object)legacy;
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex,
+                    "Idempotency cache entry for {RequestName} key={Key} could not be read as Result<Guid>. Removing.",
+                    _requestName, cacheKey);
+            }
+
+            await _cache.RemoveAsync(cacheKey, CancellationToken.None);
+            return default;
+        }
+
         try
         {
             var result = JsonSerializer.Deserialize<TResponse>(cachedJson);
@@ -214,21 +248,36 @@ public sealed class IdempotencyPipelineBehavior<TRequest, TResponse>
         TResponse response,
         TRequest request)
     {
+        if (response is IResult { IsFailure: true })
+            return;
+
         // TTL resolution order:
         //   1. Per-command override via IIdempotentCommand.IdempotencyTtl
         //   2. Hard-coded default (24 hours)
         var ttl = request.IdempotencyTtl ?? TimeSpan.FromHours(24);
+        var entryOptions = new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = ttl
+        };
 
         try
         {
-            await _cache.SetStringAsync(
-                cacheKey,
-                JsonSerializer.Serialize(response),
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = ttl
-                },
-                CancellationToken.None);
+            if (response is Result<Guid> rg)
+            {
+                await _cache.SetStringAsync(
+                    cacheKey,
+                    rg.Value.ToString("D"),
+                    entryOptions,
+                    CancellationToken.None);
+            }
+            else
+            {
+                await _cache.SetStringAsync(
+                    cacheKey,
+                    JsonSerializer.Serialize(response),
+                    entryOptions,
+                    CancellationToken.None);
+            }
 
             _circuit.RecordSuccess();
             _logger.LogInformation(

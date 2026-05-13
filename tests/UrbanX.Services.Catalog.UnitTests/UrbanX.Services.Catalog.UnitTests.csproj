@@ -29,10 +29,14 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.TestHelper" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Catalog\UrbanX.Catalog.Application\UrbanX.Catalog.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Order\UrbanX.Order.Application\UrbanX.Order.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Order\UrbanX.Order.Infrastructure\UrbanX.Order.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Shared\Shared.Cache\Shared.Cache.csproj" />
   </ItemGroup>
 
 </Project>

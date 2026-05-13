@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
@@ -17,6 +18,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<InventoryClientOptions>(configuration.GetSection(InventoryClientOptions.SectionName));
         services.Configure<CouponClientOptions>(configuration.GetSection(CouponClientOptions.SectionName));
+        services.Configure<SaleAllocationOptions>(configuration.GetSection(SaleAllocationOptions.SectionName));
 
         var jsonOptions = new JsonSerializerOptions
         {
@@ -94,11 +96,13 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<ICouponClient, CouponClient>();
 
-        // "promotion" matches the Aspire service name; service discovery resolves the actual URL
+        // Promotion HTTP: standard resilience (timeouts, retries, circuit breaker) for all client methods.
         services.AddHttpClient<IPromotionServiceClient, PromotionServiceClient>(client =>
-        {
-            client.BaseAddress = new Uri("http://promotion");
-        });
+            {
+                client.BaseAddress = new Uri("http://promotion");
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .AddStandardResilienceHandler();
 
         services.AddHttpClient<ICatalogServiceClient, CatalogServiceClient>(client =>
         {
@@ -106,6 +110,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<ICompensationCollector, CompensationCollector>();
+        services.AddSingleton<ISaleAllocationGate, SaleAllocationGate>();
 
         return services;
     }

@@ -6,7 +6,6 @@ namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 [RequirePermission(Permissions.Orders.Write, MinScope = PermissionScope.Own)]
 public record PlaceOrderCommand(
-    Guid UserId,
     PlaceOrderShippingAddressDto ShippingAddress,
     decimal ShippingFee,
     string? CouponCode,
@@ -55,7 +54,6 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
 
     public PlaceOrderCommandValidator()
     {
-        RuleFor(x => x.UserId).NotEmpty();
         RuleFor(x => x.ShippingAddress).NotNull();
         RuleFor(x => x.PricingSnapshot).NotNull();
         RuleFor(x => x.ShippingFee).GreaterThanOrEqualTo(0);

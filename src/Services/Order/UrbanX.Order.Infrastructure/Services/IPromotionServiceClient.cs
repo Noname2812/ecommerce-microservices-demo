@@ -18,7 +18,18 @@ public record PromotionRedeemResponse(
 
 public record PromotionItemDiscount(Guid VariantId, decimal DiscountPerUnit);
 
+public record CampaignEligibilityResponse(bool Eligible, string? Reason);
+
+/// <summary>Variant id + client line unit price (used by dev stub; real service maps variant ids to campaign prices).</summary>
+public record PromotionSalePriceLine(Guid VariantId, decimal UnitPrice);
+
 public interface IPromotionServiceClient
 {
     Task<Result<PromotionRedeemResponse>> RedeemAsync(PromotionRedeemRequest request, CancellationToken ct = default);
+
+    Task<Result<CampaignEligibilityResponse>> CheckCampaignEligibilityAsync(
+        Guid campaignId, Guid userId, int totalQty, CancellationToken ct);
+
+    Task<Result<Dictionary<Guid, decimal>>> GetSalePricesAsync(
+        Guid campaignId, IReadOnlyList<PromotionSalePriceLine> lines, CancellationToken ct);
 }

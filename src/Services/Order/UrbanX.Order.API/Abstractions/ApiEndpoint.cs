@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Usecases.V1.Errors;
+using HttpResult = Microsoft.AspNetCore.Http.IResult;
 
 namespace UrbanX.Order.API.Abstractions;
 
 public abstract class ApiEndpoint
 {
-    protected static IResult HandleFailure(Result result) => result switch
+    protected static HttpResult HandleFailure(Result result) => result switch
     {
         { IsSuccess: true } => throw new InvalidOperationException(),
         { Error.Code: "AUTH_REQUIRED" } => Results.Problem(
@@ -34,13 +35,21 @@ public abstract class ApiEndpoint
             statusCode: StatusCodes.Status422UnprocessableEntity,
             type: result.Error.Code),
         { Error.Code: "PRICE_MISMATCH" } => ToPriceMismatchResult(result.Error),
+        { Error.Code: "Order.SaleQuotaExceeded" or "Order.SaleUserLimitExceeded" } => Results.Problem(
+            detail: result.Error.Message,
+            statusCode: StatusCodes.Status409Conflict,
+            type: result.Error.Code),
+        { Error.Code: "Order.SaleWindowExpired" or "Order.SaleCampaignInvalid" or "Order.SalePricingUnavailable" or "Order.PriceMismatch" } => Results.Problem(
+            detail: result.Error.Message,
+            statusCode: StatusCodes.Status422UnprocessableEntity,
+            type: result.Error.Code),
         IValidationResult validationResult => Results.BadRequest(CreateProblemDetails(
             "Validation Error", StatusCodes.Status400BadRequest, result.Error, validationResult.Errors)),
         _ => Results.BadRequest(CreateProblemDetails(
             "Bad Request", StatusCodes.Status400BadRequest, result.Error)),
     };
 
-    protected static IResult ToOrderResult(Result result)
+    protected static HttpResult ToOrderResult(Result result)
     {
         if (result is IValidationResult)
             return HandleFailure(result);
@@ -57,6 +66,9 @@ public abstract class ApiEndpoint
             "INVENTORY_UNAVAILABLE" => StatusCodes.Status503ServiceUnavailable,
             "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" or "PRICE_MISMATCH"
                 => StatusCodes.Status422UnprocessableEntity,
+            "Order.SaleQuotaExceeded" or "Order.SaleUserLimitExceeded" => StatusCodes.Status409Conflict,
+            "Order.SaleWindowExpired" or "Order.SaleCampaignInvalid" or "Order.SalePricingUnavailable" or "Order.PriceMismatch"
+                => StatusCodes.Status422UnprocessableEntity,
             _ => StatusCodes.Status400BadRequest
         };
 
@@ -66,7 +78,7 @@ public abstract class ApiEndpoint
         return Results.Problem(detail: result.Error.Message, statusCode: status, type: result.Error.Code);
     }
 
-    protected static IResult ToOrderResult<T>(Result<T> result) =>
+    protected static HttpResult ToOrderResult<T>(Result<T> result) =>
         result.IsSuccess ? Results.Ok(result.Value) : ToOrderResult((Result)result);
 
     private static ProblemDetails CreateProblemDetails(
@@ -79,7 +91,7 @@ public abstract class ApiEndpoint
         Extensions = { { nameof(errors), errors } }
     };
 
-    private static IResult ToPriceMismatchResult(Error error, int statusCode = StatusCodes.Status422UnprocessableEntity)
+    private static HttpResult ToPriceMismatchResult(Error error, int statusCode = StatusCodes.Status422UnprocessableEntity)
     {
         var details = new ProblemDetails
         {

@@ -20,5 +20,23 @@ internal sealed class PromotionServiceClient(HttpClient httpClient) : IPromotion
         return Result.Success(result!);
     }
 
+    public async Task<Result<CampaignEligibilityResponse>> CheckCampaignEligibilityAsync(
+        Guid campaignId, Guid userId, int totalQty, CancellationToken ct)
+    {
+        await Task.CompletedTask;
+        return Result.Success(new CampaignEligibilityResponse(true, null));
+    }
+
+    public async Task<Result<Dictionary<Guid, decimal>>> GetSalePricesAsync(
+        Guid campaignId, IReadOnlyList<PromotionSalePriceLine> lines, CancellationToken ct)
+    {
+        await Task.CompletedTask;
+        // Dev stub: echo line prices per variant until Promotion HTTP exposes campaign prices.
+        var dict = lines
+            .GroupBy(l => l.VariantId)
+            .ToDictionary(g => g.Key, g => g.Last().UnitPrice);
+        return Result.Success(dict);
+    }
+
     private sealed record ProblemResponse(string? Type, string? Detail);
 }

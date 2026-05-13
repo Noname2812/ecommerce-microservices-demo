@@ -36,6 +36,8 @@ public sealed class Order : BaseEntity<Guid>
     public string? InternalNote { get; private set; }
     public string? CancelledReason { get; private set; }
     public string IdempotencyKey { get; private set; } = null!;
+    public string OrderType { get; private set; } = Models.OrderType.Normal;
+    public Guid? CampaignId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public DateTimeOffset? DeletedAt { get; private set; }
@@ -60,7 +62,9 @@ public sealed class Order : BaseEntity<Guid>
         decimal couponDiscount,
         string? customerNote,
         string idempotencyKey,
-        IReadOnlyList<NewOrderItemSpec> items)
+        IReadOnlyList<NewOrderItemSpec> items,
+        string orderType = Models.OrderType.Normal,
+        Guid? campaignId = null)
     {
         var now = DateTimeOffset.UtcNow;
         var orderId = Guid.NewGuid();
@@ -84,7 +88,9 @@ public sealed class Order : BaseEntity<Guid>
             Status = OrderStatus.Pending,
             PaymentStatus = Models.PaymentStatus.Unpaid,
             CreatedAt = now,
-            UpdatedAt = now
+            UpdatedAt = now,
+            OrderType = orderType,
+            CampaignId = campaignId
         };
 
         foreach (var spec in items)
@@ -99,8 +105,10 @@ public sealed class Order : BaseEntity<Guid>
         }
 
         order.Subtotal = order._items.Sum(i => i.Subtotal);
-        order.DiscountAmount = couponDiscount + order._items.Sum(i => i.DiscountAmount);
-        order.TotalAmount = order.Subtotal + shippingFee + order.TaxAmount - couponDiscount;
+        var grossBeforeCoupon = order.Subtotal + shippingFee + order.TaxAmount;
+        var rawDiscountTotal = couponDiscount + order._items.Sum(i => i.DiscountAmount);
+        order.DiscountAmount = Math.Min(rawDiscountTotal, grossBeforeCoupon);
+        order.TotalAmount = Math.Max(0, grossBeforeCoupon - couponDiscount);
         order.FinalAmount = order.TotalAmount;
         order.PricingSnapshot = JsonSerializer.Serialize(new
         {
@@ -137,6 +145,22 @@ public sealed class Order : BaseEntity<Guid>
         var prev = Status;
         ReservationId = reservationId;
         CouponClaimId = claimId;
+        Status = OrderStatus.Confirmed;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        _statusHistory.Add(OrderStatusHistory.Create(
+            Id, prev, OrderStatus.Confirmed, null, changedById, changedByName));
+    }
+
+    public void SetConfirmedAsSalesOrder(
+        Guid reservationId, Guid? claimId,
+        Guid campaignId,
+        Guid changedById, string changedByName)
+    {
+        var prev = Status;
+        ReservationId = reservationId;
+        CouponClaimId = claimId;
+        CampaignId = campaignId;
+        OrderType = Models.OrderType.Sales;
         Status = OrderStatus.Confirmed;
         UpdatedAt = DateTimeOffset.UtcNow;
         _statusHistory.Add(OrderStatusHistory.Create(

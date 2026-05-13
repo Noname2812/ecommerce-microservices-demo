@@ -74,6 +74,22 @@ public static class GatewayRateLimitingServiceCollectionExtensions
                         });
                 }
 
+                if (p.StartsWithSegments(new PathString("/api/v1/orders/sales"), StringComparison.OrdinalIgnoreCase, out var _)
+                    && httpContext.Request.Method is "POST")
+                {
+                    var sKey = "sales-order:" + GetUserIdOrIp(httpContext);
+                    return RateLimitPartition.GetSlidingWindowLimiter(
+                        sKey,
+                        _ => new SlidingWindowRateLimiterOptions
+                        {
+                            AutoReplenishment = true,
+                            SegmentsPerWindow = segs,
+                            PermitLimit = rate.SalesOrderEndpoint.PermitLimit,
+                            Window = TimeSpan.FromSeconds(rate.SalesOrderEndpoint.WindowSeconds),
+                            QueueLimit = 0
+                        });
+                }
+
                 if (IsWriteMethod(httpContext.Request.Method))
                 {
                     var wKey = "write:" + GetUserIdOrIp(httpContext);

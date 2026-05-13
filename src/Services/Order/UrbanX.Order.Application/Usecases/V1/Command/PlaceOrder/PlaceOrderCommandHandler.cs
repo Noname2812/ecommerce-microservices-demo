@@ -33,9 +33,6 @@ public sealed class PlaceOrderCommandHandler(
         if (currentUserId is null || currentUserId == Guid.Empty)
             return Result.Failure<Guid>(OrderErrors.Forbidden);
 
-        if (request.UserId != currentUserId.Value)
-            return Result.Failure<Guid>(OrderErrors.Forbidden);
-
         var userId = currentUserId.Value;
 
         var validationResult = await ValidateBusinessRulesAsync(

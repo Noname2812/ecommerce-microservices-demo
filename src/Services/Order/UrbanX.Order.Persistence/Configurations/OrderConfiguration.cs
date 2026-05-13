@@ -61,6 +61,20 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<OrderEntity>
         builder.HasIndex(o => o.IdempotencyKey)
             .IsUnique();
 
+        builder.Property(o => o.OrderType)
+            .HasColumnName("order_type")
+            .HasMaxLength(20)
+            .IsRequired()
+            .HasDefaultValue("Normal");
+
+        builder.Property(o => o.CampaignId)
+            .HasColumnName("campaign_id")
+            .IsRequired(false);
+
+        builder.HasIndex(o => o.CampaignId)
+            .HasDatabaseName("IX_orders_campaign_id")
+            .HasFilter("campaign_id IS NOT NULL");
+
         builder.HasIndex(o => o.CreatedAt);
         builder.HasIndex(o => new { o.UserId, o.CreatedAt })
             .IsDescending(false, true);

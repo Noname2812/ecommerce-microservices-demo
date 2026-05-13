@@ -1,4 +1,5 @@
 using Shared.Kernel.Primitives;
+using UrbanX.Order.Domain.Errors;
 
 namespace UrbanX.Order.Application.Usecases.V1.Errors;
 
@@ -36,6 +37,23 @@ public static class OrderErrors
 
     public static Error CouponClaimFailed(string message) =>
         new("COUPON_CLAIM_FAILED", message);
+
+    public static readonly Error SaleQuotaExceeded = OrderSaleAllocationErrors.SaleQuotaExceeded;
+
+    public static readonly Error SaleUserLimitExceeded = OrderSaleAllocationErrors.SaleUserLimitExceeded;
+
+    public static Error SaleCampaignInvalid(string reason) =>
+        new("Order.SaleCampaignInvalid", reason);
+
+    public static readonly Error SaleWindowExpired =
+        new("Order.SaleWindowExpired", "Pricing snapshot has expired. Please refresh and try again.");
+
+    public static readonly Error SalePricingUnavailable =
+        new("Order.SalePricingUnavailable", "Unable to retrieve sale prices. Please try again.");
+
+    public static Error PriceMismatch(string sku, decimal expected, decimal actual) =>
+        new("Order.PriceMismatch",
+            $"Price mismatch for SKU '{sku}': expected {expected:F2}, got {actual:F2}.");
 }
 
 public sealed class PriceMismatchError : Error

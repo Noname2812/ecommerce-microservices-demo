@@ -9,6 +9,7 @@ public sealed class RateLimitingOptions
     public GlobalLimit AuthEndpoints { get; set; } = new();
     public GlobalLimit AuthenticatedUser { get; set; } = new();
     public GlobalLimit WriteOperations { get; set; } = new();
+    public GlobalLimit SalesOrderEndpoint { get; set; } = new();
     public int SlidingWindowSegments { get; set; } = 6;
 
     public sealed class GlobalLimit
