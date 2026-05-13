@@ -1,12 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ValueObjects;
+using UrbanX.Catalog.Persistence.Projections;
 
 namespace UrbanX.Catalog.Persistence.Seeding;
 
 /// <summary>
 /// Dev/test catalog seed: category, brand, and 10 active products with one variant each.
 /// Product and variant IDs match the seed in the Inventory service so stock lines align.
+/// Also seeds the read schema projections (product_list_view / product_detail_view) so
+/// list/detail/search endpoints have data without waiting for the outbox → projection pipeline.
 /// </summary>
 public static class CatalogDataSeeder
 {
@@ -24,8 +27,17 @@ public static class CatalogDataSeeder
 
     public static async Task SeedIfEmptyAsync(CatalogDbContext context, CancellationToken cancellationToken = default)
     {
-        if (await context.Products.AnyAsync(cancellationToken))
+        var hasWriteData = await context.Products.AnyAsync(cancellationToken);
+        var hasReadData = await context.ProductListViews.AnyAsync(cancellationToken);
+
+        if (hasWriteData && hasReadData)
             return;
+
+        if (hasWriteData)
+        {
+            await SeedReadFromExistingAsync(context, cancellationToken);
+            return;
+        }
 
         var utc = DateTimeOffset.UtcNow;
 
@@ -98,6 +110,54 @@ public static class CatalogDataSeeder
                 productId: SeedProductId(n));
 
             context.Products.Add(product);
+
+            var (listView, detailView) = ProductProjectionBuilder.Build(product);
+            listView.ProjectionVersion = 1;
+            detailView.ProjectionVersion = 1;
+            context.ProductListViews.Add(listView);
+            context.ProductDetailViews.Add(detailView);
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Rebuild read-schema views from products already present in the write schema.
+    /// Useful when an earlier seed run (or manual insert) populated write data without projections.
+    /// </summary>
+    private static async Task SeedReadFromExistingAsync(CatalogDbContext context, CancellationToken cancellationToken)
+    {
+        var products = await context.Products
+            .AsNoTracking()
+            .Include(p => p.Variants).ThenInclude(v => v.AttributeValues).ThenInclude(av => av.AttributeDefinition)
+            .Include(p => p.Images)
+            .Where(p => p.DeletedAt == null)
+            .ToListAsync(cancellationToken);
+
+        if (products.Count == 0)
+            return;
+
+        var existingListIds = await context.ProductListViews
+            .Select(v => v.ProductId)
+            .ToListAsync(cancellationToken);
+        var existingListSet = existingListIds.ToHashSet();
+
+        var existingDetailIds = await context.ProductDetailViews
+            .Select(v => v.ProductId)
+            .ToListAsync(cancellationToken);
+        var existingDetailSet = existingDetailIds.ToHashSet();
+
+        foreach (var product in products)
+        {
+            var (listView, detailView) = ProductProjectionBuilder.Build(product);
+            listView.ProjectionVersion = 1;
+            detailView.ProjectionVersion = 1;
+
+            if (!existingListSet.Contains(listView.ProductId))
+                context.ProductListViews.Add(listView);
+
+            if (!existingDetailSet.Contains(detailView.ProductId))
+                context.ProductDetailViews.Add(detailView);
         }
 
         await context.SaveChangesAsync(cancellationToken);
