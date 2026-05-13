@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ReadModels;
@@ -10,6 +12,19 @@ internal static class ProductProjectionBuilder
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+
+    private static string NormalizeText(string? input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+        var decomposed = input.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(decomposed.Length);
+        foreach (var c in decomposed)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        }
+        return sb.ToString().Normalize(NormalizationForm.FormC).ToLowerInvariant();
+    }
 
     public static (ProductListView List, ProductDetailView Detail) Build(Product product)
     {
@@ -39,7 +54,9 @@ internal static class ProductProjectionBuilder
             Tags = tags,
             UpdatedAt = product.UpdatedAt,
             DeletedAt = product.DeletedAt,
-            ProjectionVersion = 1
+            ProjectionVersion = 1,
+            NameNormalized = NormalizeText(product.Name),
+            SkuNormalized = NormalizeText(product.Sku)
         };
 
         var variants = product.Variants

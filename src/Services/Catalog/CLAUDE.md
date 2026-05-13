@@ -253,12 +253,17 @@ Extends `OutboxDbContext` (from `Shared.Outbox`). DbSets:
 - All PKs: `ValueGeneratedNever` (application assigns GUIDs)
 - Prices: `HasPrecision(18, 2)` across all price columns
 
+**Read model search columns (`product_list_views`):**
+- `name_normalized` — .NET-computed lowercase+unaccented name (`ProductProjectionBuilder.NormalizeText`); GIN trigram index `ix_plv_name_normalized_trgm`
+- `sku_normalized` — .NET-computed lowercase SKU; GIN trigram index `ix_plv_sku_normalized_trgm`
+- `search_vector` — PostgreSQL `GENERATED ALWAYS AS STORED` tsvector từ `name_normalized + sku_normalized + tags`; GIN index `ix_plv_search_vector_gin`
+- `tags` — GIN index `ix_plv_tags_gin` cho `@>` array containment queries
+
 ### Migrations (in `UrbanX.Catalog.Persistence/Migrations/`)
 
 | Migration | Changes |
 |---|---|
-| `20260423021423_InitialCreate` | All base tables, FKs, indexes, `pg_trgm`, outbox table |
-| `20260423025434_ProductRowVersionAndHistory` | RowVersion + DeletedAt on products/variants; price + SKU history tables |
+| `20260513125724_InitialCreate` | All tables, FKs, indexes, `pg_trgm`, outbox, read model với `name_normalized` / `sku_normalized` / `search_vector` computed column và 4 GIN indexes |
 
 Run migrations: `cd src/Services/Catalog/UrbanX.Catalog.Persistence && dotnet ef migrations add <Name>`
 

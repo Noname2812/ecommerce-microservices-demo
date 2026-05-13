@@ -19,4 +19,6 @@ public sealed class ProductListView
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public int ProjectionVersion { get; set; }
+    public string NameNormalized { get; set; } = string.Empty;
+    public string SkuNormalized { get; set; } = string.Empty;
 }

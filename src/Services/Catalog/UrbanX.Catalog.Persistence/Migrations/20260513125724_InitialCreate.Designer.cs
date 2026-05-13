@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 using UrbanX.Catalog.Persistence;
 
 #nullable disable
@@ -13,8 +14,8 @@ using UrbanX.Catalog.Persistence;
 namespace UrbanX.Catalog.Persistence.Migrations
 {
     [DbContext(typeof(CatalogDbContext))]
-    [Migration("20260511032718_AddReadSchemaViews")]
-    partial class AddReadSchemaViews
+    [Migration("20260513125724_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +25,7 @@ namespace UrbanX.Catalog.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.6")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Shared.Outbox.CompensationOutboxMessage", b =>
@@ -671,12 +673,25 @@ namespace UrbanX.Catalog.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("NameNormalized")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("PrimaryImageUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
                     b.Property<int>("ProjectionVersion")
                         .HasColumnType("integer");
+
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(name_normalized,'') || ' ' || coalesce(sku_normalized,'') || ' ' || coalesce(array_to_string(tags,' '),''))", true);
 
                     b.Property<Guid>("SellerId")
                         .HasColumnType("uuid");
@@ -689,6 +704,13 @@ namespace UrbanX.Catalog.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SkuNormalized")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -708,6 +730,28 @@ namespace UrbanX.Catalog.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("ProductId");
+
+                    b.HasIndex("NameNormalized")
+                        .HasDatabaseName("ix_plv_name_normalized_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("NameNormalized"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("NameNormalized"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("ix_plv_search_vector_gin");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("SkuNormalized")
+                        .HasDatabaseName("ix_plv_sku_normalized_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SkuNormalized"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("SkuNormalized"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex("Tags")
+                        .HasDatabaseName("ix_plv_tags_gin");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Tags"), "gin");
 
                     b.HasIndex("UpdatedAt");
 

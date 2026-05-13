@@ -66,7 +66,7 @@ Cursor là base64 của chuỗi `{updatedAt ISO8601}|{productId}`, encode ở se
 
 ## DB Index
 
-Migration `20260511100000_AddProductSearch` tạo partial index:
+Migration `20260513125724_InitialCreate` tạo partial index:
 
 ```sql
 CREATE INDEX idx_plv_keyset
