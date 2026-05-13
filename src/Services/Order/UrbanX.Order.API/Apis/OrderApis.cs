@@ -41,7 +41,7 @@ public class OrderApis : ApiEndpoint, ICarterModule
                 statusCode: StatusCodes.Status401Unauthorized,
                 type: "AUTH_REQUIRED");
 
-        var result = await sender.Send(body with { UserId = userId.Value }, cancellationToken);
+        var result = await sender.Send(body, cancellationToken);
         if (result.IsFailure) return HandleFailure(result);
         return Results.Created($"/api/v1/orders/{result.Value}", result.Value);
     }
@@ -59,7 +59,7 @@ public class OrderApis : ApiEndpoint, ICarterModule
                 statusCode: StatusCodes.Status401Unauthorized,
                 type: "AUTH_REQUIRED");
 
-        var result = await sender.Send(body with { UserId = userId.Value }, ct);
+        var result = await sender.Send(body, ct);
         if (result.IsFailure) return HandleFailure(result);
         return Results.Created($"/api/v1/orders/{result.Value}", result.Value);
     }

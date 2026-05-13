@@ -84,8 +84,17 @@ public sealed class PlaceSalesOrderCommandHandler(
                 .Select(i => new PromotionRedeemItemDto(i.VariantId, i.ProductId, i.Quantity, i.UnitPrice))
                 .ToList();
 
-            var promotionResult = await promotionClient.RedeemAsync(
-                new PromotionRedeemRequest(OrderId: null, userId, request.CouponCode, subTotal, redeemItems), ct);
+            Result<PromotionRedeemResponse> promotionResult;
+            try
+            {
+                promotionResult = await promotionClient.RedeemAsync(
+                    new PromotionRedeemRequest(OrderId: null, userId, request.CouponCode, subTotal, redeemItems), ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                return Result.Failure<Guid>(OrderErrors.PromotionInvalid(ex.Message));
+            }
 
             if (promotionResult.IsFailure)
                 return Result.Failure<Guid>(OrderErrors.PromotionInvalid(promotionResult.Error.Message));

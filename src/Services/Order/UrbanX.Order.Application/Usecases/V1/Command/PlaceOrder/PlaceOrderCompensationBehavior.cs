@@ -20,22 +20,23 @@ public sealed class PlaceOrderCompensationBehavior(
     {
         try
         {
-            return await next(cancellationToken);
+            var result = await next(cancellationToken);
+            if (result.IsFailure && compensationContext.ReservationId is Guid)
+                await TryWriteCompensationAsync(result.Error.Code);
+            return result;
         }
         catch (Exception ex)
         {
-            await TryWriteCompensationAsync(ex);
+            await TryWriteCompensationAsync(ex switch
+            {
+                OperationCanceledException => "ORDER_CANCELLED",
+                _ => "ORDER_SAVE_FAILED"
+            });
             throw;
         }
     }
 
-    private static string GetReason(Exception ex) => ex switch
-    {
-        OperationCanceledException => "ORDER_CANCELLED",
-        _ => "ORDER_SAVE_FAILED"
-    };
-
-    private async Task TryWriteCompensationAsync(Exception originalException)
+    private async Task TryWriteCompensationAsync(string reason)
     {
         if (compensationContext.ReservationId is not Guid reservationId)
             return;
@@ -45,8 +46,6 @@ public sealed class PlaceOrderCompensationBehavior(
             await using var scope = scopeFactory.CreateAsyncScope();
             var writer = scope.ServiceProvider.GetRequiredService<ICompensationOutboxWriter>();
             var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-            var reason = GetReason(originalException);
 
             await uow.ExecuteInTransactionAsync(async () =>
             {
@@ -70,10 +69,10 @@ public sealed class PlaceOrderCompensationBehavior(
         {
             logger.LogError(
                 compensationEx,
-                "Failed to write compensation after order save failure. ReservationId={ReservationId} ClaimId={ClaimId} OriginalError={OriginalError}",
+                "Failed to write compensation after order failure. ReservationId={ReservationId} ClaimId={ClaimId} Reason={Reason}",
                 compensationContext.ReservationId,
                 compensationContext.CouponClaimId,
-                originalException.Message);
+                reason);
         }
     }
 }

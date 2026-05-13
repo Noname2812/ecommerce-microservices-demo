@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Options;
 using Shared.Kernel.Primitives;
+using UrbanX.Order.Application.Options;
 using UrbanX.Order.Application.Usecases.V1.Errors;
 using UrbanX.Order.Infrastructure.Services;
 
@@ -27,24 +29,17 @@ public sealed class ProductValidator(ICatalogServiceClient catalogServiceClient)
     }
 }
 
-public sealed class ShippingValidator : IShippingValidator
+public sealed class ShippingValidator(IOptions<ShippingOptions> options) : IShippingValidator
 {
-    private static readonly HashSet<string> SupportedRegions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "hanoi:badinh",
-        "hanoi:caugiay",
-        "hanoi:thanhxuan",
-        "hochiminh:district 1",
-        "hochiminh:district 7",
-        "danang:haichau"
-    };
+    private readonly HashSet<string> _supportedRegions =
+        new(options.Value.SupportedRegions, StringComparer.OrdinalIgnoreCase);
 
     public Task<Result> ValidateAsync(PlaceOrderShippingAddressDto shippingAddress, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var regionKey = $"{Normalize(shippingAddress.City)}:{Normalize(shippingAddress.District)}";
-        if (!SupportedRegions.Contains(regionKey))
+        if (!_supportedRegions.Contains(regionKey))
             return Task.FromResult(Result.Failure(OrderErrors.ShippingNotAvailable(
                 shippingAddress.City,
                 shippingAddress.District)));

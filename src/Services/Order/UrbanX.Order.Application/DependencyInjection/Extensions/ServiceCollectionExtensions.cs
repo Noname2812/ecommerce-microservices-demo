@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shared.Kernel.Primitives;
 using Shared.Messaging.DependencyInjection.Extensions;
+using UrbanX.Order.Application.Options;
 using UrbanX.Order.Application.Usecases.V1.Command;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
@@ -13,6 +14,8 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<ShippingOptions>(configuration.GetSection(ShippingOptions.SectionName));
+
         services.AddScoped<PlaceOrderCompensationContext>();
         services.AddScoped<PlaceSalesOrderCompensationContext>();
         services.AddScoped<IPipelineBehavior<PlaceOrderCommand, Result<Guid>>, PlaceOrderCompensationBehavior>();
