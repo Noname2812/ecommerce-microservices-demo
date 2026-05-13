@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
+using HttpResult = Microsoft.AspNetCore.Http.IResult;
 
 namespace UrbanX.Identity.API.Abstractions;
 
 public abstract class ApiEndpoint
 {
-    protected static IResult HandleFailure(Result result) => result switch
+    protected static HttpResult HandleFailure(Result result) => result switch
     {
         { IsSuccess: true } => throw new InvalidOperationException(),
         IValidationResult validationResult => Results.BadRequest(CreateProblemDetails(
@@ -13,7 +14,7 @@ public abstract class ApiEndpoint
         _ => Results.BadRequest(CreateProblemDetails("Bad Request", 400, result.Error))
     };
 
-    protected static IResult ToIdentityResult(Result result)
+    protected static HttpResult ToIdentityResult(Result result)
     {
         if (result is IValidationResult)
             return HandleFailure(result);
@@ -32,7 +33,7 @@ public abstract class ApiEndpoint
         return Results.Problem(detail: result.Error.Message, statusCode: status, type: result.Error.Code);
     }
 
-    protected static IResult ToIdentityResult<T>(Result<T> result) =>
+    protected static HttpResult ToIdentityResult<T>(Result<T> result) =>
         result.IsSuccess
             ? Results.Ok(result.Value)
             : ToIdentityResult((Result)result);

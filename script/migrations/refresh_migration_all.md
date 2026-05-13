@@ -3,7 +3,7 @@
 Chay 1 lenh tu root project:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\script\refresh_migration_all.ps1
+powershell -ExecutionPolicy Bypass -File .\script\migrations\refresh_migration_all.ps1
 ```
 
 Script se tu dong:

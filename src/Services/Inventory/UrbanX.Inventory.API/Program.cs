@@ -1,6 +1,5 @@
 using Carter;
 using Hangfire;
-using Hangfire.InMemory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Shared.Cache.DependencyInjection.Extensions;
@@ -8,6 +7,7 @@ using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
+using UrbanX.Inventory.Application.DependencyInjection.Options;
 using UrbanX.Inventory.Application.Jobs;
 using UrbanX.Inventory.Application.Messaging;
 using UrbanX.Inventory.Persistence;

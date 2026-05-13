@@ -2,7 +2,6 @@ using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Shared.Kernel.Primitives;
 using UrbanX.Catalog.Domain;
-using UrbanX.Catalog.Persistence.DependencyInjection;
 
 namespace UrbanX.Catalog.Persistence.DependencyInjection.Extensions
 {

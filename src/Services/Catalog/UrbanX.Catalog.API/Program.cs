@@ -22,6 +22,11 @@ builder.Services.AddOpenApi();
 
 // Database
 builder.AddNpgsqlDbContext<CatalogDbContext>("catalogdb");
+
+var connectionString =
+    builder.Configuration.GetConnectionString("catalogdb");
+builder.Services.AddNpgsqlDataSource(connectionString!);
+
 builder.Services.AddOutbox<CatalogDbContext>(
     configureDb: null,
     builder.Configuration
