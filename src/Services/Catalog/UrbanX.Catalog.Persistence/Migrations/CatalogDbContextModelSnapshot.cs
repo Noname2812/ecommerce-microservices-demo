@@ -688,7 +688,7 @@ namespace UrbanX.Catalog.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
                         .HasColumnName("search_vector")
-                        .HasComputedColumnSql("to_tsvector('simple', coalesce(name_normalized,'') || ' ' || coalesce(sku_normalized,'') || ' ' || coalesce(array_to_string(tags,' '),''))", true);
+                        .HasComputedColumnSql("to_tsvector('simple', coalesce(NameNormalized,'') || ' ' || coalesce(SkuNormalized,'') || ' ' || coalesce(array_to_string(tags,' '),''))", true);
 
                     b.Property<Guid>("SellerId")
                         .HasColumnType("uuid");

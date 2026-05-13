@@ -425,3 +425,4 @@ FodyWeavers.xsd
 *.msm
 *.msp
 /src/Services/Identity/UrbanX.Services.Identity/keys
+**/Migrations/*.cs

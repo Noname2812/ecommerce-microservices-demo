@@ -43,8 +43,8 @@ internal sealed class ProductListViewConfiguration : IEntityTypeConfiguration<Pr
             .HasColumnName("search_vector")
             .HasComputedColumnSql(
                 "to_tsvector('simple'," +
-                " coalesce(name_normalized,'') || ' ' ||" +
-                " coalesce(sku_normalized,'') || ' ' ||" +
+                " coalesce(NameNormalized,'') || ' ' ||" +
+                " coalesce(SkuNormalized,'') || ' ' ||" +
                 " coalesce(array_to_string(tags,' '),''))",
                 stored: true);
 
