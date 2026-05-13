@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Promotion.Application.Usecases.V1.Errors;
+namespace UrbanX.Promotion.Domain.Errors;
 
 public static class PromotionErrors
 {

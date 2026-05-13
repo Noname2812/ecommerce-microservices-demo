@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
-using UrbanX.Promotion.Application.Usecases.V1.Errors;
+using UrbanX.Promotion.Domain.Errors;
+using HttpIResult = Microsoft.AspNetCore.Http.IResult;
 
 namespace UrbanX.Promotion.API.Abstractions;
 
 public abstract class ApiEndpoint
 {
-    protected static IResult HandleFailure(Result result) => result switch
+    protected static HttpIResult HandleFailure(Result result) => result switch
     {
         { IsSuccess: true } => throw new InvalidOperationException(),
         IValidationResult validationResult => Results.BadRequest(CreateProblemDetails(
@@ -15,7 +16,7 @@ public abstract class ApiEndpoint
         _ => Results.BadRequest(CreateProblemDetails("Bad Request", 400, result.Error))
     };
 
-    protected static IResult ToPromotionResult(Result result)
+    protected static HttpIResult ToPromotionResult(Result result)
     {
         if (result is IValidationResult)
             return HandleFailure(result);
@@ -36,7 +37,7 @@ public abstract class ApiEndpoint
         return Results.Problem(detail: result.Error.Message, statusCode: status, type: result.Error.Code);
     }
 
-    protected static IResult ToPromotionResult<T>(Result<T> result) =>
+    protected static HttpIResult ToPromotionResult<T>(Result<T> result) =>
         result.IsSuccess
             ? Results.Ok(result.Value)
             : ToPromotionResult((Result)result);
@@ -44,7 +45,7 @@ public abstract class ApiEndpoint
     /// <summary>
     /// Maps DELETE release outcomes: 404 missing claim; 409 when status is not <c>CLAIMED</c>/<c>RELEASED</c> semantics (lifecycle conflict, not coupon quota exhaustion).
     /// </summary>
-    protected static IResult ToReleaseCouponClaimResult(Result result)
+    protected static HttpIResult ToReleaseCouponClaimResult(Result result)
     {
         if (result.IsSuccess)
             return Results.Ok();
@@ -62,7 +63,7 @@ public abstract class ApiEndpoint
         return Results.Problem(detail: result.Error.Message, statusCode: statusCode, type: result.Error.Code);
     }
 
-    protected static IResult ToCouponClaimResult(Result<ClaimCouponResult> result)
+    protected static HttpIResult ToCouponClaimResult(Result<ClaimCouponResult> result)
     {
         if (result.IsSuccess)
         {

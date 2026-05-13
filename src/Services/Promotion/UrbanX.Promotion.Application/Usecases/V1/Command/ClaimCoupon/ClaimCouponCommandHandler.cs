@@ -1,6 +1,6 @@
 using Shared.Application;
 using Shared.Kernel.Primitives;
-using UrbanX.Promotion.Application.Usecases.V1.Errors;
+using UrbanX.Promotion.Domain.Errors;
 using UrbanX.Promotion.Application.Abstractions;
 using UrbanX.Promotion.Domain.Models;
 using UrbanX.Promotion.Domain.Repositories;

@@ -2,7 +2,7 @@ using Shared.Application;
 using Shared.Cache.Abstractions;
 using Shared.Kernel.Primitives;
 using StackExchange.Redis;
-using UrbanX.Promotion.Application.Usecases.V1.Errors;
+using UrbanX.Promotion.Domain.Errors;
 using UrbanX.Promotion.Domain.Repositories;
 using UrbanX.Promotion.Domain.ValueObjects;
 

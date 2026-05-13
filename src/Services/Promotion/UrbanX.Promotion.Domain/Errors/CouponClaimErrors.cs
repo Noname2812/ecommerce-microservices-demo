@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Promotion.Application.Usecases.V1.Errors;
+namespace UrbanX.Promotion.Domain.Errors;
 
 /// <summary>Error codes for internal coupon claim lifecycle (DELETE release).</summary>
 public static class CouponClaimErrors
