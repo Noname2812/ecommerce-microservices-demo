@@ -3,7 +3,7 @@ using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Command.UpdateProductBasicInfo;
-using UrbanX.Catalog.Application.Usecases.V1.Errors;
+using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ValueObjects;

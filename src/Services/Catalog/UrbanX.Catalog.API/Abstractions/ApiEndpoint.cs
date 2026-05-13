@@ -1,11 +1,12 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Shared.Kernel.Primitives;
+using HttpIResult = Microsoft.AspNetCore.Http.IResult;
 
 namespace UrbanX.Catalog.API.Abstractions
 {
     public abstract class ApiEndpoint
     {
-        protected static IResult HandleFailure(Result result) => result switch
+        protected static HttpIResult HandleFailure(Result result) => result switch
         {
             { IsSuccess: true } => throw new InvalidOperationException(),
             { Error.Code: "AUTH_REQUIRED" } => Results.Problem(
@@ -23,7 +24,7 @@ namespace UrbanX.Catalog.API.Abstractions
         };
 
         /// <summary>Maps common catalog error <see cref="Error.Code"/> to HTTP status (404, 403, 409, 503).</summary>
-        protected static IResult ToCatalogResult(Result result)
+        protected static HttpIResult ToCatalogResult(Result result)
         {
             if (result is IValidationResult)
                 return HandleFailure(result);
@@ -34,7 +35,7 @@ namespace UrbanX.Catalog.API.Abstractions
             {
                 "AUTH_REQUIRED" => StatusCodes.Status401Unauthorized,
                 "FORBIDDEN" => StatusCodes.Status403Forbidden,
-                "PRODUCT_NOT_FOUND" or "VARIANT_NOT_FOUND" => StatusCodes.Status404NotFound,
+                "PRODUCT_NOT_FOUND" or "VARIANT_NOT_FOUND" or "CATEGORY_NOT_FOUND" or "BRAND_NOT_FOUND" => StatusCodes.Status404NotFound,
                 "OPTIMISTIC_LOCK_CONFLICT" => StatusCodes.Status409Conflict,
                 "INVENTORY_CHECK_UNAVAILABLE" => StatusCodes.Status503ServiceUnavailable,
                 _ => StatusCodes.Status400BadRequest
@@ -43,7 +44,7 @@ namespace UrbanX.Catalog.API.Abstractions
         }
 
         /// <summary>On success: 200 with body. On failure: <see cref="ToCatalogResult(Result)"/>.</summary>
-        protected static IResult ToCatalogResult<T>(Result<T> result) =>
+        protected static HttpIResult ToCatalogResult<T>(Result<T> result) =>
             result.IsSuccess
                 ? Results.Ok(result.Value)
                 : ToCatalogResult((Result)result);

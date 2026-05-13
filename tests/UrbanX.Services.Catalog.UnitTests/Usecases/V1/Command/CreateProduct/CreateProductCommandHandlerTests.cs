@@ -3,7 +3,7 @@ using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Command;
-using UrbanX.Catalog.Application.Usecases.V1.Errors;
+using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ValueObjects;
@@ -98,7 +98,7 @@ public class CreateProductCommandHandlerTests
 
         // Assert
         Assert.True(result.IsFailure);
-        Assert.Equal(ProductErrors.SlugInUse("x").Code, result.Error.Code);
+        Assert.Equal(CatalogErrors.SlugExists("x").Code, result.Error.Code);
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class CreateProductCommandHandlerTests
 
         // Assert
         Assert.True(result.IsFailure);
-        Assert.Equal(ProductErrors.SkuInUse(inUseSku).Code, result.Error.Code);
+        Assert.Equal(CatalogErrors.SkuExists(inUseSku).Code, result.Error.Code);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public class CreateProductCommandHandlerTests
 
         // Assert
         Assert.True(result.IsFailure);
-        Assert.Equal(ProductErrors.CategoryNotFound(categoryId).Code, result.Error.Code);
+        Assert.Equal(CatalogErrors.CategoryNotFound(categoryId).Code, result.Error.Code);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class CreateProductCommandHandlerTests
 
         // Assert
         Assert.True(result.IsFailure);
-        Assert.Equal(ProductErrors.BrandNotFound(brandId).Code, result.Error.Code);
+        Assert.Equal(CatalogErrors.BrandNotFound(brandId).Code, result.Error.Code);
     }
 
     [Fact]

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using UrbanX.Catalog.Domain.Helpers;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ValueObjects;
 
@@ -35,7 +34,7 @@ public static class CatalogDataSeeder
             Id = SeedCategoryId,
             ParentId = null,
             Name = "Electronics",
-            Slug = SlugHelper.ToSlug("Electronics"),
+            Slug = "electronic",
             Description = "Seed category",
             ImageUrl = null,
             DisplayOrder = 0,
@@ -49,7 +48,7 @@ public static class CatalogDataSeeder
         {
             Id = SeedBrandId,
             Name = "UrbanX Seed",
-            Slug = SlugHelper.ToSlug("UrbanX Seed"),
+            Slug = "urbanX-seed",
             LogoUrl = null,
             IsActive = true
         };
@@ -66,7 +65,7 @@ public static class CatalogDataSeeder
             var product = Product.Create(
                 sku: $"SEED-PROD-{n:D2}",
                 name: name,
-                slug: SlugHelper.ToSlug(name),
+                slug: name,
                 description: "Seeded product for local development.",
                 shortDescription: null,
                 categoryId: SeedCategoryId,

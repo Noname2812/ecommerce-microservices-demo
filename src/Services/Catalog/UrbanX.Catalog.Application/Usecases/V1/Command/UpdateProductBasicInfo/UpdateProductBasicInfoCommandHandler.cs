@@ -4,9 +4,9 @@ using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
-using UrbanX.Catalog.Application.Usecases.V1.Errors;
+using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
-using UrbanX.Catalog.Domain.Helpers;
+using UrbanX.Catalog.Application.Helpers;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ValueObjects;
 
@@ -56,7 +56,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             {
                 var category = await _categoryRepository.GetByIdAsync(newCategoryId, cancellationToken);
                 if (category is null)
-                    return Result.Failure(ProductErrors.CategoryNotFound(newCategoryId));
+                    return Result.Failure(CatalogErrors.CategoryNotFound(newCategoryId));
                 categoryName = category.Name;
             }
             else if (request.CategoryId is null)
@@ -69,7 +69,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             {
                 var brand = await _brandRepository.GetByIdAsync(newBrandId, cancellationToken);
                 if (brand is null)
-                    return Result.Failure(ProductErrors.BrandNotFound(newBrandId));
+                    return Result.Failure(CatalogErrors.BrandNotFound(newBrandId));
                 brandName = brand.Name;
             }
             else if (request.BrandId is null)

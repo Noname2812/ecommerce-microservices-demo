@@ -2,7 +2,7 @@ using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Kernel.Primitives;
 using UrbanX.Catalog.Application.Abstractions;
-using UrbanX.Catalog.Application.Usecases.V1.Errors;
+using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
 
 namespace UrbanX.Catalog.Application.Usecases.V1.Query

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Shared.Application;
 using Shared.Kernel.Primitives;
-using UrbanX.Catalog.Application.Usecases.V1.Errors;
+using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
 
 namespace UrbanX.Catalog.Application.Usecases.V1.Query.GetProductById;

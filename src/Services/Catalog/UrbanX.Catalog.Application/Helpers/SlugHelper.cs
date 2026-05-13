@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace UrbanX.Catalog.Domain.Helpers
+namespace UrbanX.Catalog.Application.Helpers
 {
     public static class SlugHelper
     {
