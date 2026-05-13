@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Inventory.Application.Usecases.V1.Errors;
+namespace UrbanX.Inventory.Domain.Errors;
 
 public static class InventoryReservationReleaseErrors
 {

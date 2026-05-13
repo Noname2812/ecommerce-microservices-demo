@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Shared.Messaging.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.Jobs;
 using UrbanX.Inventory.Application.Messaging;
+using UrbanX.Inventory.Application.DependencyInjection.Options;
 
 namespace UrbanX.Inventory.Application.DependencyInjection.Extensions;
 

@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Inventory.Domain;
+namespace UrbanX.Inventory.Domain.Errors;
 
 public static class InventoryStockErrors
 {

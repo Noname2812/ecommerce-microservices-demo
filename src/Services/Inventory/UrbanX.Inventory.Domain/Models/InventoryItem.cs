@@ -1,5 +1,6 @@
 using Shared.Kernel.Domain;
 using Shared.Kernel.Primitives;
+using UrbanX.Inventory.Domain.Errors;
 
 namespace UrbanX.Inventory.Domain.Models;
 

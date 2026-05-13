@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shared.Kernel.Primitives;
 using UrbanX.Inventory.Domain;
+using UrbanX.Inventory.Application.DependencyInjection.Options;
 
 namespace UrbanX.Inventory.Application.Jobs;
 

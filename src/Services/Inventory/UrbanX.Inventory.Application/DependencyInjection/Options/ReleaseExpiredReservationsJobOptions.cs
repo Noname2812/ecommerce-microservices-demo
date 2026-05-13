@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Inventory.Application.Jobs;
+namespace UrbanX.Inventory.Application.DependencyInjection.Options;
 
 public sealed class ReleaseExpiredReservationsJobOptions
 {

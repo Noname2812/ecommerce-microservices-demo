@@ -1,7 +1,7 @@
 ﻿using Shared.Application;
 using Shared.Kernel.Primitives;
-using UrbanX.Inventory.Application.Usecases.V1.Errors;
 using UrbanX.Inventory.Domain;
+using UrbanX.Inventory.Domain.Errors;
 using UrbanX.Inventory.Domain.Models;
 using UrbanX.Inventory.Domain.ValueObjects;
 
