@@ -16,7 +16,8 @@ builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database
-builder.AddNpgsqlDbContext<PaymentDbContext>("paymentdb");
+builder.AddNpgsqlDbContext<PaymentDbContext>("paymentdb",
+    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 builder.Services.AddOutbox<PaymentDbContext>(
     configureDb: null,
     builder.Configuration

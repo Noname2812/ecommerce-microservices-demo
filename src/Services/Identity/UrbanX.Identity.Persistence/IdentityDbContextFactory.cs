@@ -12,6 +12,7 @@ public sealed class IdentityDbContextFactory : IDesignTimeDbContextFactory<Ident
 
         var options = new DbContextOptionsBuilder<IdentityDbContext>()
             .UseNpgsql(connectionString)
+            .UseSnakeCaseNamingConvention()
             .Options;
 
         return new IdentityDbContext(options);

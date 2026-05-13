@@ -26,10 +26,12 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("Shared.Outbox.CompensationOutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<string>("LastError")
                         .HasMaxLength(2000)
@@ -38,18 +40,22 @@ namespace UrbanX.Promotion.Persistence.Migrations
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
 
                     b.Property<DateTimeOffset?>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
 
                     b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("retry_count");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("status");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -57,7 +63,8 @@ namespace UrbanX.Promotion.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("EventType");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_compensation_outbox");
 
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("ix_compensation_outbox_status_created_at");
@@ -68,17 +75,21 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("Shared.Outbox.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("correlation_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<DateTimeOffset?>("FailedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("failed_at");
 
                     b.Property<string>("LastError")
                         .HasMaxLength(2000)
@@ -86,22 +97,27 @@ namespace UrbanX.Promotion.Persistence.Migrations
                         .HasColumnName("Error");
 
                     b.Property<DateTimeOffset?>("NextRetryAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_retry_at");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
 
                     b.Property<DateTimeOffset?>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
 
                     b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("retry_count");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("status");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -109,7 +125,8 @@ namespace UrbanX.Promotion.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("EventType");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_outbox_messages");
 
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("ix_outbox_messages_status_created_at");
@@ -130,34 +147,43 @@ namespace UrbanX.Promotion.Persistence.Migrations
                     b.Property<string>("DiscountType")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("discount_type");
 
                     b.Property<decimal>("DiscountValue")
                         .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("discount_value");
 
                     b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
-                        .HasDefaultValue(true);
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
 
                     b.Property<decimal>("MinOrderValue")
                         .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("min_order_value");
 
                     b.Property<int?>("TotalQuota")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("total_quota");
 
                     b.Property<int>("UsedQuota")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("used_quota");
 
                     b.Property<DateTimeOffset>("ValidFrom")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_from");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_coupons");
 
                     b.HasIndex("ExpiresAt")
                         .HasDatabaseName("ix_coupons_expires_at");
@@ -171,48 +197,59 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.CouponClaim", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("CouponCode")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("coupon_code");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<decimal>("DiscountAmount")
                         .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("discount_amount");
 
                     b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
 
                     b.Property<string>("OrderIdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("order_idempotency_key");
 
                     b.Property<DateTimeOffset?>("ReleasedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("released_at");
 
                     b.Property<bool>("RestoreQuotaSlotOnRelease")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("restore_quota_slot_on_release");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_coupon_claims");
 
                     b.HasIndex("CouponCode", "UserId")
                         .IsUnique()
                         .HasDatabaseName("ix_coupon_claims_code_user_claimed")
-                        .HasFilter("\"Status\" = 'CLAIMED'");
+                        .HasFilter("status = 'CLAIMED'");
 
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("ix_coupon_claims_status_expires_at");
@@ -223,27 +260,35 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.FlashSaleItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
 
                     b.Property<Guid>("PromotionId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("promotion_id");
 
                     b.Property<int>("SlotsReserved")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("slots_reserved");
 
                     b.Property<int>("TotalSlots")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("total_slots");
 
                     b.Property<Guid?>("VariantId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_flash_sale_items");
 
                     b.HasIndex("PromotionId", "VariantId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("ix_flash_sale_items_promotion_id_variant_id");
 
                     b.ToTable("flash_sale_items", (string)null);
                 });
@@ -251,19 +296,24 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.ProcessedEvent", b =>
                 {
                     b.Property<Guid>("EventId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
 
                     b.Property<string>("EventType")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("event_type");
 
                     b.Property<DateTimeOffset>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
 
-                    b.HasKey("EventId");
+                    b.HasKey("EventId")
+                        .HasName("pk_processed_events");
 
-                    b.HasIndex("ProcessedAt");
+                    b.HasIndex("ProcessedAt")
+                        .HasDatabaseName("ix_processed_events_processed_at");
 
                     b.ToTable("processed_events", (string)null);
                 });
@@ -271,80 +321,102 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.Promotion", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
 
                     b.Property<string>("DiscountType")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("discount_type");
 
                     b.Property<decimal>("DiscountValue")
                         .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("discount_value");
 
                     b.Property<DateTimeOffset?>("EndsAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
 
                     b.Property<bool>("IsStackable")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_stackable");
 
                     b.Property<decimal?>("MaxDiscountCap")
                         .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("max_discount_cap");
 
                     b.Property<int?>("MaxTotalUsages")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("max_total_usages");
 
                     b.Property<int?>("MaxUsagesPerCustomer")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("max_usages_per_customer");
 
                     b.Property<decimal?>("MinOrderAmount")
                         .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("min_order_amount");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
 
                     b.Property<DateTimeOffset>("StartsAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
 
                     b.PrimitiveCollection<List<Guid>>("TargetIds")
                         .IsRequired()
-                        .HasColumnType("uuid[]");
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("target_ids");
 
                     b.Property<string>("TargetScope")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("target_scope");
 
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
 
                     b.Property<int>("UsageCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("usage_count");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_promotions");
 
-                    b.HasIndex("EndsAt");
+                    b.HasIndex("EndsAt")
+                        .HasDatabaseName("ix_promotions_ends_at");
 
-                    b.HasIndex("StartsAt");
+                    b.HasIndex("StartsAt")
+                        .HasDatabaseName("ix_promotions_starts_at");
 
-                    b.HasIndex("Status");
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_promotions_status");
 
-                    b.HasIndex("Type");
+                    b.HasIndex("Type")
+                        .HasDatabaseName("ix_promotions_type");
 
                     b.ToTable("promotions", (string)null);
                 });
@@ -352,31 +424,40 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.PromotionUsage", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
 
                     b.Property<decimal>("DiscountAmount")
                         .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("discount_amount");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
 
                     b.Property<Guid>("PromotionId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("promotion_id");
 
                     b.Property<DateTimeOffset>("RedeemedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("redeemed_at");
 
                     b.Property<Guid?>("VoucherCodeId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("voucher_code_id");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_promotion_usages");
 
                     b.HasIndex("PromotionId", "OrderId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("ix_promotion_usages_promotion_id_order_id");
 
                     b.ToTable("promotion_usages", (string)null);
                 });
@@ -384,32 +465,41 @@ namespace UrbanX.Promotion.Persistence.Migrations
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.VoucherCode", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<Guid?>("AssignedToCustomerId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_to_customer_id");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("code");
 
                     b.Property<Guid>("PromotionId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("promotion_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_voucher_codes");
 
                     b.HasIndex("Code")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("ix_voucher_codes_code");
 
-                    b.HasIndex("PromotionId");
+                    b.HasIndex("PromotionId")
+                        .HasDatabaseName("ix_voucher_codes_promotion_id");
 
-                    b.HasIndex("Status");
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_voucher_codes_status");
 
                     b.ToTable("voucher_codes", (string)null);
                 });
@@ -420,7 +510,8 @@ namespace UrbanX.Promotion.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("CouponCode")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_coupon_claims_coupons_coupon_code");
                 });
 
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.FlashSaleItem", b =>
@@ -429,7 +520,8 @@ namespace UrbanX.Promotion.Persistence.Migrations
                         .WithMany("FlashSaleItems")
                         .HasForeignKey("PromotionId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_flash_sale_items_promotions_promotion_id");
                 });
 
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.VoucherCode", b =>
@@ -438,7 +530,8 @@ namespace UrbanX.Promotion.Persistence.Migrations
                         .WithMany("Codes")
                         .HasForeignKey("PromotionId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_voucher_codes_promotions_promotion_id");
                 });
 
             modelBuilder.Entity("UrbanX.Promotion.Domain.Models.Promotion", b =>

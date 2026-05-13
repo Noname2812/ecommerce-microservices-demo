@@ -21,7 +21,8 @@ builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database
-builder.AddNpgsqlDbContext<InventoryDbContext>("inventorydb");
+builder.AddNpgsqlDbContext<InventoryDbContext>("inventorydb",
+    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 builder.Services.AddOutbox<InventoryDbContext>(
     configureDb: null,
     builder.Configuration

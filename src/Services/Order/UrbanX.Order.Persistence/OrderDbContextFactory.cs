@@ -12,6 +12,7 @@ public sealed class OrderDbContextFactory : IDesignTimeDbContextFactory<OrderDbC
 
         var options = new DbContextOptionsBuilder<OrderDbContext>()
             .UseNpgsql(connectionString)
+            .UseSnakeCaseNamingConvention()
             .Options;
 
         return new OrderDbContext(options);

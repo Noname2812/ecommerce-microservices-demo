@@ -12,6 +12,7 @@ public sealed class CatalogDbContextFactory : IDesignTimeDbContextFactory<Catalo
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__catalogdb")
             ?? "Host=localhost;Port=5432;Database=urbanx_catalog;Username=postgres;Password=postgres";
         optionsBuilder.UseNpgsql(connectionString);
+        optionsBuilder.UseSnakeCaseNamingConvention();
         return new CatalogDbContext(optionsBuilder.Options);
     }
 }

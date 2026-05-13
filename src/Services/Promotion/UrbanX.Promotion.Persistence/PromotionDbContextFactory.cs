@@ -12,6 +12,7 @@ public sealed class PromotionDbContextFactory : IDesignTimeDbContextFactory<Prom
 
         var options = new DbContextOptionsBuilder<PromotionDbContext>()
             .UseNpgsql(connectionString)
+            .UseSnakeCaseNamingConvention()
             .Options;
 
         return new PromotionDbContext(options);

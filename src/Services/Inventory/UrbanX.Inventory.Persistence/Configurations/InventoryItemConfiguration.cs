@@ -13,7 +13,7 @@ internal sealed class InventoryItemConfiguration : IEntityTypeConfiguration<Inve
             TableNames.InventoryItems,
             t => t.HasCheckConstraint(
                 "chk_inventory_non_negative",
-                "\"QuantityOnHand\" >= 0 AND \"QuantityReserved\" >= 0"));
+                "quantity_on_hand >= 0 AND quantity_reserved >= 0"));
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
 
@@ -25,7 +25,7 @@ internal sealed class InventoryItemConfiguration : IEntityTypeConfiguration<Inve
         builder.Property(x => x.QuantityOnHand).IsRequired();
         builder.Property(x => x.QuantityReserved).IsRequired();
         builder.Property(x => x.QuantityAvailable)
-            .HasComputedColumnSql("\"QuantityOnHand\" - \"QuantityReserved\"", stored: true);
+            .HasComputedColumnSql("quantity_on_hand - quantity_reserved", stored: true);
 
         builder.Property(x => x.ReorderPoint).HasDefaultValue(10);
         builder.Property(x => x.ReorderQuantity).HasDefaultValue(50);

@@ -28,7 +28,7 @@ internal sealed class CouponClaimConfiguration : IEntityTypeConfiguration<Coupon
         // Unique partial index: one CLAIMED claim per (coupon, user) at a time
         builder.HasIndex(x => new { x.CouponCode, x.UserId })
             .IsUnique()
-            .HasFilter("\"Status\" = 'CLAIMED'")
+            .HasFilter("status = 'CLAIMED'")
             .HasDatabaseName("ix_coupon_claims_code_user_claimed");
 
         // For TTL job: scan by (Status, ExpiresAt) to find expired claims

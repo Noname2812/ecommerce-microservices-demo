@@ -21,7 +21,8 @@ builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database + Outbox
-builder.AddNpgsqlDbContext<IdentityDbContext>("identitydb");
+builder.AddNpgsqlDbContext<IdentityDbContext>("identitydb",
+    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 builder.Services.AddOutbox<IdentityDbContext>(
     configureDb: null,
     builder.Configuration);

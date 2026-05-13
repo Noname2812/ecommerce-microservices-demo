@@ -21,7 +21,8 @@ builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database
-builder.AddNpgsqlDbContext<CatalogDbContext>("catalogdb");
+builder.AddNpgsqlDbContext<CatalogDbContext>("catalogdb",
+    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 
 var connectionString =
     builder.Configuration.GetConnectionString("catalogdb");

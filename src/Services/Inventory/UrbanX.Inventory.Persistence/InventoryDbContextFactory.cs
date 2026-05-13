@@ -12,6 +12,7 @@ public sealed class InventoryDbContextFactory : IDesignTimeDbContextFactory<Inve
 
         var options = new DbContextOptionsBuilder<InventoryDbContext>()
             .UseNpgsql(connectionString)
+            .UseSnakeCaseNamingConvention()
             .Options;
 
         return new InventoryDbContext(options);

@@ -19,7 +19,8 @@ builder.Services.AddHttpIdempotency(o => o.ServiceId = "order");
 builder.Services.AddOpenApi();
 
 // Database
-builder.AddNpgsqlDbContext<OrderDbContext>("orderdb");
+builder.AddNpgsqlDbContext<OrderDbContext>("orderdb", 
+    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 builder.Services.AddOutbox<OrderDbContext>(
     configureDb: null,
     builder.Configuration

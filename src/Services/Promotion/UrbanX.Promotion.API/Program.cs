@@ -27,7 +27,8 @@ builder.Services.AddOpenTelemetry().WithMetrics(m => m.AddMeter(PromotionMetrics
 builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
-builder.AddNpgsqlDbContext<PromotionDbContext>("promotiondb");
+builder.AddNpgsqlDbContext<PromotionDbContext>("promotiondb",
+    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 builder.Services.AddOutbox<PromotionDbContext>(
     configureDb: null,
     builder.Configuration

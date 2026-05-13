@@ -30,7 +30,7 @@ internal sealed class PaymentEventConfiguration : IEntityTypeConfiguration<Payme
         builder.HasIndex(x => x.ExternalTransactionId)
             .IsUnique()
             .HasDatabaseName("idx_payment_event_ext_tx_id")
-            .HasFilter("\"ExternalTransactionId\" IS NOT NULL");
+            .HasFilter("external_transaction_id IS NOT NULL");
 
         builder.HasIndex(x => new { x.PaymentId, x.CreatedAt });
 

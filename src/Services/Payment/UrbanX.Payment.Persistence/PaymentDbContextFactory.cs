@@ -12,6 +12,7 @@ public sealed class PaymentDbContextFactory : IDesignTimeDbContextFactory<Paymen
 
         var options = new DbContextOptionsBuilder<PaymentDbContext>()
             .UseNpgsql(connectionString)
+            .UseSnakeCaseNamingConvention()
             .Options;
 
         return new PaymentDbContext(options);

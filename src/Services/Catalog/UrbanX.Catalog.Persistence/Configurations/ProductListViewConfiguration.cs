@@ -42,10 +42,9 @@ internal sealed class ProductListViewConfiguration : IEntityTypeConfiguration<Pr
         builder.Property<NpgsqlTsVector>("SearchVector")
             .HasColumnName("search_vector")
             .HasComputedColumnSql(
-                "to_tsvector('simple'," +
-                " coalesce(NameNormalized,'') || ' ' ||" +
-                " coalesce(SkuNormalized,'') || ' ' ||" +
-                " coalesce(array_to_string(tags,' '),''))",
+                "to_tsvector('simple'::regconfig," +
+                " coalesce(name_normalized,'') || ' ' ||" +
+                " coalesce(sku_normalized,''))",
                 stored: true);
 
         builder.HasIndex(x => new { x.SellerId, x.Status });
