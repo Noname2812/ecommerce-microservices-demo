@@ -26,7 +26,12 @@ public static class CacheHostApplicationBuilderExtensions
         string connectionName = "redis")
     {
         // IConnectionMultiplexer — resolved by Aspire service discovery
-        builder.AddRedisClient(connectionName);
+        // Fail fast on Redis congestion — circuit trips in 2s instead of 5s default.
+        builder.AddRedisClient(connectionName, configureOptions: options =>
+        {
+            options.SyncTimeout = 2000;
+            options.AsyncTimeout = 2000;
+        });
 
         // Bind CacheOptions from appsettings "Shared:Cache"
         builder.Services.Configure<CacheOptions>(

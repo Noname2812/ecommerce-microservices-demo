@@ -8,6 +8,11 @@ namespace Shared.Cache.Implementations;
 
 internal sealed class RedisCacheService : ICacheService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        Converters = { new ResultJsonConverterFactory(), new PageResultJsonConverterFactory() }
+    };
+
     private readonly IConnectionMultiplexer _mux;
     private readonly CacheOptions _options;
 
@@ -24,12 +29,12 @@ internal sealed class RedisCacheService : ICacheService
     {
         var value = await Db.StringGetAsync(Prefix(key));
         if (!value.HasValue) return default;
-        return JsonSerializer.Deserialize<T>((string)value!);
+        return JsonSerializer.Deserialize<T>((string)value!, JsonOptions);
     }
 
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null, CancellationToken ct = default)
     {
-        var json = JsonSerializer.Serialize(value);
+        var json = JsonSerializer.Serialize(value, JsonOptions);
         await Db.StringSetAsync(Prefix(key), json, expiry ?? _options.DefaultExpiry);
     }
 

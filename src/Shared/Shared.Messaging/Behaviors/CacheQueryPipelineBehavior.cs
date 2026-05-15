@@ -10,24 +10,6 @@ using System.Reflection;
 
 namespace Shared.Messaging.Behaviors;
 
-/// <summary>
-/// Cache-aside pipeline for queries decorated with <see cref="CacheQueryAttribute"/>.
-///
-/// Read path (per request):
-///   L1 (MemoryCache, in-process) → L2 (Redis, circuit-guarded) → DB handler
-///
-/// Stampede prevention:
-///   L2 up  : Redis distributed lock (cross-process, double-checked).
-///   L2 down: In-process SingleFlight — coalesces concurrent misses to one handler call.
-///
-/// Resilience:
-///   Circuit Breaker (<see cref="RedisCircuitBreaker"/>): tracks consecutive Redis failures;
-///   opens after threshold; allows probe requests after cooldown.
-///   When open → skip Redis, fall through to SingleFlight + L1 only.
-///
-/// Other behaviours preserved:
-///   Negative caching, jitter, fail-open on any Redis error.
-/// </summary>
 public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IQueryBase
@@ -35,7 +17,9 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
     private static readonly CacheQueryAttribute? _attr =
         typeof(TRequest).GetCustomAttribute<CacheQueryAttribute>();
 
-    // Per generic-type instantiation: each TRequest/TResponse pair has its own flight registry.
+    private static readonly string _requestName = typeof(TRequest).Name;
+
+    // Per TRequest/TResponse pair — each query type has its own flight registry.
     private static readonly ConcurrentDictionary<string, Task<TResponse>> _flights = new();
 
     private readonly ICacheService _cache;
@@ -66,153 +50,138 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
         if (_attr is null) return await next(ct);
 
         var cacheKey = TemplateResolver.Resolve(_attr.KeyTemplate, request);
-        var lockKey = $"lock:{cacheKey}";
-        var l2Expiry = TimeSpan.FromSeconds(_attr.ExpirySeconds);
-        var lockExpiry = TimeSpan.FromSeconds(_attr.LockExpirySeconds);
-        var waitTimeout = TimeSpan.FromSeconds(_attr.LockWaitTimeoutSeconds);
 
-        // ── 1. L1: in-process memory cache ──────────────────────────────────
         if (TryGetL1(cacheKey, out var l1)) return l1!;
 
-        // ── 2. Circuit open → skip Redis, SingleFlight to handler ────────────
+        // SingleFlight: 300 concurrent misses → 1 leader runs FetchAsync,
+        // 299 followers await the same Task. WaitAsync(ct) lets each follower
+        // honour its own cancellation without disturbing the leader or other followers.
+        return await SingleFlightAsync(cacheKey, () => FetchAsync(cacheKey, next), ct);
+    }
+
+    // Leader logic: L1 double-check → Redis (circuit-guarded) → distributed lock → handler.
+    private async Task<TResponse> FetchAsync(string cacheKey, RequestHandlerDelegate<TResponse> next)
+    {
+        if (TryGetL1(cacheKey, out var l1)) return l1!;
+
         if (_circuit.ShouldSkipRedis())
         {
-            _logger.LogDebug(
-                "[Cache] Circuit open — SingleFlight fallback for '{Key}' ({Request}).",
-                cacheKey, typeof(TRequest).Name);
-            return await SingleFlightAsync(cacheKey, async () =>
-            {
-                if (TryGetL1(cacheKey, out var l1b)) return l1b!;
-                var r = await next(ct);
-                SetL1IfCacheable(cacheKey, r);
-                return r;
-            });
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("[Cache] Circuit open — skipping Redis for '{Key}' ({Request}).", cacheKey, _requestName);
+            return await CallHandlerAsync(cacheKey, next);
         }
 
-        // ── 3. L2: Redis read ────────────────────────────────────────────────
-        TResponse? cached;
+        // L2: Redis read
         try
         {
-            cached = await _cache.GetAsync<TResponse>(cacheKey, ct);
+            var cached = await _cache.GetAsync<TResponse>(cacheKey, CancellationToken.None);
             _circuit.RecordSuccess();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "[Cache] Redis read failed for '{Key}' ({Request}). Circuit fallback.",
-                cacheKey, typeof(TRequest).Name);
-            _circuit.RecordFailure();
-            return await SingleFlightAsync(cacheKey, async () =>
-            {
-                if (TryGetL1(cacheKey, out var l1c)) return l1c!;
-                var r = await next(ct);
-                SetL1IfCacheable(cacheKey, r);
-                return r;
-            });
-        }
-
-        if (cached is not null)
-        {
-            _logger.LogDebug("[Cache] L2 hit for '{Key}' ({Request})", cacheKey, typeof(TRequest).Name);
-            SetL1(cacheKey, cached);
-            return cached;
-        }
-
-        // ── 4. Acquire Redis lock (stampede prevention) ──────────────────────
-        ILockHandle? lockHandle;
-        try
-        {
-            lockHandle = await _lockService.AcquireAsync(lockKey, lockExpiry, waitTimeout, ct);
-            _circuit.RecordSuccess();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "[Cache] Redis lock failed for '{Key}' ({Request}). Circuit fallback.",
-                cacheKey, typeof(TRequest).Name);
-            _circuit.RecordFailure();
-            return await SingleFlightAsync(cacheKey, async () =>
-            {
-                if (TryGetL1(cacheKey, out var l1d)) return l1d!;
-                var r = await next(ct);
-                SetL1IfCacheable(cacheKey, r);
-                return r;
-            });
-        }
-
-        if (lockHandle is null)
-        {
-            // Redis is up but the lock is held by another process — direct fallback.
-            _logger.LogWarning(
-                "[Cache] Lock timeout for '{Key}' after {Timeout}s — direct handler fallback. ({Request})",
-                cacheKey, _attr.LockWaitTimeoutSeconds, typeof(TRequest).Name);
-            return await next(ct);
-        }
-
-        await using (lockHandle)
-        {
-            // ── 5. Double-check L2 ─────────────────────────────────────────
-            try
-            {
-                cached = await _cache.GetAsync<TResponse>(cacheKey, ct);
-                _circuit.RecordSuccess();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "[Cache] Redis double-check failed for '{Key}' ({Request}). Proceeding to handler.",
-                    cacheKey, typeof(TRequest).Name);
-                _circuit.RecordFailure();
-                cached = default;
-            }
-
             if (cached is not null)
             {
                 SetL1(cacheKey, cached);
                 return cached;
             }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Cache] Redis read failed for '{Key}' ({Request}).", cacheKey, _requestName);
+            _circuit.RecordFailure();
+            return await CallHandlerAsync(cacheKey, next);
+        }
 
-            // ── 6. Call handler, populate both caches ─────────────────────
-            var response = await next(ct);
-            var result = response as IResult;
+        // Distributed lock: guards cross-process stampede.
+        // SingleFlight already ensures only one in-process goroutine reaches here.
+        var lockKey = $"lock:{cacheKey}";
+        var lockExpiry = TimeSpan.FromSeconds(_attr!.LockExpirySeconds);
+        var lockWait = TimeSpan.FromSeconds(_attr.LockWaitTimeoutSeconds);
 
-            if (result?.IsSuccess == true)
+        ILockHandle? lockHandle;
+        try
+        {
+            lockHandle = await _lockService.AcquireAsync(lockKey, lockExpiry, lockWait, CancellationToken.None);
+            _circuit.RecordSuccess();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Cache] Redis lock failed for '{Key}' ({Request}).", cacheKey, _requestName);
+            _circuit.RecordFailure();
+            return await CallHandlerAsync(cacheKey, next);
+        }
+
+        if (lockHandle is null)
+        {
+            // Lock wait timeout — another process likely already populated the cache.
+            _logger.LogWarning("[Cache] Lock timeout for '{Key}' ({Request}) — re-checking L2.", cacheKey, _requestName);
+            try
             {
-                var jitteredExpiry = AddJitter(l2Expiry, _attr.JitterPercent);
-                await TrySetL2Async(cacheKey, response, jitteredExpiry);
-                SetL1(cacheKey, response);
+                var l2 = await _cache.GetAsync<TResponse>(cacheKey, CancellationToken.None);
+                if (l2 is not null) { SetL1(cacheKey, l2); return l2; }
             }
-            else if (result?.IsSuccess == false && _attr.NegativeTtlSeconds > 0)
+            catch { /* Redis error: fall through to handler */ }
+
+            return await CallHandlerAsync(cacheKey, next);
+        }
+
+        await using (lockHandle)
+        {
+            // Double-check L2 under lock (another process may have populated it).
+            try
             {
-                var negativeTtl = TimeSpan.FromSeconds(_attr.NegativeTtlSeconds);
-                await TrySetL2Async(cacheKey, response, negativeTtl);
-                SetL1(cacheKey, response);
+                var l2 = await _cache.GetAsync<TResponse>(cacheKey, CancellationToken.None);
+                _circuit.RecordSuccess();
+                if (l2 is not null) { SetL1(cacheKey, l2); return l2; }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[Cache] Redis double-check failed for '{Key}' ({Request}).", cacheKey, _requestName);
+                _circuit.RecordFailure();
             }
 
-            return response;
+            return await CallHandlerAsync(cacheKey, next);
         }
     }
 
-    // ── SingleFlight ────────────────────────────────────────────────────────
-    // When Redis is unavailable, coalesces concurrent requests for the same key
-    // into a single handler call. Leader executes; followers await the same Task.
-    // If the leader fails, followers surface the same exception (fail-fast).
-    private async Task<TResponse> SingleFlightAsync(string key, Func<Task<TResponse>> factory)
+    // Calls the handler (DB). On success, populates L2 + L1.
+    // On DB failure, logs the error and re-throws — SingleFlight propagates to all followers.
+    private async Task<TResponse> CallHandlerAsync(string cacheKey, RequestHandlerDelegate<TResponse> next)
+    {
+        TResponse response;
+        try
+        {
+            response = await next(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Cache] Handler failed (DB down?) for '{Key}' ({Request}).", cacheKey, _requestName);
+            throw;
+        }
+
+        if (response is not IResult result || result.IsSuccess)
+        {
+            var ttl = AddJitter(TimeSpan.FromSeconds(_attr!.ExpirySeconds), _attr.JitterPercent);
+            await TrySetL2Async(cacheKey, response, ttl);
+            SetL1(cacheKey, response);
+        }
+        else if (_attr!.NegativeTtlSeconds > 0)
+        {
+            var ttl = TimeSpan.FromSeconds(_attr.NegativeTtlSeconds);
+            await TrySetL2Async(cacheKey, response, ttl);
+            SetL1(cacheKey, response);
+        }
+
+        return response;
+    }
+
+    // ── SingleFlight ─────────────────────────────────────────────────────────
+    private static async Task<TResponse> SingleFlightAsync(
+        string key, Func<Task<TResponse>> factory, CancellationToken requestCt)
     {
         var tcs = new TaskCompletionSource<TResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
         var task = _flights.GetOrAdd(key, tcs.Task);
 
         if (!ReferenceEquals(task, tcs.Task))
-        {
-            // Follower: wait for the leader's result.
-            _logger.LogDebug("[Cache] SingleFlight follower waiting on '{Key}' ({Request}).",
-                key, typeof(TRequest).Name);
-            return await task;
-        }
+            return await task.WaitAsync(requestCt);
 
-        // Leader: execute factory and broadcast result/exception to all followers.
-        _logger.LogDebug("[Cache] SingleFlight leader for '{Key}' ({Request}).",
-            key, typeof(TRequest).Name);
         try
         {
             var result = await factory();
@@ -230,7 +199,7 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
         }
     }
 
-    // ── L1 helpers ──────────────────────────────────────────────────────────
+    // ── L1 helpers ───────────────────────────────────────────────────────────
     private bool TryGetL1(string key, out TResponse? value)
     {
         if (_attr!.MemoryTtlSeconds <= 0) { value = default; return false; }
@@ -243,19 +212,7 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
         _memoryCache.Set(key, value, TimeSpan.FromSeconds(_attr.MemoryTtlSeconds));
     }
 
-    // Sets L1 only when the response would also be stored in L2 (mirrors L2 cacheability rules).
-    private void SetL1IfCacheable(string key, TResponse response)
-    {
-        if (_attr!.MemoryTtlSeconds <= 0) return;
-        var result = response as IResult;
-        if (result?.IsSuccess == true ||
-            (result?.IsSuccess == false && _attr.NegativeTtlSeconds > 0))
-        {
-            SetL1(key, response);
-        }
-    }
-
-    // ── L2 helpers ──────────────────────────────────────────────────────────
+    // ── L2 helpers ───────────────────────────────────────────────────────────
     private async Task TrySetL2Async(string key, TResponse value, TimeSpan ttl)
     {
         try
@@ -265,9 +222,7 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "[Cache] Redis write failed for '{Key}' ({Request}).",
-                key, typeof(TRequest).Name);
+            _logger.LogWarning(ex, "[Cache] Redis write failed for '{Key}' ({Request}).", key, _requestName);
             _circuit.RecordFailure();
         }
     }

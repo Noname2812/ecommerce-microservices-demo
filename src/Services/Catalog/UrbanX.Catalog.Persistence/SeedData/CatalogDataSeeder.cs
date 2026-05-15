@@ -72,7 +72,7 @@ public static class CatalogDataSeeder
 
         for (var n = 1; n <= 10; n++)
         {
-            var name = $"Seed Product {n}";
+            var name = $"Điện thoại Product {n}";
             var price = 100_000m + n * 10_000m;
             var product = Product.Create(
                 sku: $"SEED-PROD-{n:D2}",

@@ -1,15 +1,57 @@
 using System.Text;
 using Dapper;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Shared.Kernel.Primitives;
 using UrbanX.Catalog.Domain;
+using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain.ReadModels;
 using UrbanX.Catalog.Domain.ValueObjects;
 
 namespace UrbanX.Catalog.Persistence;
 
-public sealed class ProductReadModelRepository(NpgsqlDataSource dataSource) : IProductReadRepository
+public sealed class ProductReadModelRepository(
+    [FromKeyedServices("catalog-read")] NpgsqlDataSource dataSource) : IProductReadRepository
 {
+    // Captures COUNT(*) OVER() total alongside each row from the single-round-trip search query.
+    // Dapper ignores the _rank column (no matching property); MatchNamesWithUnderscores maps total_count → TotalCount.
+    private sealed class SearchResultRow
+    {
+        public long TotalCount { get; set; }
+        public Guid ProductId { get; set; }
+        public Guid SellerId { get; set; }
+        public string Sku { get; set; } = null!;
+        public string Name { get; set; } = null!;
+        public string Slug { get; set; } = null!;
+        public string Status { get; set; } = null!;
+        public Guid? CategoryId { get; set; }
+        public string? CategoryName { get; set; }
+        public Guid? BrandId { get; set; }
+        public string? BrandName { get; set; }
+        public string? ShortDescription { get; set; }
+        public decimal BasePrice { get; set; }
+        public string? PrimaryImageUrl { get; set; }
+        public string[] Tags { get; set; } = [];
+        public DateTimeOffset UpdatedAt { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
+        public int ProjectionVersion { get; set; }
+        public string NameNormalized { get; set; } = string.Empty;
+        public string SkuNormalized { get; set; } = string.Empty;
+
+        public ProductListView ToView() => new()
+        {
+            ProductId = ProductId, SellerId = SellerId, Sku = Sku,
+            Name = Name, Slug = Slug, Status = Status,
+            CategoryId = CategoryId, CategoryName = CategoryName,
+            BrandId = BrandId, BrandName = BrandName,
+            ShortDescription = ShortDescription, BasePrice = BasePrice,
+            PrimaryImageUrl = PrimaryImageUrl, Tags = Tags,
+            UpdatedAt = UpdatedAt, DeletedAt = DeletedAt,
+            ProjectionVersion = ProjectionVersion,
+            NameNormalized = NameNormalized, SkuNormalized = SkuNormalized,
+        };
+    }
+
     public async Task<ProductDetailView?> GetByIdAsync(Guid productId, CancellationToken ct = default)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
@@ -22,15 +64,16 @@ public sealed class ProductReadModelRepository(NpgsqlDataSource dataSource) : IP
         return await conn.QuerySingleOrDefaultAsync<ProductDetailView>(cmd);
     }
 
-    public async Task<CursorPageResult<ProductListView>> GetPageKeysetAsync(
+    public async Task<Result<CursorPageResult<ProductListView>>> GetPageKeysetAsync(
         Guid? sellerId, Guid? categoryId, string? status,
         string? cursor, int pageSize, CancellationToken ct = default)
     {
+        if (!TryDecodeCursor(cursor, out var cursorUpdatedAt, out var cursorProductId))
+            return Result.Failure<CursorPageResult<ProductListView>>(CatalogErrors.InvalidCursor(cursor!));
+
         await using var conn = await dataSource.OpenConnectionAsync(ct);
 
         var safeSize = Math.Clamp(pageSize, 1, PageResult<ProductListView>.UpperPageSize);
-        var (cursorUpdatedAt, cursorProductId) = DecodeCursor(cursor);
-
         var where = new List<string> { "deleted_at IS NULL", "status != @deletedStatus" };
         var p = new DynamicParameters();
         p.Add("deletedStatus", ProductStatus.Deleted);
@@ -66,7 +109,7 @@ public sealed class ProductReadModelRepository(NpgsqlDataSource dataSource) : IP
             ? EncodeCursor(items[^1].UpdatedAt, items[^1].ProductId)
             : null;
 
-        return CursorPageResult<ProductListView>.Create(items, nextCursor);
+        return Result.Success(CursorPageResult<ProductListView>.Create(items, nextCursor));
     }
 
     public async Task<PageResult<ProductListView>> SearchAsync(
@@ -92,26 +135,54 @@ public sealed class ProductReadModelRepository(NpgsqlDataSource dataSource) : IP
             AND (@priceMax::numeric IS NULL OR base_price <= @priceMax)
             """;
 
-        var orderByRelevance = "ORDER BY ts_rank(search_vector, to_tsquery('simple', public.f_unaccent(@tsquery))) DESC";
-        var orderClause = sort switch
+        // _rank expression and ORDER BY clause per sort mode.
+        // For non-relevance sorts both tiers use the same column so _rank is a dummy 0.
+        var (ftsRank, trgRank, sortClause) = sort switch
         {
-            "price_asc"  => "ORDER BY base_price ASC",
-            "price_desc" => "ORDER BY base_price DESC",
-            "newest"     => "ORDER BY updated_at DESC",
-            _            => orderByRelevance
+            "price_asc"  => ("0::float8", "0::float8", "ORDER BY base_price ASC"),
+            "price_desc" => ("0::float8", "0::float8", "ORDER BY base_price DESC"),
+            "newest"     => ("0::float8", "0::float8", "ORDER BY updated_at DESC"),
+            _ => (
+                "ts_rank(search_vector, to_tsquery('simple', unaccent(@tsquery)))::float8",
+                "similarity(name_normalized, @rawQ)::float8",
+                "ORDER BY _rank DESC"
+            ),
         };
 
-        var trgOrderClause = sort switch
-        {
-            "price_asc"  => "ORDER BY base_price ASC",
-            "price_desc" => "ORDER BY base_price DESC",
-            "newest"     => "ORDER BY updated_at DESC",
-            _            => "ORDER BY similarity(name_normalized, @rawQ) DESC"
-        };
+        // Single round-trip CTE:
+        //   fts_data    — FTS candidates (MATERIALIZED so it is computed once).
+        //   has_fts     — boolean flag: true when FTS returns any row.
+        //   trg_data    — trigram candidates, only executed when FTS is empty (NOT has_fts.v).
+        //   combined    — union of whichever tier produced results; exactly one tier is non-empty.
+        //   COUNT(*) OVER() — total rows in combined before LIMIT, returned alongside each page row.
+        var sql = $"""
+            WITH fts_data AS MATERIALIZED (
+                SELECT *
+                FROM read.product_list_view
+                WHERE search_vector @@ to_tsquery('simple', unaccent(@tsquery))
+                  AND {baseFilter}
+            ),
+            has_fts AS (SELECT COUNT(*) > 0 AS v FROM fts_data),
+            trg_data AS (
+                SELECT *
+                FROM read.product_list_view
+                WHERE NOT (SELECT v FROM has_fts)
+                  AND name_normalized % @rawQ
+                  AND {baseFilter}
+            ),
+            combined AS (
+                SELECT *, {ftsRank} AS _rank FROM fts_data
+                UNION ALL
+                SELECT *, {trgRank} AS _rank FROM trg_data
+            )
+            SELECT COUNT(*) OVER() AS total_count, combined.*
+            FROM combined
+            {sortClause}
+            LIMIT @limit OFFSET @offset;
+            """;
 
         var p = new DynamicParameters();
         p.Add("tsquery", tsquery);
-        // rawQ: lowercased + unaccented in C# for trigram fallback (matches name_normalized column)
         p.Add("rawQ", NormalizeForTrigram(q));
         p.Add("categoryId", categoryId);
         p.Add("priceMin", priceMin);
@@ -120,42 +191,11 @@ public sealed class ProductReadModelRepository(NpgsqlDataSource dataSource) : IP
         p.Add("limit", safeSize);
         p.Add("offset", offset);
 
-        // Tier 1: full-text search (exact + prefix match, Vietnamese via f_unaccent on DB side)
-        var ftSql = $"""
-            SELECT COUNT(*) FROM read.product_list_view
-            WHERE search_vector @@ to_tsquery('simple', public.f_unaccent(@tsquery))
-            AND {baseFilter};
+        var rows = (await conn.QueryAsync<SearchResultRow>(
+            new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
 
-            SELECT * FROM read.product_list_view
-            WHERE search_vector @@ to_tsquery('simple', public.f_unaccent(@tsquery))
-            AND {baseFilter}
-            {orderClause}
-            LIMIT @limit OFFSET @offset;
-            """;
-
-        using var multi = await conn.QueryMultipleAsync(new CommandDefinition(ftSql, p, cancellationToken: ct));
-        var total = await multi.ReadSingleAsync<int>();
-        var items = (await multi.ReadAsync<ProductListView>()).ToList();
-
-        if (total > 0)
-            return PageResult<ProductListView>.Create(items, page, safeSize, total);
-
-        // Tier 2: trigram similarity fallback (handles typos, abbreviations)
-        var trgSql = $"""
-            SELECT COUNT(*) FROM read.product_list_view
-            WHERE name_normalized % @rawQ
-            AND {baseFilter};
-
-            SELECT * FROM read.product_list_view
-            WHERE name_normalized % @rawQ
-            AND {baseFilter}
-            {trgOrderClause}
-            LIMIT @limit OFFSET @offset;
-            """;
-
-        using var multi2 = await conn.QueryMultipleAsync(new CommandDefinition(trgSql, p, cancellationToken: ct));
-        total = await multi2.ReadSingleAsync<int>();
-        items = (await multi2.ReadAsync<ProductListView>()).ToList();
+        var total = rows.Count > 0 ? (int)rows[0].TotalCount : 0;
+        var items = rows.ConvertAll(r => r.ToView());
 
         return PageResult<ProductListView>.Create(items, page, safeSize, total);
     }
@@ -196,21 +236,26 @@ public sealed class ProductReadModelRepository(NpgsqlDataSource dataSource) : IP
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
     }
 
-    private static (DateTimeOffset?, Guid?) DecodeCursor(string? cursor)
+    private static bool TryDecodeCursor(
+        string? cursor,
+        out DateTimeOffset? updatedAt,
+        out Guid? productId)
     {
-        if (string.IsNullOrEmpty(cursor)) return (null, null);
+        updatedAt = null;
+        productId = null;
+        if (string.IsNullOrEmpty(cursor)) return true;
         try
         {
             var raw = Encoding.UTF8.GetString(Convert.FromBase64String(cursor));
             var sep = raw.LastIndexOf('|');
-            if (sep < 0) return (null, null);
-            var updatedAt = DateTimeOffset.Parse(raw[..sep], null, System.Globalization.DateTimeStyles.RoundtripKind);
-            var productId = Guid.Parse(raw[(sep + 1)..]);
-            return (updatedAt, productId);
+            if (sep < 0) return false;
+            updatedAt = DateTimeOffset.Parse(raw[..sep], null, System.Globalization.DateTimeStyles.RoundtripKind);
+            productId = Guid.Parse(raw[(sep + 1)..]);
+            return true;
         }
         catch
         {
-            return (null, null);
+            return false;
         }
     }
 }

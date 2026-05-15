@@ -30,4 +30,7 @@ public static class CatalogErrors
         new("INVENTORY_CHECK_UNAVAILABLE", "Cannot confirm reservation state. Please try again later.");
     public static Error NoActiveVariant() =>
         new("NO_ACTIVE_VARIANT", "Snapshot must contain at least one active variant.");
+
+    public static Error InvalidCursor(string cursor) =>
+        new("INVALID_CURSOR", $"Pagination cursor is invalid or has been tampered with: '{cursor}'");
 }

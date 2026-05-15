@@ -1,10 +1,12 @@
 using Carter;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
+using UrbanX.Catalog.API.Exceptions;
 using UrbanX.Catalog.Application.DependencyInjection.Extensions;
 using UrbanX.Catalog.Application.Messaging;
 using UrbanX.Catalog.Persistence;
@@ -20,13 +22,31 @@ builder.AddSharedCache("redis");
 // Add services to the container.
 builder.Services.AddOpenApi();
 
-// Database
-builder.AddNpgsqlDbContext<CatalogDbContext>("catalogdb",
-    configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
+var connectionString = builder.Configuration.GetConnectionString("catalogdb")!;
 
-var connectionString =
-    builder.Configuration.GetConnectionString("catalogdb");
-builder.Services.AddNpgsqlDataSource(connectionString!);
+// Write pool: EF Core + Outbox relay + projection consumers.
+// Kept small so reads never starve writes and vice versa.
+builder.Services.AddNpgsqlDataSource(connectionString, ds =>
+{
+    ds.ConnectionStringBuilder.MaxPoolSize      = 50;
+    ds.ConnectionStringBuilder.MinPoolSize      = 5;
+    ds.ConnectionStringBuilder.CommandTimeout   = 7;   // must be < request timeout (8 s)
+    ds.ConnectionStringBuilder.ApplicationName  = "catalog-write";
+});
+builder.Services.AddDbContextPool<CatalogDbContext>((sp, options) =>
+    options.UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
+           .UseSnakeCaseNamingConvention());
+
+// Read pool: Dapper (ProductReadModelRepository) — high-concurrency reads only.
+// Registered as keyed singleton so the write pool above remains the default NpgsqlDataSource.
+builder.Services.AddKeyedSingleton<NpgsqlDataSource>("catalog-read", (_, _) =>
+    NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(connectionString)
+    {
+        MaxPoolSize     = 150,
+        MinPoolSize     = 10,
+        CommandTimeout  = 7,
+        ApplicationName = "catalog-read",
+    }.ConnectionString));
 
 builder.Services.AddOutbox<CatalogDbContext>(
     configureDb: null,
@@ -50,6 +70,7 @@ builder.Services
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<CatalogDbContext>(name: "catalogdb", tags: ["ready", "db"]);
 
+builder.Services.AddExceptionHandler<OperationCancelledExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Add infrastructure

@@ -43,6 +43,7 @@ namespace Shared.Outbox.EfCore
             var now = DateTimeOffset.UtcNow;
 
             return await _dbContext.OutboxMessages
+                .AsNoTracking()
                 .Where(m =>
                     m.Status == OutboxMessageStatus.Pending &&
                     (m.NextRetryAt == null || m.NextRetryAt <= now))

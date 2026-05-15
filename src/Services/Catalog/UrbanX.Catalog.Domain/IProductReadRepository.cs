@@ -7,7 +7,7 @@ public interface IProductReadRepository
 {
     Task<ProductDetailView?> GetByIdAsync(Guid productId, CancellationToken ct = default);
 
-    Task<CursorPageResult<ProductListView>> GetPageKeysetAsync(
+    Task<Result<CursorPageResult<ProductListView>>> GetPageKeysetAsync(
         Guid? sellerId,
         Guid? categoryId,
         string? status,

@@ -35,17 +35,31 @@ namespace Shared.Outbox
             _options = options.Value;
         }
 
+        // Backoff sequence for consecutive errors: 5s, 10s, 20s, 40s … capped at 120s.
+        private static readonly TimeSpan[] ErrorBackoff =
+        [
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(10),
+            TimeSpan.FromSeconds(20),
+            TimeSpan.FromSeconds(40),
+            TimeSpan.FromSeconds(80),
+            TimeSpan.FromSeconds(120),
+        ];
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation(
                 "OutboxRelayWorker started. BatchSize={BatchSize}, Interval={Interval}s, MaxRetryAttempts={Max}",
                 _options.BatchSize, _options.PollingIntervalSeconds, _options.MaxRetryAttempts);
 
+            var consecutiveErrors = 0;
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
                     await ProcessBatchAsync(stoppingToken);
+                    consecutiveErrors = 0;
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -53,7 +67,13 @@ namespace Shared.Outbox
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unhandled error in OutboxRelayWorker polling cycle");
+                    consecutiveErrors++;
+                    var backoff = ErrorBackoff[Math.Min(consecutiveErrors - 1, ErrorBackoff.Length - 1)];
+                    _logger.LogError(ex,
+                        "OutboxRelayWorker error (attempt {Attempt}), backing off {Backoff}s",
+                        consecutiveErrors, backoff.TotalSeconds);
+                    await Task.Delay(backoff, stoppingToken);
+                    continue;
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(_options.PollingIntervalSeconds), stoppingToken);

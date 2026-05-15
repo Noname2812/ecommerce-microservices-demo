@@ -7,9 +7,10 @@ namespace Shared.Cache.Implementations;
 
 internal sealed class RedisDistributedLockService : IDistributedLockService
 {
-    // Lua script: release lock only if token matches (atomic check-and-delete)
+    // Lua script: release lock only if token matches (atomic check-and-delete).
+    // Use @placeholders so SE.Redis maps RedisKey → KEYS and values → ARGV (required for Redis 7+ Lua).
     private static readonly LuaScript ReleaseScript = LuaScript.Prepare(
-        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end");
+        "if redis.call('get', @lockKey) == @lockToken then return redis.call('del', @lockKey) else return 0 end");
 
     private readonly IConnectionMultiplexer _mux;
     private readonly CacheOptions _options;
@@ -39,13 +40,14 @@ internal sealed class RedisDistributedLockService : IDistributedLockService
         string resource, TimeSpan expiry, TimeSpan waitTimeout, CancellationToken ct = default)
     {
         var deadline = DateTimeOffset.UtcNow + waitTimeout;
-        var delay = TimeSpan.FromMilliseconds(50);
 
         while (DateTimeOffset.UtcNow < deadline)
         {
             ct.ThrowIfCancellationRequested();
             var handle = await TryAcquireAsync(resource, expiry, ct);
             if (handle is not null) return handle;
+            // Jitter prevents synchronized retry bursts under high concurrency.
+            var delay = TimeSpan.FromMilliseconds(50 + Random.Shared.Next(0, 50));
             await Task.Delay(delay, ct);
         }
 
@@ -74,7 +76,7 @@ internal sealed class RedisDistributedLockService : IDistributedLockService
         {
             if (_released) return;
             _released = true;
-            await ReleaseScript.EvaluateAsync(_db, new { KEYS = new RedisKey[] { _key }, ARGV = new RedisValue[] { _token } });
+            await ReleaseScript.EvaluateAsync(_db, new { lockKey = (RedisKey)_key, lockToken = (RedisValue)_token });
         }
     }
 }

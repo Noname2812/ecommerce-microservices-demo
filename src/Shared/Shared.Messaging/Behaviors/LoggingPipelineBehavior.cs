@@ -27,7 +27,7 @@ public sealed class LoggingPipelineBehavior<TRequest, TResponse> : IPipelineBeha
 
         try
         {
-            var response = await next();
+            var response = await next(cancellationToken);
             sw.Stop();
 
             _logger.LogInformation(
@@ -35,6 +35,14 @@ public sealed class LoggingPipelineBehavior<TRequest, TResponse> : IPipelineBeha
                 _requestName, sw.ElapsedMilliseconds);
 
             return response;
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested || ex.CancellationToken.IsCancellationRequested)
+        {
+            sw.Stop();
+            _logger.LogInformation(
+                "Request {RequestName} cancelled by client after {ElapsedMs}ms",
+                _requestName, sw.ElapsedMilliseconds);
+            throw;
         }
         catch (Exception ex)
         {

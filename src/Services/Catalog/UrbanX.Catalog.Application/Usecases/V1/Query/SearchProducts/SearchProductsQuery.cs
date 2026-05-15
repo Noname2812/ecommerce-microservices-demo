@@ -1,11 +1,21 @@
 using FluentValidation;
 using Shared.Application;
 using Shared.Application.Authorization;
+using Shared.Cache.Attributes;
 using Shared.Kernel.Primitives;
 
 namespace UrbanX.Catalog.Application.Usecases.V1.Query.SearchProducts;
 
 [AllowAnonymous]
+[CacheQuery(
+    "product:list:{Q}:{CategoryId}:{PriceMin}:{PriceMax}:{Sort}:{Page}:{PageSize}",
+    ExpirySeconds      = 300,   // TTL trên Redis. Mặc định: 300s (5 phút)
+    MemoryTtlSeconds   = 5,     // TTL L1 in-process cache. Mặc định: 5s. Set 0 để tắt
+    NegativeTtlSeconds = 30,    // Cache kết quả "not found" để tránh hit DB liên tục. Mặc định: 0 (tắt)
+    JitterPercent      = 10,    // Jitter ±10% để tránh thundering herd. Mặc định: 10
+    LockExpirySeconds  = 10,    // Thời gian giữ lock khi populate cache. Mặc định: 10s
+    LockWaitTimeoutSeconds = 0  // Timeout chờ lock. Mặc định: 5s
+)]
 public record SearchProductsQuery(
     string Q,
     Guid? CategoryId = null,
