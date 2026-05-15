@@ -51,21 +51,68 @@ const DURATION = __ENV.DURATION || "3m";
 // Query sẽ được chọn ngẫu nhiên mỗi iteration để mô phỏng hành vi thực tế.
 
 const SEARCH_QUERIES = [
-  "thoai",
-  "dien thoai",
-  "samsung",
-  "iphone",
-  "laptop",
-  "tai nghe",
-  "sac du phong",
-  "apple",
-  "xiaomi",
-  "oppo",
-  "man hinh",
-  "chuot",
-  "ban phim",
-  "o cung",
-  "ram",
+  // Điện thoại
+  "dien thoai", "smartphone", "iphone", "samsung", "xiaomi", "oppo", "vivo", "realme", "nokia", "motorola",
+  "iphone 15", "iphone 14", "iphone 13", "samsung galaxy", "samsung a55", "samsung s24", "xiaomi 14",
+  "oppo reno", "vivo v30", "realme 12", "dien thoai gaming", "dien thoai 5g", "dien thoai gia re",
+  "dien thoai android", "dien thoai cam ung", "may bo", "dien thoai pin trau", "iphone cu", "samsung cu",
+
+  // Laptop & Máy tính
+  "laptop", "macbook", "laptop gaming", "dell", "hp", "lenovo", "asus", "acer", "msi", "lg gram",
+  "macbook air", "macbook pro", "laptop sinh vien", "laptop van phong", "laptop do hoa",
+  "laptop core i5", "laptop core i7", "laptop ryzen", "laptop 16 inch", "laptop 14 inch",
+  "may tinh ban", "pc gaming", "may tinh bo", "ban phim co", "chuot gaming",
+  "man hinh 4k", "man hinh cong", "man hinh 27 inch", "man hinh gaming", "man hinh 144hz",
+
+  // Tai nghe & Loa
+  "tai nghe", "tai nghe bluetooth", "tai nghe chong on", "airpods", "sony wh1000xm5",
+  "tai nghe gaming", "tai nghe true wireless", "earbuds", "tai nghe co day", "tai nghe in ear",
+  "loa bluetooth", "loa karaoke", "loa vi tinh", "soundbar", "loa jbl",
+  "loa marshall", "tai nghe samsung", "tai nghe xiaomi", "tai nghe apple", "tai nghe bose",
+
+  // Phụ kiện
+  "sac du phong", "pin du phong", "sac nhanh", "cap sac", "sac khong day",
+  "op lung", "cuong luc", "bao da", "op iphone", "op samsung",
+  "chuot bluetooth", "ban phim bluetooth", "hub usb", "usb c", "the nho",
+  "the sd", "usb", "o cung ngoai", "ssd ngoai", "webcam",
+  "giay do man hinh", "gia do man hinh", "gia dung laptop", "vo lung may tinh", "tan nhiet laptop",
+
+  // Linh kiện PC
+  "ram", "ram ddr5", "ram laptop", "cpu", "intel core i9",
+  "amd ryzen", "bo xu ly", "card do hoa", "rtx 4090", "rtx 4080",
+  "vga gaming", "ssd", "ssd nvme", "o cung ssd", "hdd",
+  "mainboard", "cpu cooler", "tan nhiet", "psu", "nguon may tinh",
+  "case may tinh", "vo case", "case gaming", "rgb", "fan case",
+
+  // Máy ảnh & Quay phim
+  "may anh", "may anh mirrorless", "may anh sony", "may anh canon", "may anh fuji",
+  "ong kinh", "lens", "tripod", "chan may", "gimbal",
+  "action camera", "gopro", "may quay phim", "may quay vlog", "camera hanh dong",
+  "may anh gia re", "may anh cu", "may anh cho nguoi moi", "micro thu am", "den ring light",
+
+  // Đồng hồ & Wearable
+  "dong ho thong minh", "smartwatch", "apple watch", "samsung watch", "garmin",
+  "xiaomi band", "vong tay thong minh", "dong ho the thao", "dong ho chay bo",
+  "dong ho gps", "tai nghe khong day", "the duc thong minh", "vong tay theo doi suc khoe",
+  "may do huyet ap", "may do nhip tim",
+
+  // Thiết bị nhà thông minh
+  "thiet bi nha thong minh", "smart home", "camera an ninh", "camera ip", "camera wifi",
+  "den thong minh", "o cam thong minh", "router wifi", "mesh wifi", "wifi extender",
+  "tv thong minh", "smart tv", "samsung tv", "lg tv", "sony tv",
+  "loa thong minh", "may loc khong khi", "robot hut bui", "may loc nuoc", "noi com dien tu",
+
+  // Gaming
+  "tai nghe gaming", "chuot gaming", "ban phim gaming", "ghe gaming", "ban gaming",
+  "man hinh gaming", "controller", "tay cam", "gamepad", "joystick",
+  "headset gaming", "microphone gaming", "webcam gaming", "capture card", "ps5",
+  "xbox", "may choi game", "nintendo switch", "gaming gear", "rgb gaming",
+
+  // Máy in & Văn phòng
+  "may in", "may in laser", "may in mau", "may in phun", "muc in",
+  "may scan", "may photocopy", "may chieu", "may tinh bang", "tablet",
+  "ipad", "android tablet", "samsung tab", "may tinh xach tay", "laptop van phong",
+  "but stylus", "apple pencil", "ban di chuot", "lo xo", "may tinh casio",
 ];
 
 function randomQuery() {

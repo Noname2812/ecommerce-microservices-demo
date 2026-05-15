@@ -106,3 +106,13 @@ Script in ra **req/s trung bình** (tổng request / thời gian wall-clock). Đ
 - Chạy k6 từ **máy khác** trong mạng LAN để tránh CPU client làm nghẽn.
 - Theo dõi **PostgreSQL** (CPU, `pg_stat_statements`, connection pool) và **Catalog** (GC, thread pool) khi RPS cao.
 - So sánh cùng workload với/s không có **Redis** (nếu sau này search có cache) để biết bottleneck.
+
+
+docker run --rm williamyeh/wrk -t8 -c200 -d60s http://host.docker.internal:5025/api/v1/catalog/products?q=seed
+
+
+App đã có sẵn instrumentation — nhìn vào Aspire dashboard:
+
+cache.l2.get span duration: nếu > 200ms → Redis là bottleneck
+cache.lock.acquire span duration: nếu > 100ms → lock/Redis slow
+catalog.db.connection_open_ms metric: nếu > 50ms → connection pool pressure

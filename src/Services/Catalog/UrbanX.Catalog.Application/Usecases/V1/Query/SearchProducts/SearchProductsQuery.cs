@@ -14,7 +14,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Query.SearchProducts;
     NegativeTtlSeconds = 30,    // Cache kết quả "not found" để tránh hit DB liên tục. Mặc định: 0 (tắt)
     JitterPercent      = 10,    // Jitter ±10% để tránh thundering herd. Mặc định: 10
     LockExpirySeconds  = 10,    // Thời gian giữ lock khi populate cache. Mặc định: 10s
-    LockWaitTimeoutSeconds = 0  // Timeout chờ lock. Mặc định: 5s
+    LockWaitTimeoutSeconds = 1  // Timeout chờ lock. Mặc định: 5s
 )]
 public record SearchProductsQuery(
     string Q,

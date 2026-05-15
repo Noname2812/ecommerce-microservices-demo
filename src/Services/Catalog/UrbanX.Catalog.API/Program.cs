@@ -19,6 +19,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddSharedCache("redis");
 
+// Register catalog-specific and cache-behavior activity sources + meters so
+// Aspire dashboard (OTLP) captures spans from each phase: cache L2, lock, DB query.
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t
+        .AddSource(ProductReadModelRepository.ActivitySourceName)
+        .AddSource("SharedKernel.Cache"))
+    .WithMetrics(m => m
+        .AddMeter(ProductReadModelRepository.MeterName)
+        .AddMeter("SharedKernel.Cache"));
+
 // Add services to the container.
 builder.Services.AddOpenApi();
 

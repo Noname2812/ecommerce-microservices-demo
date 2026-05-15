@@ -6,6 +6,8 @@ using Shared.Cache.Abstractions;
 using Shared.Cache.Attributes;
 using Shared.Kernel.Primitives;
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 
 namespace Shared.Messaging.Behaviors;
@@ -14,6 +16,20 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IQueryBase
 {
+    public const string ActivitySourceName = "SharedKernel.Cache";
+    public const string MeterName = "SharedKernel.Cache";
+
+    private static readonly ActivitySource _activitySource = new(ActivitySourceName, "1.0.0");
+    private static readonly Meter _meter = new(MeterName, "1.0.0");
+    private static readonly Counter<long> _cacheHits =
+        _meter.CreateCounter<long>("cache.query.hits", "{requests}", "Cache L2 hits");
+    private static readonly Counter<long> _cacheMisses =
+        _meter.CreateCounter<long>("cache.query.misses", "{requests}", "Cache L2 misses");
+    private static readonly Histogram<double> _l2GetDurationMs =
+        _meter.CreateHistogram<double>("cache.query.l2_get_duration_ms", "ms", "Redis GET duration");
+    private static readonly Histogram<double> _handlerDurationMs =
+        _meter.CreateHistogram<double>("cache.query.handler_duration_ms", "ms", "Handler (DB) duration on cache miss");
+
     private static readonly CacheQueryAttribute? _attr =
         typeof(TRequest).GetCustomAttribute<CacheQueryAttribute>();
 
@@ -71,23 +87,43 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
             return await CallHandlerAsync(cacheKey, next);
         }
 
-        // L2: Redis read
-        try
+        // L2: Redis read — instrumented
+        TResponse? cached = default;
+        bool redisFailed = false;
+        var l2GetSw = Stopwatch.StartNew();
+        using (var l2Span = _activitySource.StartActivity("cache.l2.get", ActivityKind.Client))
         {
-            var cached = await _cache.GetAsync<TResponse>(cacheKey, CancellationToken.None);
-            _circuit.RecordSuccess();
-            if (cached is not null)
+            l2Span?.SetTag("cache.key", cacheKey);
+            l2Span?.SetTag("cache.request", _requestName);
+            try
             {
-                SetL1(cacheKey, cached);
-                return cached;
+                cached = await _cache.GetAsync<TResponse>(cacheKey, CancellationToken.None);
+                _circuit.RecordSuccess();
+                l2Span?.SetTag("cache.hit", cached is not null);
+            }
+            catch (Exception ex)
+            {
+                l2Span?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                _logger.LogWarning(ex, "[Cache] Redis read failed for '{Key}' ({Request}).", cacheKey, _requestName);
+                _circuit.RecordFailure();
+                redisFailed = true;
             }
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "[Cache] Redis read failed for '{Key}' ({Request}).", cacheKey, _requestName);
-            _circuit.RecordFailure();
+        l2GetSw.Stop();
+        _l2GetDurationMs.Record(l2GetSw.Elapsed.TotalMilliseconds,
+            new TagList { { "request", _requestName }, { "hit", (!redisFailed && cached is not null).ToString() } });
+
+        if (redisFailed)
             return await CallHandlerAsync(cacheKey, next);
+
+        if (cached is not null)
+        {
+            _cacheHits.Add(1, new TagList { { "request", _requestName } });
+            SetL1(cacheKey, cached);
+            return cached;
         }
+
+        _cacheMisses.Add(1, new TagList { { "request", _requestName } });
 
         // Distributed lock: guards cross-process stampede.
         // SingleFlight already ensures only one in-process goroutine reaches here.
@@ -96,21 +132,28 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
         var lockWait = TimeSpan.FromSeconds(_attr.LockWaitTimeoutSeconds);
 
         ILockHandle? lockHandle;
-        try
+        using (var lockSpan = _activitySource.StartActivity("cache.lock.acquire", ActivityKind.Internal))
         {
-            lockHandle = await _lockService.AcquireAsync(lockKey, lockExpiry, lockWait, CancellationToken.None);
-            _circuit.RecordSuccess();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "[Cache] Redis lock failed for '{Key}' ({Request}).", cacheKey, _requestName);
-            _circuit.RecordFailure();
-            return await CallHandlerAsync(cacheKey, next);
+            lockSpan?.SetTag("cache.lock.key", lockKey);
+            lockSpan?.SetTag("cache.lock.wait_timeout_s", _attr.LockWaitTimeoutSeconds);
+            try
+            {
+                lockHandle = await _lockService.AcquireAsync(lockKey, lockExpiry, lockWait, CancellationToken.None);
+                _circuit.RecordSuccess();
+                lockSpan?.SetTag("cache.lock.acquired", lockHandle is not null);
+            }
+            catch (Exception ex)
+            {
+                lockSpan?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                _logger.LogWarning(ex, "[Cache] Redis lock failed for '{Key}' ({Request}).", cacheKey, _requestName);
+                _circuit.RecordFailure();
+                return await CallHandlerAsync(cacheKey, next);
+            }
         }
 
         if (lockHandle is null)
         {
-            // Lock wait timeout — another process likely already populated the cache.
+            // LockWaitTimeoutSeconds=0 → always null; or another process holds the lock.
             _logger.LogWarning("[Cache] Lock timeout for '{Key}' ({Request}) — re-checking L2.", cacheKey, _requestName);
             try
             {
@@ -146,15 +189,26 @@ public sealed class CacheQueryPipelineBehavior<TRequest, TResponse>
     private async Task<TResponse> CallHandlerAsync(string cacheKey, RequestHandlerDelegate<TResponse> next)
     {
         TResponse response;
-        try
+        var handlerSw = Stopwatch.StartNew();
+        using (var handlerSpan = _activitySource.StartActivity("cache.handler", ActivityKind.Internal))
         {
-            response = await next(CancellationToken.None);
+            handlerSpan?.SetTag("cache.key", cacheKey);
+            handlerSpan?.SetTag("cache.request", _requestName);
+            try
+            {
+                response = await next(CancellationToken.None);
+                handlerSpan?.SetTag("handler.success", true);
+            }
+            catch (Exception ex)
+            {
+                handlerSpan?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                _logger.LogError(ex, "[Cache] Handler failed (DB down?) for '{Key}' ({Request}).", cacheKey, _requestName);
+                throw;
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[Cache] Handler failed (DB down?) for '{Key}' ({Request}).", cacheKey, _requestName);
-            throw;
-        }
+        handlerSw.Stop();
+        _handlerDurationMs.Record(handlerSw.Elapsed.TotalMilliseconds,
+            new TagList { { "request", _requestName } });
 
         if (response is not IResult result || result.IsSuccess)
         {

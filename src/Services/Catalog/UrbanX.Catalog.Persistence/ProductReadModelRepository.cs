@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Text;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +15,18 @@ namespace UrbanX.Catalog.Persistence;
 public sealed class ProductReadModelRepository(
     [FromKeyedServices("catalog-read")] NpgsqlDataSource dataSource) : IProductReadRepository
 {
+    public const string ActivitySourceName = "UrbanX.Catalog";
+    public const string MeterName = "UrbanX.Catalog";
+
+    private static readonly ActivitySource _source = new(ActivitySourceName, "1.0.0");
+    private static readonly Meter _meter = new(MeterName, "1.0.0");
+    private static readonly Histogram<double> _searchDurationMs =
+        _meter.CreateHistogram<double>("catalog.db.search_duration_ms", "ms",
+            "Total SearchAsync duration: connection open + query + mapping");
+    private static readonly Histogram<double> _connectionOpenMs =
+        _meter.CreateHistogram<double>("catalog.db.connection_open_ms", "ms",
+            "Time waiting for a connection from the read pool");
+
     // Captures COUNT(*) OVER() total alongside each row from the single-round-trip search query.
     // Dapper ignores the _rank column (no matching property); MatchNamesWithUnderscores maps total_count → TotalCount.
     private sealed class SearchResultRow
@@ -116,7 +130,23 @@ public sealed class ProductReadModelRepository(
         string q, Guid? categoryId, decimal? priceMin, decimal? priceMax,
         string sort, int page, int pageSize, CancellationToken ct = default)
     {
+        using var searchSpan = _source.StartActivity("catalog.product.search", ActivityKind.Internal);
+        searchSpan?.SetTag("db.system", "postgresql");
+        searchSpan?.SetTag("catalog.search.sort", sort);
+        searchSpan?.SetTag("catalog.search.page", page);
+        searchSpan?.SetTag("catalog.search.page_size", pageSize);
+        searchSpan?.SetTag("catalog.search.has_category_filter", categoryId.HasValue);
+        searchSpan?.SetTag("catalog.search.has_price_filter", priceMin.HasValue || priceMax.HasValue);
+
+        var totalSw = Stopwatch.StartNew();
+
+        // Measure connection pool wait separately — pool exhaustion shows up here under load.
+        var connSw = Stopwatch.StartNew();
         await using var conn = await dataSource.OpenConnectionAsync(ct);
+        connSw.Stop();
+        _connectionOpenMs.Record(connSw.Elapsed.TotalMilliseconds);
+        searchSpan?.AddEvent(new ActivityEvent("db.connection_acquired",
+            tags: new() { { "pool", "catalog-read" }, { "duration_ms", connSw.ElapsedMilliseconds } }));
 
         var safeSize = Math.Clamp(pageSize, 1, PageResult<ProductListView>.UpperPageSize);
         var offset = (page - 1) * safeSize;
@@ -191,11 +221,29 @@ public sealed class ProductReadModelRepository(
         p.Add("limit", safeSize);
         p.Add("offset", offset);
 
-        var rows = (await conn.QueryAsync<SearchResultRow>(
-            new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
+        List<SearchResultRow> rows;
+        using (var querySpan = _source.StartActivity("catalog.db.search_products", ActivityKind.Client))
+        {
+            querySpan?.SetTag("db.system", "postgresql");
+            querySpan?.SetTag("db.operation", "SELECT");
+            querySpan?.SetTag("db.collection.name", "read.product_list_view");
+            querySpan?.SetTag("catalog.search.sort", sort);
+            querySpan?.SetTag("catalog.search.page", page);
+            querySpan?.SetTag("catalog.search.offset", offset);
+
+            rows = (await conn.QueryAsync<SearchResultRow>(
+                new CommandDefinition(sql, p, cancellationToken: ct))).ToList();
+
+            querySpan?.SetTag("db.response.rows_returned", rows.Count);
+        }
 
         var total = rows.Count > 0 ? (int)rows[0].TotalCount : 0;
         var items = rows.ConvertAll(r => r.ToView());
+
+        totalSw.Stop();
+        searchSpan?.SetTag("catalog.result.total_count", total);
+        _searchDurationMs.Record(totalSw.Elapsed.TotalMilliseconds,
+            new TagList { { "sort", sort } });
 
         return PageResult<ProductListView>.Create(items, page, safeSize, total);
     }
