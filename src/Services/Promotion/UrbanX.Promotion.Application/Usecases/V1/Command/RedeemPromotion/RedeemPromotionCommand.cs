@@ -19,10 +19,13 @@ public record RedeemOrderItem(Guid ProductId, Guid VariantId, decimal UnitPrice,
 public record RedeemPromotionResult(
     decimal OrderLevelDiscount,
     IReadOnlyList<ItemDiscount> ItemDiscounts,
-    IReadOnlyList<Guid> AppliedPromotionIds
+    IReadOnlyList<Guid> AppliedPromotionIds,
+    IReadOnlyList<ClaimedFlashSaleSlotResult> ClaimedFlashSaleSlots
 );
 
 public record ItemDiscount(Guid VariantId, decimal DiscountPerUnit);
+
+public record ClaimedFlashSaleSlotResult(Guid PromotionId, string SlotKey, int Quantity);
 
 public sealed class RedeemPromotionCommandValidator : AbstractValidator<RedeemPromotionCommand>
 {

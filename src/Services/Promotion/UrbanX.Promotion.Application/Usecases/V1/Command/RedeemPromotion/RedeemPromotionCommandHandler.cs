@@ -85,6 +85,7 @@ internal sealed class RedeemPromotionCommandHandler(
 
         var itemDiscounts = new List<ItemDiscount>();
         var flashSalePromotionIds = new List<Guid>();
+        var claimedSlots = new List<ClaimedFlashSaleSlotResult>();
 
         foreach (var flashPromotion in activeFlashSales)
         {
@@ -109,6 +110,7 @@ internal sealed class RedeemPromotionCommandHandler(
 
                 var discountPerUnit = CalculateItemDiscount(flashPromotion, orderItem.UnitPrice);
                 itemDiscounts.Add(new ItemDiscount(orderItem.VariantId, discountPerUnit));
+                claimedSlots.Add(new ClaimedFlashSaleSlotResult(flashPromotion.Id, slotKey.ToString(), orderItem.Quantity));
 
                 if (!flashSalePromotionIds.Contains(flashPromotion.Id))
                 {
@@ -130,7 +132,7 @@ internal sealed class RedeemPromotionCommandHandler(
         if (appliedCodePromotionId.HasValue) allAppliedIds.Add(appliedCodePromotionId.Value);
         allAppliedIds.AddRange(flashSalePromotionIds);
 
-        return Result.Success(new RedeemPromotionResult(orderLevelDiscount, itemDiscounts, allAppliedIds));
+        return Result.Success(new RedeemPromotionResult(orderLevelDiscount, itemDiscounts, allAppliedIds, claimedSlots));
     }
 
     private static Error? ValidatePromotion(Domain.Models.Promotion promotion, decimal subtotal, DateTimeOffset now)

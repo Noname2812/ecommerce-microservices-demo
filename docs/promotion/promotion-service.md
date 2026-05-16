@@ -14,8 +14,21 @@ Server-side discount authority for the UrbanX platform. Handles creation, lifecy
 | POST | `/api/v1/promotions/{id}/pause` | `promotion:write` | Pause promotion |
 | POST | `/api/v1/promotions/{id}/voucher-codes` | `promotion:write` | Add voucher codes |
 | POST | `/api/v1/promotions/{id}/flash-sale-items` | `promotion:write` | Add flash sale items |
-| POST | `/api/v1/promotions/redeem` | Anonymous | Validate and redeem (called by Order service) |
+| POST | `/api/v1/promotions/redeem` | Anonymous | Validate and redeem — sync, dùng cho PlaceOrder normal |
 | POST | `/api/v1/promotions/preview` | Anonymous | Preview discount without side effects |
+| POST | `/internal/v1/coupon-claims` | Anonymous | Claim coupon — sync, internal |
+| DELETE | `/internal/v1/coupon-claims/{claimId}` | Anonymous | Release coupon claim — sync, internal |
+
+## Message Consumers (Saga)
+
+Hai consumer xử lý event từ `PlaceOrderSaga` qua RabbitMQ — tái sử dụng các MediatR command đã có:
+
+| Consumer | Event consumed | Response events |
+|---|---|---|
+| `RedeemSalePromotionRequestedConsumer` | `RedeemSalePromotionRequestedV1` | `PromotionRedeemedV1` / `PromotionRedeemFailedV1` |
+| `ClaimCouponRequestedConsumer` | `ClaimCouponRequestedV1` | `CouponClaimedV1` / `CouponClaimFailedV1` |
+
+Chi tiết: [promotion-saga-consumers.md](promotion-saga-consumers.md)
 
 ## Service Port
 
@@ -24,9 +37,30 @@ Port `5040` (manual run). Aspire assigns port dynamically at runtime.
 ## Dependencies
 
 - PostgreSQL (`urbanx_promotion`)
-- Redis (flash sale slot counter, distributed lock)
-- RabbitMQ (publishes `PromotionRedeemedV1`)
+- Redis (flash sale slot counter, distributed lock, coupon claim quota)
+- RabbitMQ (publishes outbox events + saga response events; consumes saga request events)
 
 ## Config
 
-No additional env vars required beyond standard Aspire wiring (`promotiondb`, `redis`, `messaging`).
+Tuning cho message consumers được cấu hình qua `appsettings.json` (section `Promotion:Messaging`):
+
+```json
+"Promotion": {
+  "Messaging": {
+    "RedeemSalePromotionRequested": {
+      "QueueName": "promotion-redeem-sale-promotion-requested",
+      "Retry": { "RetryLimit": 3, "MinIntervalMs": 200, "MaxIntervalMs": 2000, "IntervalDeltaMs": 500 },
+      "PrefetchCount": 16,
+      "ConcurrentMessageLimit": 8
+    },
+    "ClaimCouponRequested": {
+      "QueueName": "promotion-claim-coupon-requested",
+      "Retry": { "RetryLimit": 3, "MinIntervalMs": 200, "MaxIntervalMs": 2000, "IntervalDeltaMs": 500 },
+      "PrefetchCount": 16,
+      "ConcurrentMessageLimit": 8
+    }
+  }
+}
+```
+
+Ngoài ra không cần env var nào khác ngoài Aspire wiring chuẩn (`promotiondb`, `redis`, `messaging`).

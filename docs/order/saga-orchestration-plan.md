@@ -1,6 +1,6 @@
 # Saga Orchestration cho PlaceOrder / PlaceSalesOrder
 
-> **Status**: In Progress — TASK-01 ✅ TASK-02 ✅ (bao gồm Payment step) · TASK-03/04/05 còn lại
+> **Status**: In Progress — TASK-01 ✅ TASK-02 ✅ (bao gồm Payment step) · TASK-03 ✅ · TASK-04/05 còn lại
 > **Owner**: Order service team
 > **Tasks**: xem `docs/order/tasks/` để thấy chi tiết từng task giao cho member
 

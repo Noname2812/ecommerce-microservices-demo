@@ -14,6 +14,7 @@ using UrbanX.Promotion.API.Messaging;
 using UrbanX.Promotion.Application.DependencyInjection.Extensions;
 using UrbanX.Promotion.Application.Jobs;
 using UrbanX.Promotion.Application.Messaging;
+using UrbanX.Promotion.Application.Messaging.Consumers;
 using UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Application.Telemetry;
@@ -49,6 +50,8 @@ builder.Services
         configureBus: bus =>
         {
             bus.AddConsumer<CouponReleaseRequestedConsumer>(typeof(CouponReleaseRequestedConsumerDefinition));
+            bus.AddConsumer<RedeemSalePromotionRequestedConsumer>(typeof(RedeemSalePromotionRequestedConsumerDefinition));
+            bus.AddConsumer<ClaimCouponRequestedConsumer>(typeof(ClaimCouponRequestedConsumerDefinition));
         });
 
 builder.Services

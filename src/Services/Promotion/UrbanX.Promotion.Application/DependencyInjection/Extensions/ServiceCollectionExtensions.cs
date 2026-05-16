@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shared.Messaging.DependencyInjection.Extensions;
+using UrbanX.Promotion.Application.DependencyInjection.Options;
 using UrbanX.Promotion.Application.Jobs;
 using UrbanX.Promotion.Application.Messaging;
 
@@ -17,6 +18,22 @@ public static class ServiceCollectionExtensions
         services
             .AddOptions<CouponReleaseRequestedConsumerOptions>()
             .BindConfiguration(CouponReleaseRequestedConsumerOptions.SectionName)
+            .ValidateOnStart();
+
+        services.AddSingleton<IValidateOptions<RedeemSalePromotionRequestedConsumerOptions>,
+            RedeemSalePromotionRequestedConsumerOptionsValidator>();
+
+        services
+            .AddOptions<RedeemSalePromotionRequestedConsumerOptions>()
+            .BindConfiguration(RedeemSalePromotionRequestedConsumerOptions.SectionName)
+            .ValidateOnStart();
+
+        services.AddSingleton<IValidateOptions<ClaimCouponRequestedConsumerOptions>,
+            ClaimCouponRequestedConsumerOptionsValidator>();
+
+        services
+            .AddOptions<ClaimCouponRequestedConsumerOptions>()
+            .BindConfiguration(ClaimCouponRequestedConsumerOptions.SectionName)
             .ValidateOnStart();
 
         services
