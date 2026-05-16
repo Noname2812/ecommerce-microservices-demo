@@ -41,7 +41,7 @@ TASK-07 ────────────────────────
 - [ ] TASK-01 — Saga Contract Events
 - [ ] TASK-02 — Saga State + State Machine + Migration
 - [ ] TASK-03 — Promotion Service Consumers
-- [ ] TASK-04 — Inventory Service Consumer
+- [x] TASK-04 — Inventory Service Consumer
 - [ ] TASK-05 — PlaceSalesOrder API Refactor
 - [ ] TASK-06 — Hot-path Optimizations
 - [ ] TASK-07 — PlaceOrder Normal Hardening

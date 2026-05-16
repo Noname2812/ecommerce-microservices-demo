@@ -19,6 +19,14 @@ public static class ServiceCollectionExtensions
             .BindConfiguration(InventoryReleaseRequestedConsumerOptions.SectionName)
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<ReserveInventoryRequestedConsumerOptions>,
+            ReserveInventoryRequestedConsumerOptionsValidator>();
+
+        services
+            .AddOptions<ReserveInventoryRequestedConsumerOptions>()
+            .BindConfiguration(ReserveInventoryRequestedConsumerOptions.SectionName)
+            .ValidateOnStart();
+
         services
             .AddOptions<ReleaseExpiredReservationsJobOptions>()
             .BindConfiguration(ReleaseExpiredReservationsJobOptions.SectionName)
@@ -26,6 +34,7 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddScoped<InventoryReleaseRequestedProcessor>();
+        services.AddScoped<ReserveInventoryRequestedProcessor>();
         services.AddScoped<ReleaseExpiredReservationsJob>();
         services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
         return services;

@@ -46,4 +46,24 @@ dotnet ef migrations add InitialCreate
 
 ## Integration Events
 
-Contract place-order: `Shared.Contract/Messaging/PlaceOrder/` (ví dụ `InventoryReleaseRequestedV1`). Consumer compensation đọc cấu hình queue/retry/throughput từ appsettings `Inventory:Messaging:InventoryReleaseRequested` (class `InventoryReleaseRequestedConsumerOptions`), validate lúc startup qua `InventoryReleaseRequestedConsumerOptionsValidator` (`ValidateOnStart`).
+Contracts trong `Shared.Contract/Messaging/PlaceOrder/` và `Shared.Contract/Messaging/PlaceOrderSaga/`.
+
+| Consumer | Event | Namespace | Config section |
+|---|---|---|---|
+| `InventoryReleaseRequestedConsumer` | `InventoryReleaseRequestedV1` | `PlaceOrder` | `Inventory:Messaging:InventoryReleaseRequested` |
+| `ReserveInventoryRequestedConsumer` | `ReserveInventoryRequestedV1` | `PlaceOrderSaga` | `Inventory:Messaging:ReserveInventoryRequested` |
+
+### ReserveInventoryRequestedConsumer (saga)
+
+Nhận `ReserveInventoryRequestedV1` từ `PlaceSalesOrderSaga`. Delegate sang `ReserveInventoryRequestedProcessor` → `ReserveInventoryCommand` (MediatR). Publish `InventoryReservedV1` hoặc `InventoryReserveFailedV1` tùy kết quả.
+
+- Idempotency: handler tự xử lý qua `OrderIdempotencyKey` (`:inv` suffix)
+- Concurrency retry: `IConcurrencyRetriableCommand` xử lý xmin conflict tự động
+- Retry broker-level: exponential 3 lần (config `Retry.RetryLimit/MinIntervalMs/MaxIntervalMs/IntervalDeltaMs`)
+- Throughput: `PrefetchCount=32`, `ConcurrentMessageLimit=16` (default)
+
+Chi tiết: [reserve-inventory-consumer.md](reserve-inventory-consumer.md)
+
+### InventoryReleaseRequestedConsumer (compensation)
+
+Consumer bù trừ cho PlaceOrder normal và PlaceSalesOrder saga. Đọc cấu hình từ `Inventory:Messaging:InventoryReleaseRequested`.

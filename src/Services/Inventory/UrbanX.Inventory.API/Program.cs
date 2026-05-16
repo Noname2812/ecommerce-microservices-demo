@@ -39,6 +39,7 @@ builder.Services
         configureBus: bus =>
         {
             bus.AddConsumer<InventoryReleaseRequestedConsumer>(typeof(InventoryReleaseRequestedConsumerDefinition));
+        bus.AddConsumer<ReserveInventoryRequestedConsumer>(typeof(ReserveInventoryRequestedConsumerDefinition));
         });
 
 // Health checks
