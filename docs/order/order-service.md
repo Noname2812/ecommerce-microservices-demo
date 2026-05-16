@@ -20,6 +20,8 @@ PENDING → CANCELLED
 
 ## Endpoints
 
+### Normal Order
+
 | Method | Path | Command/Query | Permission |
 |---|---|---|---|
 | POST | `/api/v1/orders` | `PlaceOrderCommand` | `order:write` (Own) |
@@ -28,15 +30,40 @@ PENDING → CANCELLED
 | PUT | `/api/v1/orders/{id}/confirm` | `ConfirmOrderCommand` | `order:write` (All — Admin) |
 | PUT | `/api/v1/orders/{id}/cancel` | `CancelOrderCommand` | `order:write` (Own) |
 
+### Flash Sale Order (async)
+
+| Method | Path | Command/Query | Permission | Response |
+|---|---|---|---|---|
+| POST | `/api/v1/orders/sales` | `PlaceSalesOrderCommand` | `order:write` (Own) | `202 Accepted` + `Location` header |
+| GET | `/api/v1/orders/sales/{id}/status` | `GetSalesOrderStatusQuery` | `order:read` (Own) | `200 OK` — `SalesOrderStatusDto` |
+
+`POST /sales` trả về ngay sau khi save Order(Pending) + publish `PlaceSalesOrderRequestedV1`. Client poll `GET /sales/{id}/status` để theo dõi saga tiến trình đến `Confirmed` hoặc `Faulted`.
+
+Xem chi tiết: [place-sales-order.md](place-sales-order.md)
+
 ## Integration Events Published
 
-| Event | Trigger |
-|---|---|
-| `OrderCreatedV1` | Order placed successfully |
-| `OrderConfirmedV1` | Admin confirms order |
-| `OrderCancelledV1` | Order cancelled (customer or admin) |
+| Event | Trigger | Transport |
+|---|---|---|
+| `OrderCreatedV1` | Normal order placed | Outbox → RabbitMQ |
+| `OrderConfirmedV1` | Admin confirms order | Outbox → RabbitMQ |
+| `OrderCancelledV1` | Order cancelled | Outbox → RabbitMQ |
+| `PlaceSalesOrderRequestedV1` | Sales order accepted (202) | Outbox → RabbitMQ |
+| `PlaceSalesOrderConfirmedV1` | Saga completes successfully | Saga → RabbitMQ |
+| `PlaceSalesOrderFailedV1` | Saga faults | Saga → RabbitMQ |
 
-Events published via Transactional Outbox → RabbitMQ.
+## Saga
+
+`PlaceSalesOrderSagaStateMachine` (MassTransit, EF Core persistence) orchestrates the async flow:
+
+```
+Initial → PromotionRedeeming → InventoryReserving → [CouponClaiming] → PaymentProcessing → Confirming → Completed
+                                                                                              ↓ (any step fail)
+                                                                                          Compensating → Faulted
+```
+
+State persisted in `place_sales_order_saga_states` table (same `OrderDbContext`).  
+Xem chi tiết: [saga-orchestration-plan.md](saga-orchestration-plan.md)
 
 ## Integration Events Consumed
 

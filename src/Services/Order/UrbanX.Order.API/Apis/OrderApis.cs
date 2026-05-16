@@ -7,6 +7,7 @@ using UrbanX.Order.Application.Usecases.V1.Command;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 using UrbanX.Order.Application.Usecases.V1.Query;
+using UrbanX.Order.Application.Usecases.V1.Query.GetSalesOrderStatus;
 
 namespace UrbanX.Order.API.Apis;
 
@@ -22,6 +23,8 @@ public class OrderApis : ApiEndpoint, ICarterModule
         group.MapPost("/", PlaceOrderV1);
         group.MapPost("/sales", PlaceSalesOrderV1)
             .WithSummary("Place a flash-sale order");
+        group.MapGet("/sales/{id:guid}/status", GetSalesOrderStatusV1)
+            .WithSummary("Get flash-sale order processing status");
         group.MapGet("/my", ListMyOrdersV1);
         group.MapGet("/{id:guid}", GetOrderByIdV1);
         group.MapPut("/{id:guid}/confirm", ConfirmOrderV1);
@@ -61,7 +64,18 @@ public class OrderApis : ApiEndpoint, ICarterModule
 
         var result = await sender.Send(body, ct);
         if (result.IsFailure) return HandleFailure(result);
-        return Results.Created($"/api/v1/orders/{result.Value}", result.Value);
+        return Results.Accepted(
+            uri: $"/api/v1/orders/sales/{result.Value}/status",
+            value: new { orderId = result.Value, status = "Pending" });
+    }
+
+    private static async Task<IResult> GetSalesOrderStatusV1(
+        [FromServices] ISender sender,
+        [FromRoute] Guid id,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new GetSalesOrderStatusQuery(id), ct);
+        return ToOrderResult(result);
     }
 
     public static async Task<IResult> ListMyOrdersV1(

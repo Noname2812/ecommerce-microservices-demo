@@ -31,24 +31,26 @@ POST /api/v1/orders/sales
 
 ### Response
 
-- `201 Created` — body: `Guid` (orderId)
+- `202 Accepted` — body: `{ orderId: Guid, status: "Pending" }`, header `Location: /api/v1/orders/sales/{id}/status`
+- Client poll `GET /api/v1/orders/sales/{id}/status` để theo dõi tiến trình async
 - Xem bảng Error Codes bên dưới cho các failure cases
 
-## Flow xử lý (PlaceSalesOrderCommandHandler — sync, legacy)
+## Flow xử lý (async — TASK-05)
 
-> **Lưu ý**: Flow bên dưới là implementation đồng bộ hiện tại. Saga async (TASK-02) đã được implement song song — xem [saga-orchestration-plan.md](saga-orchestration-plan.md) để biết flow thay thế.
+Handler (`PlaceSalesOrderCommandHandler`) chỉ xử lý **sync portion** và publish trigger event. Toàn bộ Promotion / Inventory / Coupon được saga xử lý bất đồng bộ qua RabbitMQ.
 
-1. **Auth check** — `request.UserId` phải khớp với `userContext.UserId` từ Gateway header
-2. **Campaign eligibility** — `ISaleEligibilityValidator.ValidateAsync(campaignId, userId, items)` — stub gọi Promotion service (luôn pass khi Promotion chưa implement endpoint)
-3. **Redis quota gate** — `ISaleAllocationGate.TryReserveAsync(campaignId, userId, totalQty)` — atomic DECR trên Redis; fail fast nếu quota hết hoặc user vượt limit
-4. **Parallel validation** — `IProductValidator` + `IShippingValidator` + `ISalePricingValidator` chạy đồng thời; fail fast khi bất kỳ validator nào fail
-5. **Promotion redemption** (optional) — nếu có `CouponCode`, gọi `IPromotionServiceClient.RedeemAsync`
-6. **Inventory reservation** — `IInventoryClient.ReserveAsync`; set `compensationContext.ReservationId`
-7. **Coupon claim** (optional) — nếu có `CouponCode`, gọi `ICouponClient.ClaimAsync`
-8. **Order creation** — `Order.Create(..., orderType: "Sales", campaignId: ...)` với prefix `SALE-`
-9. **Confirm as sales order** — `order.SetConfirmedAsSalesOrder(reservationId, claimId, campaignId, userId, name)`
-10. **Persist** — `orderRepository.Add(order)`
-11. **Outbox** — `outboxWriter.WriteAsync(PlaceSalesOrderConfirmedV1)` — `PaymentId` là `null` trong legacy flow (payment chưa được tích hợp)
+1. **Auth check** — `userContext.UserId` phải có giá trị
+2. **Idempotency guard** — tra Redis theo `idempotencyKey`; trả về `orderId` cũ nếu đã tồn tại (fail-open khi Redis unavailable)
+3. **Campaign eligibility** — `ISaleEligibilityValidator.ValidateAsync(campaignId, userId, items)`
+4. **Redis quota gate** — `ISaleAllocationGate.TryReserveAsync(campaignId, userId, totalQty)` — atomic Lua DECR; fail fast nếu hết quota / vượt user limit; set `salesCompensationContext` để compensate nếu bước sau fail
+5. **Parallel validation** — `IProductValidator` + `IShippingValidator` + `ISalePricingValidator` chạy đồng thời
+6. **Save Order(Pending) + outbox** — `Order.Create(orderType: "Sales", campaignId)` → `orderRepository.Add(order)` → `outboxWriter.WriteAsync(PlaceSalesOrderRequestedV1)` trong cùng một EF transaction (qua `TransactionPipelineBehavior`)
+7. **Set idempotency cache** — best-effort; pipeline idempotency vẫn bảo vệ nếu bước này fail
+
+Saga (`PlaceSalesOrderSagaStateMachine`) nhận `PlaceSalesOrderRequestedV1` và xử lý tuần tự:
+→ PromotionRedeeming → InventoryReserving → [CouponClaiming] → PaymentProcessing → Confirming
+
+Xem chi tiết saga: [saga-orchestration-plan.md](saga-orchestration-plan.md)
 
 ## Redis Quota Gate
 
@@ -71,7 +73,7 @@ TTL cho user quota key: **86400 giây (1 ngày)**.
 
 ### Compensation
 
-Khi handler thất bại sau bước 3, `PlaceSalesOrderCompensationBehavior` (MediatR pipeline behavior) sẽ ghi `SaleQuotaReleaseRequestedV1` vào outbox để hoàn lại quota. Outbox đảm bảo at-least-once delivery.
+Khi handler thất bại sau bước quota gate (bước 4), `PlaceSalesOrderCompensationBehavior` (MediatR pipeline behavior) ghi `SaleQuotaReleaseRequestedV1` vào compensation outbox để hoàn lại quota. Saga sở hữu compensation cho Inventory / Coupon / Promotion — handler không cần xử lý.
 
 ## So sánh Normal vs Sales
 
@@ -84,7 +86,9 @@ Khi handler thất bại sau bước 3, `PlaceSalesOrderCompensationBehavior` (M
 | Quota gate | Không | Redis atomic DECR |
 | Order type tag | `Normal` | `Sales` |
 | Order number prefix | `ORD-` | `SALE-` |
-| Outbox event | `OrderConfirmedForPlaceOrderV1` | `PlaceSalesOrderConfirmedV1` (saga path includes `PaymentId`) |
+| API response | `201 Created` (orderId) | `202 Accepted` (orderId + Location) |
+| Trigger event | `OrderConfirmedForPlaceOrderV1` | `PlaceSalesOrderRequestedV1` (handler) |
+| Outbox event (final) | `OrderConfirmedForPlaceOrderV1` | `PlaceSalesOrderConfirmedV1` (saga, sau payment) |
 
 ## Error Codes
 

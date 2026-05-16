@@ -1,4 +1,5 @@
 using Carter;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
@@ -6,6 +7,7 @@ using Shared.Messaging.Idempotency;
 using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
+using UrbanX.Order.Application.Sagas;
 using UrbanX.Order.API.Middleware;
 using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Order.Persistence;
@@ -30,7 +32,15 @@ builder.Services.AddCompensationOutbox(builder.Configuration);
 // Messaging
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(builder.Configuration);
+    .AddMessaging(builder.Configuration, configureBus: bus =>
+    {
+        bus.AddSagaStateMachine<PlaceSalesOrderSagaStateMachine, PlaceSalesOrderSagaState>()
+            .EntityFrameworkRepository(r =>
+            {
+                r.ConcurrencyMode = ConcurrencyMode.Optimistic;
+                r.ExistingDbContext<OrderDbContext>();
+            });
+    });
 
 // Health checks
 builder.Services.AddHealthChecks()

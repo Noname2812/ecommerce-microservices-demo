@@ -4,12 +4,10 @@ using Microsoft.Extensions.Logging;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
-using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 
 public sealed class PlaceSalesOrderCompensationBehavior(
-    PlaceOrderCompensationContext orderCompensationContext,
     PlaceSalesOrderCompensationContext salesCompensationContext,
     IServiceScopeFactory scopeFactory,
     ILogger<PlaceSalesOrderCompensationBehavior> logger)
@@ -23,14 +21,8 @@ public sealed class PlaceSalesOrderCompensationBehavior(
         try
         {
             var result = await next(cancellationToken);
-            if (result.IsFailure &&
-                (orderCompensationContext.ReservationId is Guid ||
-                 salesCompensationContext.HasSaleAllocation))
-            {
-                await TryWriteCompensationAsync(
-                    new SalesOrderCompensationReasonException(result.Error));
-            }
-
+            if (result.IsFailure && salesCompensationContext.HasSaleAllocation)
+                await TryWriteCompensationAsync(new SalesOrderCompensationReasonException(result.Error));
             return result;
         }
         catch (Exception ex)
@@ -42,10 +34,7 @@ public sealed class PlaceSalesOrderCompensationBehavior(
 
     private async Task TryWriteCompensationAsync(Exception originalException)
     {
-        var hasInventory = orderCompensationContext.ReservationId is Guid;
-        var hasSaleQuota = salesCompensationContext.HasSaleAllocation;
-
-        if (!hasInventory && !hasSaleQuota)
+        if (!salesCompensationContext.HasSaleAllocation)
             return;
 
         try
@@ -58,42 +47,20 @@ public sealed class PlaceSalesOrderCompensationBehavior(
 
             await uow.ExecuteInTransactionAsync(async () =>
             {
-                if (orderCompensationContext.ReservationId is Guid reservationId)
+                await writer.AddAsync(new SaleQuotaReleaseRequestedV1
                 {
-                    await writer.AddAsync(new InventoryReleaseRequestedV1
-                    {
-                        ReservationId = reservationId,
-                        Reason = reason
-                    }, CancellationToken.None);
-                }
-
-                if (orderCompensationContext.CouponClaimId is Guid claimId)
-                {
-                    await writer.AddAsync(new CouponReleaseRequestedV1
-                    {
-                        ClaimId = claimId,
-                        Reason = reason
-                    }, CancellationToken.None);
-                }
-
-                if (hasSaleQuota)
-                {
-                    await writer.AddAsync(new SaleQuotaReleaseRequestedV1
-                    {
-                        CampaignId = salesCompensationContext.SaleCampaignId!.Value,
-                        UserId     = salesCompensationContext.SaleUserId!.Value,
-                        Quantity   = salesCompensationContext.SaleReservedQty,
-                        QuotaKey   = salesCompensationContext.SaleQuotaKey!
-                    }, CancellationToken.None);
-                }
+                    CampaignId = salesCompensationContext.SaleCampaignId!.Value,
+                    UserId     = salesCompensationContext.SaleUserId!.Value,
+                    Quantity   = salesCompensationContext.SaleReservedQty,
+                    QuotaKey   = salesCompensationContext.SaleQuotaKey!
+                }, CancellationToken.None);
             }, CancellationToken.None);
         }
         catch (Exception compensationEx)
         {
             logger.LogError(
                 compensationEx,
-                "Failed to write sales order compensation. ReservationId={ReservationId} SaleQuotaKey={QuotaKey} OriginalError={OriginalError}",
-                orderCompensationContext.ReservationId,
+                "Failed to write quota release compensation for SaleQuotaKey={QuotaKey} OriginalError={OriginalError}",
                 salesCompensationContext.SaleQuotaKey,
                 originalException.Message);
         }

@@ -1,17 +1,15 @@
 using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Cache.Abstractions;
-using Shared.Contract.Messaging.PlaceOrder;
+using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
+using UrbanX.Order.Application.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 using UrbanX.Order.Domain.ValueObjects;
-using UrbanX.Order.Application.Abstractions;
-using UrbanX.Order.Application.Clients;
-using UrbanX.Order.Application.Exceptions;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
@@ -19,22 +17,18 @@ namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 public sealed class PlaceSalesOrderCommandHandler(
     IOrderRepository orderRepository,
     IOutboxWriter outboxWriter,
-    ICompensationOutboxWriter compensationOutboxWriter,
     IUserContext userContext,
-    IInventoryClient inventoryClient,
-    ICouponClient couponClient,
-    IPromotionServiceClient promotionClient,
     IProductValidator productValidator,
     IShippingValidator shippingValidator,
     ISaleEligibilityValidator eligibilityValidator,
     ISaleAllocationGate allocationGate,
     ISalePricingValidator salePricingValidator,
     ICacheService cache,
-    PlaceOrderCompensationContext orderCompensationContext,
     PlaceSalesOrderCompensationContext salesCompensationContext)
     : ICommandHandler<PlaceSalesOrderCommand, Guid>
 {
     private static readonly TimeSpan IdempotencyGuardTtl = TimeSpan.FromHours(24);
+
     public async Task<Result<Guid>> Handle(PlaceSalesOrderCommand request, CancellationToken ct)
     {
         var currentUserId = userContext.UserId;
@@ -66,79 +60,15 @@ public sealed class PlaceSalesOrderCommandHandler(
         if (quotaResult.IsFailure)
             return Result.Failure<Guid>(quotaResult.Error);
 
-        salesCompensationContext.SaleQuotaKey     = quotaResult.Value;
-        salesCompensationContext.SaleCampaignId   = request.CampaignId;
-        salesCompensationContext.SaleUserId       = userId;
+        salesCompensationContext.SaleQuotaKey    = quotaResult.Value;
+        salesCompensationContext.SaleCampaignId  = request.CampaignId;
+        salesCompensationContext.SaleUserId      = userId;
         salesCompensationContext.SaleReservedQty = totalQty;
 
-        var validationResult = await ValidateBusinessRulesAsync(request, productValidator, shippingValidator, salePricingValidator, ct);
+        var validationResult = await ValidateBusinessRulesAsync(
+            request, productValidator, shippingValidator, salePricingValidator, ct);
         if (validationResult.IsFailure)
             return Result.Failure<Guid>(validationResult.Error);
-
-        decimal couponDiscount = 0;
-        var itemDiscountMap = new Dictionary<Guid, decimal>();
-        var subTotal = request.Items.Sum(i => i.UnitPrice * i.Quantity);
-
-        if (!string.IsNullOrWhiteSpace(request.CouponCode))
-        {
-            var redeemItems = request.Items
-                .Select(i => new PromotionRedeemItemDto(i.VariantId, i.ProductId, i.Quantity, i.UnitPrice))
-                .ToList();
-
-            Result<PromotionRedeemResponse> promotionResult;
-            try
-            {
-                promotionResult = await promotionClient.RedeemAsync(
-                    new PromotionRedeemRequest(OrderId: null, userId, request.CouponCode, subTotal, redeemItems), ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex)
-            {
-                return Result.Failure<Guid>(OrderErrors.PromotionInvalid(ex.Message));
-            }
-
-            if (promotionResult.IsFailure)
-                return Result.Failure<Guid>(OrderErrors.PromotionInvalid(promotionResult.Error.Message));
-
-            var redeemed = promotionResult.Value!;
-            couponDiscount = redeemed.OrderLevelDiscount;
-            foreach (var d in redeemed.ItemDiscounts)
-                itemDiscountMap[d.VariantId] = d.DiscountPerUnit;
-        }
-
-        Guid reservationId;
-        try
-        {
-            var reserveItems = request.Items
-                .Select(i => new ReserveLineItem(i.ProductId, i.Quantity))
-                .ToList();
-
-            var reservation = await inventoryClient.ReserveAsync(
-                new ReserveRequest(request.IdempotencyKey, reserveItems), ct);
-
-            reservationId = reservation.ReservationId;
-            orderCompensationContext.ReservationId = reservationId;
-        }
-        catch (OutOfStockException ex)           { return Result.Failure<Guid>(OrderErrors.OutOfStock(ex.Message)); }
-        catch (InventoryUnavailableException ex) { return Result.Failure<Guid>(OrderErrors.InventoryUnavailable(ex.Message)); }
-        catch (HttpRequestException ex)          { return Result.Failure<Guid>(OrderErrors.InventoryUnavailable(ex.Message)); }
-
-        Guid? couponClaimId = null;
-        if (!string.IsNullOrWhiteSpace(request.CouponCode))
-        {
-            try
-            {
-                var claimResponse = await couponClient.ClaimAsync(
-                    new ClaimCouponRequest(request.IdempotencyKey, request.CouponCode!, userId, subTotal),
-                    new CouponClaimReservationContext(reservationId, compensationOutboxWriter),
-                    ct);
-
-                couponClaimId = claimResponse.ClaimId;
-                orderCompensationContext.CouponClaimId = couponClaimId;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex) { return Result.Failure<Guid>(OrderErrors.CouponClaimFailed(ex.Message)); }
-        }
 
         var orderNumber = GenerateOrderNumber();
         var address = ShippingAddress.Create(
@@ -152,8 +82,7 @@ public sealed class PlaceSalesOrderCommandHandler(
             i.ProductId, i.ProductName, i.ProductSlug,
             i.VariantId, i.VariantSku, i.VariantName,
             i.SellerId, i.SellerName,
-            i.UnitPrice, i.Quantity,
-            itemDiscountMap.TryGetValue(i.VariantId, out var d) ? d * i.Quantity : 0m,
+            i.UnitPrice, i.Quantity, DiscountAmount: 0m,
             i.ImageUrl)).ToList();
 
         var order = OrderEntity.Create(
@@ -161,28 +90,42 @@ public sealed class PlaceSalesOrderCommandHandler(
             customerEmail: request.CustomerEmail?.Trim() ?? string.Empty,
             customerName: request.ShippingAddress.FullName,
             customerPhone: request.ShippingAddress.Phone,
-            address, request.ShippingFee, request.CouponCode, couponDiscount,
+            address, request.ShippingFee,
+            couponCode: request.CouponCode, couponDiscount: 0m,
             request.CustomerNote, request.IdempotencyKey, specs,
             orderType: OrderType.Sales,
             campaignId: request.CampaignId);
 
-        order.SetConfirmedAsSalesOrder(
-            reservationId, couponClaimId,
-            request.CampaignId,
-            userId, request.ShippingAddress.FullName);
-
         orderRepository.Add(order);
 
-        await outboxWriter.WriteAsync(new PlaceSalesOrderConfirmedV1
+        await outboxWriter.WriteAsync(new PlaceSalesOrderRequestedV1
         {
-            OrderId       = order.Id,
-            UserId        = order.UserId,
-            CampaignId    = request.CampaignId,
-            ReservationId = reservationId,
-            ClaimId       = couponClaimId,
-            FinalAmount   = order.FinalAmount,
-            ConfirmedAt   = order.UpdatedAt
-        }, CancellationToken.None);
+            CorrelationId  = order.Id.ToString("D"),
+            OrderId        = order.Id,
+            UserId         = userId.ToString("D"),
+            CampaignId     = request.CampaignId,
+            IdempotencyKey = request.IdempotencyKey,
+            Subtotal       = order.Subtotal,
+            ShippingFee    = order.ShippingFee,
+            ShippingAddress = new ShippingAddressSnapshot(
+                RecipientName: order.ShippingAddress.RecipientName,
+                PhoneNumber:   order.ShippingAddress.RecipientPhone,
+                AddressLine:   order.ShippingAddress.Street,
+                Ward:          order.ShippingAddress.Ward ?? string.Empty,
+                District:      order.ShippingAddress.District,
+                Province:      order.ShippingAddress.Province ?? string.Empty,
+                CountryCode:   order.ShippingAddress.Country),
+            CouponCode     = request.CouponCode,
+            Items          = order.Items
+                .Select(i => new OrderItemSnapshot(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice))
+                .ToList(),
+            PricingSnapshot = new PricingSnapshot(
+                Subtotal:            order.Subtotal,
+                ShippingFee:         order.ShippingFee,
+                TotalBeforeDiscount: order.Subtotal + order.ShippingFee),
+            CustomerEmail  = request.CustomerEmail,
+            CustomerNote   = request.CustomerNote
+        }, ct);
 
         try
         {
