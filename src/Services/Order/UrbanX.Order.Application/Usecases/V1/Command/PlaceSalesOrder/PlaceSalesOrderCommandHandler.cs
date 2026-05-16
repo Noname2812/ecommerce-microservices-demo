@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Cache.Abstractions;
@@ -24,7 +25,8 @@ public sealed class PlaceSalesOrderCommandHandler(
     ISaleAllocationGate allocationGate,
     ISalePricingValidator salePricingValidator,
     ICacheService cache,
-    PlaceSalesOrderCompensationContext salesCompensationContext)
+    PlaceSalesOrderCompensationContext salesCompensationContext,
+    ILogger<PlaceSalesOrderCommandHandler> logger)
     : ICommandHandler<PlaceSalesOrderCommand, Guid>
 {
     private static readonly TimeSpan IdempotencyGuardTtl = TimeSpan.FromHours(24);
@@ -46,9 +48,10 @@ public sealed class PlaceSalesOrderCommandHandler(
                 existingOrderId != Guid.Empty)
                 return Result.Success(existingOrderId);
         }
-        catch
+        catch (Exception ex)
         {
-            // Fail-open: Redis unavailable — continue (pipeline idempotency may still apply).
+            logger.LogWarning(ex, "Idempotency guard cache unavailable for key {Key}", guardKey);
+            return Result.Failure<Guid>(OrderErrors.GuardUnavailable);
         }
 
         var eligibility = await eligibilityValidator.ValidateAsync(request.CampaignId, userId, request.Items, ct);

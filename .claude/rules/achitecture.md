@@ -200,7 +200,8 @@ public static class <Service>Errors
 - Code message: ưu tiên `"<Entity>.<PascalCase>"` hoặc mã ổn định đã thống nhất với API (`ORDER_NOT_FOUND`, …) — nhất quán trong service
 - Luật nghiệp vụ → `Result.Failure(<Service>Errors.…)` — **không** `throw` cho lỗi nghiệp vụ đã quy ước trả `Result`
 - Không hardcode chuỗi lỗi rải rác — luôn qua static trong `Domain/Errors`
-- **Legacy:** service chưa gom (ví dụ Catalog) có thể còn `Application/Usecases/V1/Errors/*Errors.cs` — khi sửa lớn nên chuyển dần sang **`Domain/Errors/`** cho thống nhất
+- **KHÔNG chấp nhận** `Application/Usecases/V1/Errors/` cho service mới — chỉ dùng `Domain/Errors/`
+- Service cũ còn errors trong Application: chuyển về `Domain/Errors/` khi sửa file đó (không tạo task migrate riêng)
 
 ### 4.2 Exception biên HTTP / client — **Application**
 
@@ -395,3 +396,47 @@ public sealed class <Event>Consumer(ISender sender)
 ```
 
 **NuGet:** thêm package phiên bản centralized trong `Directory.Packages.props` — không thêm `<Version>` trùng trong `.csproj` (tránh drift phiên bản).
+
+---
+
+## 10. Configuration — No Magic Values
+
+Mọi giá trị cấu hình (thresholds, timeouts, limits, URLs, API keys, feature flags, v.v.) phải đặt trong `appsettings.json` và bind qua typed Options class. **Không hardcode magic value trong code.**
+
+### Options pattern
+
+```csharp
+// Infrastructure/DependencyInjection/Options/StripeOptions.cs  (hoặc Application/Options/ nếu Application cần dùng)
+public sealed class StripeOptions
+{
+    public const string SectionName = "Stripe";
+
+    public string SecretKey { get; init; } = string.Empty;
+    public string WebhookSecret { get; init; } = string.Empty;
+}
+```
+
+```json
+// appsettings.json
+{
+  "Stripe": {
+    "SecretKey": "",
+    "WebhookSecret": ""
+  }
+}
+```
+
+```csharp
+// Program.cs (hoặc AddInfrastructure / AddApplication)
+builder.Services.AddOptions<StripeOptions>()
+    .BindConfiguration(StripeOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+```
+
+**Rules:**
+- `SectionName` là `const` trên Options class — không dùng string literal khi `BindConfiguration`
+- Inject `IOptions<T>` (singleton) hoặc `IOptionsSnapshot<T>` (per-request) — không inject raw value
+- `.ValidateOnStart()` bắt buộc — fail fast lúc startup thay vì runtime
+- Secrets (API key, password) đặt trong `appsettings.Development.json` (local) hoặc environment variable — không commit vào source control
+- Options class đặt trong layer thấp nhất cần dùng: `Infrastructure/DependencyInjection/Options/` nếu chỉ Infrastructure dùng; `Application/Options/` nếu handler cần đọc

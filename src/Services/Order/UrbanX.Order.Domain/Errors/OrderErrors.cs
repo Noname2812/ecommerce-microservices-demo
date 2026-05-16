@@ -53,6 +53,9 @@ public static class OrderErrors
     public static Error PriceMismatch(string sku, decimal expected, decimal actual) =>
         new("Order.PriceMismatch",
             $"Price mismatch for SKU '{sku}': expected {expected:F2}, got {actual:F2}.");
+
+    public static readonly Error GuardUnavailable =
+        new("SALES_ORDER_GUARD_UNAVAILABLE", "Service temporarily unavailable, please retry");
 }
 
 public sealed class PriceMismatchError : Error

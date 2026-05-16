@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Cache.Abstractions;
 using Shared.Kernel.Primitives;
@@ -10,7 +11,8 @@ namespace UrbanX.Promotion.Application.Usecases.V1.Command;
 
 internal sealed class ActivatePromotionCommandHandler(
     IPromotionRepository promotionRepository,
-    ICacheService cacheService)
+    ICacheService cacheService,
+    ILogger<ActivatePromotionCommandHandler> logger)
     : ICommandHandler<ActivatePromotionCommand>
 {
     public async Task<Result> Handle(ActivatePromotionCommand cmd, CancellationToken ct)
@@ -42,6 +44,9 @@ internal sealed class ActivatePromotionCommandHandler(
             var key = $"promotion:flash:{promotion.Id}:item:{slotKey}:slots";
             var remaining = item.TotalSlots - item.SlotsReserved;
             await cacheService.SetAsync(key, remaining, expiry, ct);
+            logger.LogInformation(
+                "Pre-warmed flash sale quota key {Key} with {Remaining} slots",
+                key, remaining);
         }
     }
 }

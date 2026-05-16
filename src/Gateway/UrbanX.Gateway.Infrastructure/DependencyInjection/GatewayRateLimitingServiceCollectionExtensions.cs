@@ -77,15 +77,15 @@ public static class GatewayRateLimitingServiceCollectionExtensions
                 if (p.StartsWithSegments(new PathString("/api/v1/orders/sales"), StringComparison.OrdinalIgnoreCase, out var _)
                     && httpContext.Request.Method is "POST")
                 {
-                    var sKey = "sales-order:" + GetUserIdOrIp(httpContext);
-                    return RateLimitPartition.GetSlidingWindowLimiter(
-                        sKey,
-                        _ => new SlidingWindowRateLimiterOptions
+                    var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? httpContext.Connection.Id;
+                    return RateLimitPartition.GetTokenBucketLimiter(
+                        "sales-order-ip:" + ip,
+                        _ => new TokenBucketRateLimiterOptions
                         {
                             AutoReplenishment = true,
-                            SegmentsPerWindow = segs,
-                            PermitLimit = rate.SalesOrderEndpoint.PermitLimit,
-                            Window = TimeSpan.FromSeconds(rate.SalesOrderEndpoint.WindowSeconds),
+                            TokenLimit = rate.SalesOrderBurst.TokenLimit,
+                            TokensPerPeriod = rate.SalesOrderBurst.TokensPerPeriod,
+                            ReplenishmentPeriod = TimeSpan.FromSeconds(rate.SalesOrderBurst.ReplenishmentPeriodSeconds),
                             QueueLimit = 0
                         });
                 }
