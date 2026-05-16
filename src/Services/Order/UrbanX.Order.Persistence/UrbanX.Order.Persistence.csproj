@@ -17,7 +17,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\Shared.Kernel\Shared.Kernel.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Outbox\Shared.Outbox.csproj" />
     <ProjectReference Include="..\UrbanX.Order.Domain\UrbanX.Order.Domain.csproj" />
+    <ProjectReference Include="..\UrbanX.Order.Application\UrbanX.Order.Application.csproj" />
   </ItemGroup>
 </Project>

@@ -136,6 +136,131 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.ToTable("outbox_messages", (string)null);
                 });
 
+            modelBuilder.Entity("UrbanX.Order.Application.Sagas.PlaceSalesOrderSagaState", b =>
+                {
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<string>("ClaimedFlashSaleSlotsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("claimed_flash_sale_slots_json");
+
+                    b.Property<Guid?>("CouponClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coupon_claim_id");
+
+                    b.Property<string>("CouponCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("coupon_code");
+
+                    b.Property<decimal>("CouponDiscount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("coupon_discount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CurrentState")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("current_state");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<string>("FailureStep")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("failure_step");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("ItemsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("items_json");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_id");
+
+                    b.Property<decimal>("PromotionDiscount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("promotion_discount");
+
+                    b.Property<int>("QuotaQuantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quota_quantity");
+
+                    b.Property<bool>("QuotaReserved")
+                        .HasColumnType("boolean")
+                        .HasColumnName("quota_reserved");
+
+                    b.Property<Guid?>("ReservationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reservation_id");
+
+                    b.Property<decimal>("ShippingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("shipping_fee");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("subtotal");
+
+                    b.Property<Guid?>("TimeoutTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("timeout_token_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("user_id");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("CorrelationId")
+                        .HasName("pk_place_sales_order_saga_states");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_place_sales_order_saga_states_order_id");
+
+                    b.HasIndex("CurrentState", "CreatedAt")
+                        .HasDatabaseName("ix_place_sales_order_saga_states_current_state_created_at");
+
+                    b.ToTable("place_sales_order_saga_states", (string)null);
+                });
+
             modelBuilder.Entity("UrbanX.Order.Domain.Models.Order", b =>
                 {
                     b.Property<Guid>("Id")

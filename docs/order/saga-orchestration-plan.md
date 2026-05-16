@@ -1,6 +1,6 @@
 # Saga Orchestration cho PlaceOrder / PlaceSalesOrder
 
-> **Status**: Planning — chưa implement
+> **Status**: In Progress — TASK-01 ✅ TASK-02 ✅ (bao gồm Payment step) · TASK-03/04/05 còn lại
 > **Owner**: Order service team
 > **Tasks**: xem `docs/order/tasks/` để thấy chi tiết từng task giao cho member
 
@@ -66,8 +66,8 @@ Client                 Order.API           Order.Saga           Promotion       
                           │                            │ Promotion redeem          │                 │
                           │                            │ Inventory reserve         │                 │
                           │                            │ Coupon claim (if any)     │                 │
-                          │                            │ Update Order(Confirmed)   │                 │
-                          │                            │ Publish PlaceSalesOrderConfirmedV1          │
+                          │                            │ Payment process           │                 │
+                          │                            │ Publish PlaceSalesOrderConfirmedV1 (PaymentId)│
                           │                            │ (failure → compensation events)             │
 
 Client GET /api/v1/orders/sales/{orderId}/status  → trả về current state
@@ -86,23 +86,37 @@ Mọi HTTP call ra service khác chuyển thành **message-based** qua RabbitMQ.
 ## 5. State machine
 
 ```
-Initial → PromotionRedeeming → InventoryReserving → CouponClaiming → Confirming → Confirmed (Final)
-                                       ↓ fail
+Initial → PromotionRedeeming → InventoryReserving → [CouponClaiming →] PaymentProcessing → Confirming → Confirmed (Final)
+                                       ↓ fail (any state)
                                   Compensating → Failed (Final)
 ```
 
-| State hiện tại | Khi nhận event | Hành động | Chuyển sang |
+| State | Khi nhận event | Hành động | Chuyển sang |
 |---|---|---|---|
 | `Initial` | `PlaceSalesOrderRequestedV1` | Snapshot; Publish `RedeemSalePromotionRequestedV1` | `PromotionRedeeming` |
-| `PromotionRedeeming` | `PromotionRedeemedV1` | Lưu discounts + slots; Publish `ReserveInventoryRequestedV1` | `InventoryReserving` |
-| `PromotionRedeeming` | `PromotionRedeemFailedV1` | Publish `SaleQuotaReleaseRequestedV1` | `Compensating` → `Failed` |
-| `InventoryReserving` | `InventoryReservedV1` | Lưu ReservationId; nếu coupon → `ClaimCouponRequestedV1` | `CouponClaiming` / `Confirming` |
-| `InventoryReserving` | `InventoryReserveFailedV1` | Publish `FlashSaleSlotReleaseRequestedV1` + `SaleQuotaReleaseRequestedV1` | `Compensating` → `Failed` |
-| `CouponClaiming` | `CouponClaimedV1` | Lưu ClaimId | `Confirming` |
-| `CouponClaiming` | `CouponClaimFailedV1` | Publish 3 compensation events | `Compensating` → `Failed` |
-| `Confirming` | (timer/immediate) | Update Order(Confirmed); Publish `PlaceSalesOrderConfirmedV1` | `Confirmed` |
+| `PromotionRedeeming` | `PromotionRedeemedV1` | Lưu discounts + flash-sale slots; Publish `ReserveInventoryRequestedV1` | `InventoryReserving` |
+| `PromotionRedeeming` | `PromotionRedeemFailedV1` / timeout | Set FailureStep; Publish `SaleQuotaReleaseRequestedV1` | `Compensating` |
+| `InventoryReserving` | `InventoryReservedV1` | Lưu `ReservationId`; nếu coupon → `ClaimCouponRequestedV1`, không coupon → `ProcessPaymentRequestedV1` | `CouponClaiming` / `PaymentProcessing` |
+| `InventoryReserving` | `InventoryReserveFailedV1` / timeout | Release quota (if any) | `Compensating` |
+| `CouponClaiming` | `CouponClaimedV1` | Lưu `ClaimId` + `CouponDiscount`; Publish `ProcessPaymentRequestedV1` | `PaymentProcessing` |
+| `CouponClaiming` | `CouponClaimFailedV1` / timeout | Release inventory + quota | `Compensating` |
+| `PaymentProcessing` | `PaymentProcessedV1` | Lưu `PaymentId`; Publish `PlaceSalesOrderConfirmedV1` (với `PaymentId`) | `Confirming` |
+| `PaymentProcessing` | `PaymentProcessFailedV1` / timeout | Release inventory + coupon (if any) + quota (if any) | `Compensating` |
+| `Confirming` | (enter) | `Finalize()` — xóa saga khỏi DB | `Confirmed` (removed) |
+| `Compensating` | (enter) | Publish `PlaceSalesOrderFailedV1` | `Faulted` |
 
 Mỗi state có **timeout 30s** — không nhận response → fault + compensate.
+
+### Contracts hiện có (`Shared.Contract/Messaging/PlaceOrderSaga/`)
+
+| File | Events |
+|---|---|
+| `PlaceSalesOrderRequestedV1.cs` | Trigger event — Order API → Saga |
+| `PromotionEvents.cs` | `RedeemSalePromotionRequestedV1`, `PromotionRedeemedV1`, `PromotionRedeemFailedV1` |
+| `InventoryEvents.cs` | `ReserveInventoryRequestedV1`, `InventoryReservedV1`, `InventoryReserveFailedV1` |
+| `CouponEvents.cs` | `ClaimCouponRequestedV1`, `CouponClaimedV1`, `CouponClaimFailedV1` |
+| `PaymentEvents.cs` | `ProcessPaymentRequestedV1`, `PaymentProcessedV1`, `PaymentProcessFailedV1` |
+| `PlaceSalesOrderFailedV1.cs` | Terminal failure event — Saga → Order service |
 
 ---
 
@@ -156,10 +170,11 @@ TASK-07 ────────────────────────
 3. **Happy path**:
    - AppHost start → seed flash sale promotion.
    - POST `/api/v1/orders/sales` → `202 Accepted` + `{ orderId, statusUrl }`.
-   - Poll status → `Initiated` → `PromotionRedeeming` → `InventoryReserving` → `CouponClaiming` → `Confirmed`.
-   - RabbitMQ UI: `PlaceSalesOrderConfirmedV1` published.
+   - Poll status → `Initiated` → `PromotionRedeeming` → `InventoryReserving` → [`CouponClaiming` →] `PaymentProcessing` → `Confirmed`.
+   - RabbitMQ UI: `PlaceSalesOrderConfirmedV1` published với `PaymentId` != null.
 4. **Failure paths**:
-   - Inventory out-of-stock → `Compensating` → `Failed` → slot/quota rollback.
+   - Inventory out-of-stock → `Compensating` → `Faulted` → quota rollback.
+   - Payment declined → release inventory + coupon (if claimed) + quota → `Compensating` → `Faulted`.
    - Promotion timeout 30s → fault transition + compensation.
 5. **Concurrency**:
    - 100 concurrent POST cùng idempotencyKey → 1 success, 99 dedup.
@@ -173,4 +188,5 @@ TASK-07 ────────────────────────
 
 - [Order service overview](order-service.md) — service-level info
 - [Place Sales Order (current)](place-sales-order.md) — sync API hiện tại (sẽ deprecate sau migration)
+- [Saga — Payment Step](saga-payment-step.md) — contracts, compensation, và interface Payment service cần implement
 - [Tasks](tasks/README.md) — chi tiết từng task để giao member

@@ -10,6 +10,7 @@ public record PlaceSalesOrderConfirmedV1 : IntegrationEventBase
     public Guid CampaignId { get; init; }
     public Guid ReservationId { get; init; }
     public Guid? ClaimId { get; init; }
+    public Guid? PaymentId { get; init; }
     public decimal FinalAmount { get; init; }
     public DateTimeOffset ConfirmedAt { get; init; }
 }

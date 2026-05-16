@@ -34,7 +34,9 @@ POST /api/v1/orders/sales
 - `201 Created` — body: `Guid` (orderId)
 - Xem bảng Error Codes bên dưới cho các failure cases
 
-## Flow xử lý (PlaceSalesOrderCommandHandler)
+## Flow xử lý (PlaceSalesOrderCommandHandler — sync, legacy)
+
+> **Lưu ý**: Flow bên dưới là implementation đồng bộ hiện tại. Saga async (TASK-02) đã được implement song song — xem [saga-orchestration-plan.md](saga-orchestration-plan.md) để biết flow thay thế.
 
 1. **Auth check** — `request.UserId` phải khớp với `userContext.UserId` từ Gateway header
 2. **Campaign eligibility** — `ISaleEligibilityValidator.ValidateAsync(campaignId, userId, items)` — stub gọi Promotion service (luôn pass khi Promotion chưa implement endpoint)
@@ -46,7 +48,7 @@ POST /api/v1/orders/sales
 8. **Order creation** — `Order.Create(..., orderType: "Sales", campaignId: ...)` với prefix `SALE-`
 9. **Confirm as sales order** — `order.SetConfirmedAsSalesOrder(reservationId, claimId, campaignId, userId, name)`
 10. **Persist** — `orderRepository.Add(order)`
-11. **Outbox** — `outboxWriter.WriteAsync(PlaceSalesOrderConfirmedV1)`
+11. **Outbox** — `outboxWriter.WriteAsync(PlaceSalesOrderConfirmedV1)` — `PaymentId` là `null` trong legacy flow (payment chưa được tích hợp)
 
 ## Redis Quota Gate
 
@@ -82,7 +84,7 @@ Khi handler thất bại sau bước 3, `PlaceSalesOrderCompensationBehavior` (M
 | Quota gate | Không | Redis atomic DECR |
 | Order type tag | `Normal` | `Sales` |
 | Order number prefix | `ORD-` | `SALE-` |
-| Outbox event | `OrderConfirmedForPlaceOrderV1` | `PlaceSalesOrderConfirmedV1` |
+| Outbox event | `OrderConfirmedForPlaceOrderV1` | `PlaceSalesOrderConfirmedV1` (saga path includes `PaymentId`) |
 
 ## Error Codes
 

@@ -1,12 +1,14 @@
 
+using MassTransit;
 using Shared.Application;
 
 namespace Shared.Messaging.Saga
 {
     /// <summary>
     /// Base class providing default saga state fields.
+    /// Implements ISagaVersion explicitly so subclasses satisfy SagaClassMap&lt;T&gt; constraints.
     /// </summary>
-    public abstract class SagaStateBase : ISagaState
+    public abstract class SagaStateBase : ISagaState, ISagaVersion
     {
         public Guid CorrelationId { get; set; }
         public string CurrentState { get; set; } = string.Empty;
