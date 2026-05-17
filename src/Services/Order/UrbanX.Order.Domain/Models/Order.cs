@@ -35,6 +35,8 @@ public sealed class Order : BaseEntity<Guid>
     public string? CustomerNote { get; private set; }
     public string? InternalNote { get; private set; }
     public string? CancelledReason { get; private set; }
+    public string? PaymentUrl { get; private set; }
+    public string? QrCodeUrl { get; private set; }
     public string IdempotencyKey { get; private set; } = null!;
     public string OrderType { get; private set; } = Models.OrderType.Normal;
     public Guid? CampaignId { get; private set; }
@@ -165,6 +167,23 @@ public sealed class Order : BaseEntity<Guid>
         UpdatedAt = DateTimeOffset.UtcNow;
         _statusHistory.Add(OrderStatusHistory.Create(
             Id, prev, OrderStatus.Confirmed, null, changedById, changedByName));
+    }
+
+    public void SetPaymentSession(string paymentUrl, string? qrCodeUrl)
+    {
+        PaymentUrl = paymentUrl;
+        QrCodeUrl = qrCodeUrl;
+        PaymentStatus = Models.PaymentStatus.AwaitingPayment;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void MarkPaid(string paymentSessionId, Guid changedById, string changedByName)
+    {
+        PaymentStatus = Models.PaymentStatus.Paid;
+        PaymentReference = paymentSessionId;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        _statusHistory.Add(OrderStatusHistory.Create(
+            Id, Status, Status, "Payment completed", changedById, changedByName));
     }
 
     public void Cancel(string reason, Guid? changedById, string? changedByName)

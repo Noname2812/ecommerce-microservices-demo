@@ -6,28 +6,24 @@ using UrbanX.Order.Persistence.Constants;
 
 namespace UrbanX.Order.Persistence.Configurations;
 
-internal sealed class PlaceSalesOrderSagaStateConfiguration
-    : SagaStateEfCoreConfiguration<PlaceSalesOrderSagaState>
+internal sealed class PlaceOrderNormalSagaStateConfiguration
+    : SagaStateEfCoreConfiguration<PlaceOrderNormalSagaState>
 {
-    protected override string TableName => TableNames.PlaceSalesOrderSagas;
+    protected override string TableName => TableNames.PlaceOrderNormalSagas;
 
-    protected override void ConfigureSaga(EntityTypeBuilder<PlaceSalesOrderSagaState> builder)
+    protected override void ConfigureSaga(EntityTypeBuilder<PlaceOrderNormalSagaState> builder)
     {
         builder.Property(x => x.OrderId).IsRequired();
         builder.Property(x => x.UserId).HasMaxLength(64).IsRequired();
-        builder.Property(x => x.CampaignId).IsRequired();
         builder.Property(x => x.IdempotencyKey).HasMaxLength(128).IsRequired();
+        builder.Property(x => x.CouponCode).HasMaxLength(64);
 
         builder.Property(x => x.Subtotal).HasPrecision(18, 2).IsRequired();
         builder.Property(x => x.ShippingFee).HasPrecision(18, 2).IsRequired();
         builder.Property(x => x.PromotionDiscount).HasPrecision(18, 2).IsRequired();
         builder.Property(x => x.CouponDiscount).HasPrecision(18, 2).IsRequired();
 
-        builder.Property(x => x.CouponCode).HasMaxLength(64);
         builder.Property(x => x.ItemsJson).HasColumnType("jsonb");
-        builder.Property(x => x.ClaimedFlashSaleSlotsJson).HasColumnType("jsonb");
-
-        builder.Property(x => x.PaymentId);
         builder.Property(x => x.PaymentSessionId).HasMaxLength(255);
 
         builder.Property(x => x.FailureStep).HasMaxLength(64);

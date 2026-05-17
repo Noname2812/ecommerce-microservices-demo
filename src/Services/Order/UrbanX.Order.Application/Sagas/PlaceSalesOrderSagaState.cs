@@ -34,11 +34,13 @@ public sealed class PlaceSalesOrderSagaState : SagaStateBase
 
     // ── Payment tracking ──────────────────────────────────────────────────────
     public Guid? PaymentId { get; set; }
+    public string? PaymentSessionId { get; set; }
 
     // ── Failure info ──────────────────────────────────────────────────────────
     public string? FailureStep { get; set; }
     public string? FailureReason { get; set; }
 
-    // ── Scheduled timeout token ───────────────────────────────────────────────
+    // ── Scheduled timeout tokens ──────────────────────────────────────────────
     public Guid? TimeoutTokenId { get; set; }
+    public Guid? PaymentExpiryTokenId { get; set; }
 }

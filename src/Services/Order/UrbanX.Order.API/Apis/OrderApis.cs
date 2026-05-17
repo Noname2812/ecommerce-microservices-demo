@@ -46,7 +46,9 @@ public class OrderApis : ApiEndpoint, ICarterModule
 
         var result = await sender.Send(body, cancellationToken);
         if (result.IsFailure) return HandleFailure(result);
-        return Results.Created($"/api/v1/orders/{result.Value}", result.Value);
+        return Results.Accepted(
+            uri:   $"/api/v1/orders/{result.Value}",
+            value: new { orderId = result.Value, status = "Pending" });
     }
 
     private static async Task<IResult> PlaceSalesOrderV1(

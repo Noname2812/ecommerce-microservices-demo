@@ -40,6 +40,13 @@ builder.Services
                 r.ConcurrencyMode = ConcurrencyMode.Optimistic;
                 r.ExistingDbContext<OrderDbContext>();
             });
+
+        bus.AddSagaStateMachine<PlaceOrderNormalSagaStateMachine, PlaceOrderNormalSagaState>()
+            .EntityFrameworkRepository(r =>
+            {
+                r.ConcurrencyMode = ConcurrencyMode.Optimistic;
+                r.ExistingDbContext<OrderDbContext>();
+            });
     });
 
 // Health checks

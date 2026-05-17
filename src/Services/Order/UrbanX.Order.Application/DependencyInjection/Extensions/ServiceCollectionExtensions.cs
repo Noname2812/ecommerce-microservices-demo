@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shared.Kernel.Primitives;
 using Shared.Messaging.DependencyInjection.Extensions;
+using UrbanX.Order.Application.DependencyInjection.Options;
 using UrbanX.Order.Application.Options;
 using UrbanX.Order.Application.Usecases.V1.Command;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
@@ -16,9 +17,12 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<ShippingOptions>(configuration.GetSection(ShippingOptions.SectionName));
 
-        services.AddScoped<PlaceOrderCompensationContext>();
+        services.AddOptions<OrderPaymentOptions>()
+            .BindConfiguration(OrderPaymentOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddScoped<PlaceSalesOrderCompensationContext>();
-        services.AddScoped<IPipelineBehavior<PlaceOrderCommand, Result<Guid>>, PlaceOrderCompensationBehavior>();
         services.AddScoped<IPipelineBehavior<PlaceSalesOrderCommand, Result<Guid>>, PlaceSalesOrderCompensationBehavior>();
 
         services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);

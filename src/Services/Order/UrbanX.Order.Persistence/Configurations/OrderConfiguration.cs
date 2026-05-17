@@ -49,6 +49,8 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<OrderEntity>
         builder.Property(o => o.PaymentStatus).IsRequired().HasMaxLength(30);
         builder.Property(o => o.PaymentMethod).HasMaxLength(50);
         builder.Property(o => o.PaymentReference).HasMaxLength(255);
+        builder.Property(o => o.PaymentUrl).HasMaxLength(2048);
+        builder.Property(o => o.QrCodeUrl).HasMaxLength(2048);
         builder.Property(o => o.ShippingMethod).HasMaxLength(100);
         builder.Property(o => o.TrackingNumber).HasMaxLength(255);
 
