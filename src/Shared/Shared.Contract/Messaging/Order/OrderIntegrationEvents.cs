@@ -17,14 +17,6 @@ public static class OrderIntegrationEvents
         public override string Source => "order-service";
     }
 
-    public record OrderConfirmedV1(
-        Guid OrderId,
-        string OrderNumber
-    ) : IntegrationEventBase
-    {
-        public override string Source => "order-service";
-    }
-
     public record OrderCancelledV1(
         Guid OrderId,
         string OrderNumber,

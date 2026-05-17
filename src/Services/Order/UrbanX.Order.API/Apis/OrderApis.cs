@@ -27,7 +27,6 @@ public class OrderApis : ApiEndpoint, ICarterModule
             .WithSummary("Get flash-sale order processing status");
         group.MapGet("/my", ListMyOrdersV1);
         group.MapGet("/{id:guid}", GetOrderByIdV1);
-        group.MapPut("/{id:guid}/confirm", ConfirmOrderV1);
         group.MapPut("/{id:guid}/cancel", CancelOrderV1);
     }
 
@@ -85,16 +84,6 @@ public class OrderApis : ApiEndpoint, ICarterModule
     {
         var result = await sender.Send(new GetOrderByIdQuery(id), cancellationToken);
         return ToOrderResult(result);
-    }
-
-    public static async Task<IResult> ConfirmOrderV1(
-        [FromServices] ISender sender,
-        [FromRoute] Guid id,
-        CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new ConfirmOrderCommand(id), cancellationToken);
-        if (result.IsFailure) return ToOrderResult(result);
-        return Results.NoContent();
     }
 
     public static async Task<IResult> CancelOrderV1(

@@ -27,7 +27,6 @@ PENDING → CANCELLED
 | POST | `/api/v1/orders` | `PlaceOrderCommand` | `order:write` (Own) |
 | GET | `/api/v1/orders/my` | `ListMyOrdersQuery` | `order:read` (Own) |
 | GET | `/api/v1/orders/{id}` | `GetOrderByIdQuery` | `order:read` (Own) |
-| PUT | `/api/v1/orders/{id}/confirm` | `ConfirmOrderCommand` | `order:write` (All — Admin) |
 | PUT | `/api/v1/orders/{id}/cancel` | `CancelOrderCommand` | `order:write` (Own) |
 
 ### Flash Sale Order (async)
@@ -46,7 +45,6 @@ Xem chi tiết: [place-sales-order.md](place-sales-order.md)
 | Event | Trigger | Transport |
 |---|---|---|
 | `OrderCreatedV1` | Normal order placed | Outbox → RabbitMQ |
-| `OrderConfirmedV1` | Admin confirms order | Outbox → RabbitMQ |
 | `OrderCancelledV1` | Order cancelled | Outbox → RabbitMQ |
 | `PlaceSalesOrderRequestedV1` | Sales order accepted (202) | Outbox → RabbitMQ |
 | `PlaceSalesOrderConfirmedV1` | Saga completes successfully | Saga → RabbitMQ |
