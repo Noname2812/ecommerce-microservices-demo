@@ -21,6 +21,11 @@ export default defineConfig({
         target: "http://localhost:5000",
         changeOrigin: true,
       },
+      "/order-api": {
+        target: "http://localhost:5010",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/order-api/, "/api"),
+      },
     },
   },
 });

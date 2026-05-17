@@ -3,6 +3,7 @@ import { useAuthStore } from "@/shared/store/authStore";
 import { AppLayout } from "@/shared/components/layout/AppLayout";
 import { LoginPage } from "@/features/auth";
 import { ProductsPage } from "@/features/products";
+import { TestPlaceOrderPage } from "@/features/test-order";
 
 function ProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -15,6 +16,7 @@ function GuestRoute() {
 }
 
 export const router = createBrowserRouter([
+  { path: "/test/place-order", element: <TestPlaceOrderPage /> },
   {
     element: <GuestRoute />,
     children: [{ path: "/login", element: <LoginPage /> }],

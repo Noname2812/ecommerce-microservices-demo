@@ -107,10 +107,10 @@ var paymentService = builder.AddProject<Projects.UrbanX_Payment_API>("payment")
 //    .WaitFor(identityService)
 //    .WaitFor(promotionService);
 
-// var frontend = builder.AddViteApp("frontend", "../../front-end")
+var frontend = builder.AddViteApp("frontend", "../../front-end")
 //    .WithReference(gateway)
 //    .WaitFor(gateway)
-//    .WithExternalHttpEndpoints();
+   .WithExternalHttpEndpoints();
 
 
 builder.Build().Run();
