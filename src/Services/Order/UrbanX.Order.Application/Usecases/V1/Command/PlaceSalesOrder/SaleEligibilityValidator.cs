@@ -1,11 +1,11 @@
 using Shared.Kernel.Primitives;
+using UrbanX.Order.Application.Abstractions.Promotion;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Errors;
-using UrbanX.Order.Application.Clients;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 
-internal sealed class SaleEligibilityValidator(IPromotionServiceClient promotionClient)
+internal sealed class SaleEligibilityValidator(ISaleSnapshotCache snapshotCache)
     : ISaleEligibilityValidator
 {
     public async Task<Result> ValidateAsync(
@@ -13,16 +13,22 @@ internal sealed class SaleEligibilityValidator(IPromotionServiceClient promotion
         IReadOnlyList<PlaceOrderLineDto> items,
         CancellationToken ct)
     {
-        var totalQty = items.Sum(i => i.Quantity);
-        var eligibilityResult = await promotionClient.CheckCampaignEligibilityAsync(campaignId, userId, totalQty, ct);
+        var snapshotResult = await snapshotCache.GetCampaignAsync(campaignId, ct);
+        if (snapshotResult.IsFailure)
+            return Result.Failure(snapshotResult.Error);
 
-        if (eligibilityResult.IsFailure)
-            return Result.Failure(eligibilityResult.Error);
+        var campaign = snapshotResult.Value;
+        if (campaign is null)
+            return Result.Failure(OrderErrors.SaleCampaignInvalid("Campaign is not available"));
 
-        var response = eligibilityResult.Value!;
-        if (!response.Eligible)
-            return Result.Failure(OrderErrors.SaleCampaignInvalid(response.Reason ?? "Campaign is not eligible"));
+        if (!campaign.IsActive)
+            return Result.Failure(OrderErrors.SaleCampaignInvalid("Campaign is not active"));
 
+        var now = DateTimeOffset.UtcNow;
+        if (now < campaign.StartsAt || now > campaign.EndsAt)
+            return Result.Failure(OrderErrors.SaleCampaignInvalid("Campaign is outside the sale window"));
+
+        // Per-user / global quota is enforced atomically by ISaleAllocationGate later in the handler.
         return Result.Success();
     }
 }

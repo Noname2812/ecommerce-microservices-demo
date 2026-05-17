@@ -1,11 +1,11 @@
 using Shared.Kernel.Primitives;
+using UrbanX.Order.Application.Abstractions.Promotion;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Errors;
-using UrbanX.Order.Application.Clients;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 
-internal sealed class SalePricingValidator(IPromotionServiceClient promotionClient)
+internal sealed class SalePricingValidator(ISaleSnapshotCache snapshotCache)
     : ISalePricingValidator
 {
     private const decimal Tolerance = 0.01m;
@@ -20,18 +20,12 @@ internal sealed class SalePricingValidator(IPromotionServiceClient promotionClie
         if (DateTimeOffset.UtcNow - snapshot.CapturedAt > MaxWindow)
             return Result.Failure(OrderErrors.SaleWindowExpired);
 
-        var lines = items
-            .Select(i => new PromotionSalePriceLine(i.VariantId, i.UnitPrice))
-            .ToList();
-        var salePricesResult = await promotionClient.GetSalePricesAsync(campaignId, lines, ct);
+        var pricesResult = await snapshotCache.GetSalePricesAsync(campaignId, ct);
+        if (pricesResult.IsFailure)
+            return Result.Failure(pricesResult.Error);
 
-        if (salePricesResult.IsFailure)
-            return Result.Failure(OrderErrors.SalePricingUnavailable);
-
-        var salePrices = salePricesResult.Value!;
-
-        var distinctVariants = items.Select(i => i.VariantId).Distinct().Count();
-        if (distinctVariants > 0 && salePrices.Count == 0)
+        var salePrices = pricesResult.Value!;
+        if (salePrices.Count == 0)
             return Result.Failure(OrderErrors.SalePricingUnavailable);
 
         foreach (var item in items)

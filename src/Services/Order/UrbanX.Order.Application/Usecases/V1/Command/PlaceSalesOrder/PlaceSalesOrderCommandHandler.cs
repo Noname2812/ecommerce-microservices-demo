@@ -53,9 +53,13 @@ public sealed class PlaceSalesOrderCommandHandler(
             return Result.Failure<Guid>(OrderErrors.GuardUnavailable);
         }
 
-        var eligibility = await eligibilityValidator.ValidateAsync(request.CampaignId, userId, request.Items, ct);
-        if (eligibility.IsFailure)
-            return Result.Failure<Guid>(eligibility.Error);
+        var validation = await ParallelValidator.RunAsync(ct,
+            token => eligibilityValidator.ValidateAsync(request.CampaignId, userId, request.Items, token),
+            token => productValidator.ValidateAsync(request.Items, token),
+            token => shippingValidator.ValidateAsync(request.ShippingAddress, token),
+            token => salePricingValidator.ValidateAsync(request.CampaignId, request.PricingSnapshot, request.Items, token));
+        if (validation.IsFailure)
+            return Result.Failure<Guid>(validation.Error);
 
         var totalQty = request.Items.Sum(i => i.Quantity);
         var quotaResult = await allocationGate.TryReserveAsync(request.CampaignId, userId, totalQty, ct);
@@ -66,13 +70,6 @@ public sealed class PlaceSalesOrderCommandHandler(
         salesCompensationContext.SaleCampaignId  = request.CampaignId;
         salesCompensationContext.SaleUserId      = userId;
         salesCompensationContext.SaleReservedQty = totalQty;
-
-        var validation = await ParallelValidator.RunAsync(ct,
-            token => productValidator.ValidateAsync(request.Items, token),
-            token => shippingValidator.ValidateAsync(request.ShippingAddress, token),
-            token => salePricingValidator.ValidateAsync(request.CampaignId, request.PricingSnapshot, request.Items, token));
-        if (validation.IsFailure)
-            return Result.Failure<Guid>(validation.Error);
 
         var order = OrderFactory.Build(
             request,
