@@ -56,6 +56,9 @@ public static class OrderErrors
 
     public static readonly Error GuardUnavailable =
         new("SALES_ORDER_GUARD_UNAVAILABLE", "Service temporarily unavailable, please retry");
+
+    public static readonly Error CatalogUnavailable =
+        new("CATALOG_UNAVAILABLE", "Catalog service is unavailable.");
 }
 
 public sealed class PriceMismatchError : Error

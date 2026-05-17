@@ -751,6 +751,76 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.ToTable("order_status_histories", (string)null);
                 });
 
+            modelBuilder.Entity("UrbanX.Order.Domain.Models.ProcessedEvent", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.HasKey("EventId")
+                        .HasName("pk_processed_events");
+
+                    b.HasIndex("ProcessedAt")
+                        .HasDatabaseName("ix_processed_events_processed_at");
+
+                    b.ToTable("processed_events", (string)null);
+                });
+
+            modelBuilder.Entity("UrbanX.Order.Domain.ReadModels.CatalogSnapshot", b =>
+                {
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<decimal>("CurrentPrice")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("current_price");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<bool>("ProductIsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("product_is_active");
+
+                    b.Property<long>("ProjectionVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("projection_version");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("sku");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<bool>("VariantIsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("variant_is_active");
+
+                    b.HasKey("VariantId")
+                        .HasName("pk_catalog_snapshots");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_catalog_snapshots_product_id");
+
+                    b.ToTable("catalog_snapshots", "read");
+                });
+
             modelBuilder.Entity("UrbanX.Order.Domain.Models.OrderItem", b =>
                 {
                     b.HasOne("UrbanX.Order.Domain.Models.Order", null)

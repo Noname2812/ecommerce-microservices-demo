@@ -1,17 +1,17 @@
 using Microsoft.Extensions.Options;
 using Shared.Kernel.Primitives;
+using UrbanX.Order.Application.Abstractions.Catalog;
 using UrbanX.Order.Application.Options;
 using UrbanX.Order.Domain.Errors;
-using UrbanX.Order.Application.Clients;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
-public sealed class ProductValidator(ICatalogServiceClient catalogServiceClient) : IProductValidator
+public sealed class ProductValidator(IProductSnapshotCache snapshotCache) : IProductValidator
 {
     public async Task<Result> ValidateAsync(IReadOnlyList<PlaceOrderLineDto> items, CancellationToken cancellationToken)
     {
         var productIds = items.Select(x => x.ProductId).Distinct().ToArray();
-        var response = await catalogServiceClient.ValidateProductsAsync(productIds, cancellationToken);
+        var response = await snapshotCache.GetProductsAsync(productIds, cancellationToken);
         if (response.IsFailure)
             return Result.Failure(response.Error);
 
@@ -50,7 +50,7 @@ public sealed class ShippingValidator(IOptions<ShippingOptions> options) : IShip
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
 }
 
-public sealed class PricingValidator(ICatalogServiceClient catalogServiceClient) : IPricingValidator
+public sealed class PricingValidator(IProductSnapshotCache snapshotCache) : IPricingValidator
 {
     private const decimal AllowedTolerance = 0.01m;
 
@@ -60,7 +60,7 @@ public sealed class PricingValidator(ICatalogServiceClient catalogServiceClient)
         CancellationToken cancellationToken)
     {
         var variantIds = items.Select(x => x.VariantId).Distinct().ToArray();
-        var response = await catalogServiceClient.GetCurrentPricesAsync(variantIds, cancellationToken);
+        var response = await snapshotCache.GetVariantPricesAsync(variantIds, cancellationToken);
         if (response.IsFailure)
             return Result.Failure(response.Error);
 

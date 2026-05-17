@@ -6,7 +6,10 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Messaging.Idempotency;
 using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
+using OpenTelemetry.Metrics;
+using UrbanX.Order.Application.Constants;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
+using UrbanX.Order.Application.Messaging.Catalog;
 using UrbanX.Order.Application.Sagas;
 using UrbanX.Order.API.Middleware;
 using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
@@ -17,6 +20,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddSharedCache("redis");
+
+// Register Order-specific meter for OpenTelemetry export
+builder.Services.ConfigureOpenTelemetryMeterProvider(metrics =>
+    metrics.AddMeter(CatalogProjectionConstants.Metrics.MeterName));
 builder.Services.AddHttpIdempotency(o => o.ServiceId = "order");
 builder.Services.AddOpenApi();
 
@@ -47,6 +54,14 @@ builder.Services
                 r.ConcurrencyMode = ConcurrencyMode.Optimistic;
                 r.ExistingDbContext<OrderDbContext>();
             });
+
+        // Catalog projection consumers — maintain read.catalog_snapshots for validators
+        bus.AddConsumer<ProductCreatedConsumer>();
+        bus.AddConsumer<ProductInfoUpdatedConsumer>();
+        bus.AddConsumer<ProductStatusChangedConsumer>();
+        bus.AddConsumer<ProductVariantAddedConsumer>();
+        bus.AddConsumer<ProductVariantUpdatedConsumer>();
+        bus.AddConsumer<ProductVariantDeletedConsumer>();
     });
 
 // Health checks

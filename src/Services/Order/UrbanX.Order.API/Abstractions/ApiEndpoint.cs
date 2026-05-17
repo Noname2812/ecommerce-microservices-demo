@@ -26,7 +26,7 @@ public abstract class ApiEndpoint
             detail: result.Error.Message,
             statusCode: StatusCodes.Status409Conflict,
             type: result.Error.Code),
-        { Error.Code: "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE" } => Results.Problem(
+        { Error.Code: "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE" or "CATALOG_UNAVAILABLE" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable,
             type: result.Error.Code),
@@ -63,7 +63,7 @@ public abstract class ApiEndpoint
             "FORBIDDEN" or "ORDER_FORBIDDEN" => StatusCodes.Status403Forbidden,
             "ORDER_NOT_FOUND" => StatusCodes.Status404NotFound,
             "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED" => StatusCodes.Status409Conflict,
-            "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE" => StatusCodes.Status503ServiceUnavailable,
+            "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE" or "CATALOG_UNAVAILABLE" => StatusCodes.Status503ServiceUnavailable,
             "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" or "PRICE_MISMATCH"
                 => StatusCodes.Status422UnprocessableEntity,
             "Order.SaleQuotaExceeded" or "Order.SaleUserLimitExceeded" => StatusCodes.Status409Conflict,
