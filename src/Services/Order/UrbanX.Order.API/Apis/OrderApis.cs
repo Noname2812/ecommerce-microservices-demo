@@ -37,18 +37,12 @@ public class OrderApis : ApiEndpoint, ICarterModule
         [FromBody] PlaceOrderCommand body,
         CancellationToken cancellationToken)
     {
-        var userId = userContext.UserId;
-        if (userId is null || userId == Guid.Empty)
-            return Results.Problem(
-                detail: "Authenticated user was not found in request context.",
-                statusCode: StatusCodes.Status401Unauthorized,
-                type: "AUTH_REQUIRED");
+        if (PlaceOrderEndpointHelpers.RequireUserId(userContext) is { } unauthorized)
+            return unauthorized;
 
         var result = await sender.Send(body, cancellationToken);
         if (result.IsFailure) return HandleFailure(result);
-        return Results.Accepted(
-            uri:   $"/api/v1/orders/{result.Value}",
-            value: new { orderId = result.Value, status = "Pending" });
+        return PlaceOrderEndpointHelpers.Accepted202(result.Value, $"/api/v1/orders/{result.Value}");
     }
 
     private static async Task<IResult> PlaceSalesOrderV1(
@@ -57,18 +51,12 @@ public class OrderApis : ApiEndpoint, ICarterModule
         [FromBody] PlaceSalesOrderCommand body,
         CancellationToken ct)
     {
-        var userId = userContext.UserId;
-        if (userId is null || userId == Guid.Empty)
-            return Results.Problem(
-                detail: "Authenticated user was not found in request context.",
-                statusCode: StatusCodes.Status401Unauthorized,
-                type: "AUTH_REQUIRED");
+        if (PlaceOrderEndpointHelpers.RequireUserId(userContext) is { } unauthorized)
+            return unauthorized;
 
         var result = await sender.Send(body, ct);
         if (result.IsFailure) return HandleFailure(result);
-        return Results.Accepted(
-            uri: $"/api/v1/orders/sales/{result.Value}/status",
-            value: new { orderId = result.Value, status = "Pending" });
+        return PlaceOrderEndpointHelpers.Accepted202(result.Value, $"/api/v1/orders/sales/{result.Value}/status");
     }
 
     private static async Task<IResult> GetSalesOrderStatusV1(

@@ -3,11 +3,9 @@ using Shared.Application.Authorization;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
+using UrbanX.Order.Application.Usecases.V1.Command.Common;
 using UrbanX.Order.Domain.Errors;
-using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
-using UrbanX.Order.Domain.ValueObjects;
-using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
@@ -28,37 +26,14 @@ public sealed class PlaceOrderCommandHandler(
 
         var userId = currentUserId.Value;
 
-        var validationResult = await ValidateBusinessRulesAsync(cmd, ct);
-        if (validationResult.IsFailure)
-            return Result.Failure<Guid>(validationResult.Error);
+        var validation = await ParallelValidator.RunAsync(ct,
+            token => productValidator.ValidateAsync(cmd.Items, token),
+            token => shippingValidator.ValidateAsync(cmd.ShippingAddress, token),
+            token => pricingValidator.ValidateAsync(cmd.PricingSnapshot, cmd.Items, token));
+        if (validation.IsFailure)
+            return Result.Failure<Guid>(validation.Error);
 
-        var address = ShippingAddress.Create(
-            cmd.ShippingAddress.Address, cmd.ShippingAddress.Ward, cmd.ShippingAddress.District,
-            cmd.ShippingAddress.City, cmd.ShippingAddress.Province, cmd.ShippingAddress.Country,
-            cmd.ShippingAddress.ZipCode, cmd.ShippingAddress.FullName, cmd.ShippingAddress.Phone);
-
-        var specs = cmd.Items.Select(i => new NewOrderItemSpec(
-            i.ProductId, i.ProductName, i.ProductSlug,
-            i.VariantId, i.VariantSku, i.VariantName,
-            i.SellerId, i.SellerName,
-            i.UnitPrice, i.Quantity,
-            i.DiscountAmount,
-            i.ImageUrl
-        )).ToList();
-
-        var order = OrderEntity.Create(
-            GenerateOrderNumber(),
-            userId,
-            customerEmail: cmd.CustomerEmail?.Trim() ?? string.Empty,
-            customerName: cmd.ShippingAddress.FullName,
-            customerPhone: cmd.ShippingAddress.Phone,
-            address,
-            cmd.ShippingFee,
-            cmd.CouponCode,
-            couponDiscount: 0m,
-            cmd.CustomerNote,
-            cmd.IdempotencyKey,
-            specs);
+        var order = OrderFactory.Build(cmd, userId, OrderNumberGenerator.Generate("ORD"));
 
         orderRepository.Add(order);
 
@@ -76,43 +51,5 @@ public sealed class PlaceOrderCommandHandler(
         }, ct);
 
         return Result.Success(order.Id);
-    }
-
-    private async Task<Result> ValidateBusinessRulesAsync(PlaceOrderCommand cmd, CancellationToken ct)
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var running = new List<Task<Result>>
-        {
-            productValidator.ValidateAsync(cmd.Items, cts.Token),
-            shippingValidator.ValidateAsync(cmd.ShippingAddress, cts.Token),
-            pricingValidator.ValidateAsync(cmd.PricingSnapshot, cmd.Items, cts.Token)
-        };
-
-        while (running.Count > 0)
-        {
-            var completed = await Task.WhenAny(running);
-            running.Remove(completed);
-
-            var result = await completed;
-            if (result.IsFailure)
-            {
-                cts.Cancel();
-                _ = Task.WhenAll(running).ContinueWith(
-                    _ => { },
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted,
-                    TaskScheduler.Default);
-                return result;
-            }
-        }
-
-        return Result.Success();
-    }
-
-    private static string GenerateOrderNumber()
-    {
-        var date = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
-        var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
-        return $"ORD-{date}-{suffix}";
     }
 }

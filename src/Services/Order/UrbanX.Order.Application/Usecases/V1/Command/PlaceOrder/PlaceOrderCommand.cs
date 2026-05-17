@@ -1,6 +1,7 @@
 using FluentValidation;
 using Shared.Application;
 using Shared.Application.Authorization;
+using UrbanX.Order.Application.Usecases.V1.Command.Common;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
@@ -14,7 +15,7 @@ public record PlaceOrderCommand(
     PlaceOrderPricingSnapshotDto PricingSnapshot,
     IReadOnlyList<PlaceOrderLineDto> Items,
     string? CustomerEmail = null
-) : ICommand<Guid>;
+) : ICommand<Guid>, IPlaceOrderRequest;
 
 public record PlaceOrderShippingAddressDto(
     string FullName,
@@ -49,62 +50,24 @@ public record PlaceOrderLineDto(
 
 public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCommand>
 {
-    private const string PhoneRegex = @"^\+?[0-9]{8,15}$";
-    private const string CouponCodeRegex = @"^[A-Za-z0-9-]{1,64}$";
+    private const int MaxItems = 20;
+    private const int MaxQtyPerItem = 100;
+    private static readonly TimeSpan PricingWindow = TimeSpan.FromMinutes(30);
 
     public PlaceOrderCommandValidator()
     {
-        RuleFor(x => x.ShippingAddress).NotNull();
-        RuleFor(x => x.PricingSnapshot).NotNull();
-        RuleFor(x => x.ShippingFee).GreaterThanOrEqualTo(0);
-        RuleFor(x => x.IdempotencyKey)
-            .NotEmpty()
-            .Must(key => Guid.TryParseExact(key, "D", out _))
-            .WithMessage("IdempotencyKey must be a valid UUID in format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.");
-        RuleFor(x => x.Items)
-            .NotEmpty()
-            .WithMessage("Order must have at least one item")
-            .Must(items => items.Count <= 20)
-            .WithMessage("Order cannot contain more than 20 items");
-
-        RuleFor(x => x.CouponCode)
-            .Matches(CouponCodeRegex)
-            .When(x => !string.IsNullOrWhiteSpace(x.CouponCode))
-            .WithMessage("Coupon code must be 1-64 characters using letters, digits, or dash.");
-
-        RuleFor(x => x.PricingSnapshot.CapturedAt)
-            .Must(capturedAt => capturedAt >= DateTimeOffset.UtcNow.AddMinutes(-30))
-            .When(x => x.PricingSnapshot is not null)
-            .WithMessage("Pricing snapshot must be captured within the last 30 minutes.");
-
-        RuleFor(x => x.CustomerEmail)
-            .EmailAddress()
-            .MaximumLength(320)
-            .When(x => !string.IsNullOrWhiteSpace(x.CustomerEmail));
-
-        When(x => x.ShippingAddress is not null, () =>
-        {
-            RuleFor(x => x.ShippingAddress.FullName).NotEmpty().MaximumLength(255);
-            RuleFor(x => x.ShippingAddress.Phone)
-                .NotEmpty()
-                .Matches(PhoneRegex)
-                .WithMessage("Shipping phone format is invalid.");
-            RuleFor(x => x.ShippingAddress.Address).NotEmpty().MaximumLength(255);
-            RuleFor(x => x.ShippingAddress.District).NotEmpty().MaximumLength(100);
-            RuleFor(x => x.ShippingAddress.City).NotEmpty().MaximumLength(100);
-            RuleFor(x => x.ShippingAddress.Country).NotEmpty().MaximumLength(100);
-        });
-
-        RuleForEach(x => x.Items).ChildRules(item =>
-        {
-            item.RuleFor(i => i.ProductId).NotEmpty();
-            item.RuleFor(i => i.VariantId).NotEmpty();
-            item.RuleFor(i => i.VariantSku).NotEmpty().MaximumLength(100);
-            item.RuleFor(i => i.ProductName).NotEmpty().MaximumLength(500);
-            item.RuleFor(i => i.SellerId).NotEmpty();
-            item.RuleFor(i => i.SellerName).NotEmpty().MaximumLength(255);
-            item.RuleFor(i => i.UnitPrice).GreaterThan(0);
-            item.RuleFor(i => i.Quantity).InclusiveBetween(1, 100);
-        });
+        this.RuleForShippingAddress();
+        this.RuleForShippingFee();
+        this.RuleForIdempotencyKey();
+        this.RuleForCouponCode();
+        this.RuleForCustomerEmail();
+        this.RuleForPricingSnapshot();
+        this.RuleForPricingWindow(
+            PricingWindow,
+            "Pricing snapshot must be captured within the last 30 minutes.");
+        this.RuleForItems(
+            MaxItems,
+            MaxQtyPerItem,
+            itemsCountMessage: $"Order cannot contain more than {MaxItems} items.");
     }
 }

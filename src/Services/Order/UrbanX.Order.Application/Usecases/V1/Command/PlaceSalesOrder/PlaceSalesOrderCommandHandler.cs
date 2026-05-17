@@ -7,11 +7,10 @@ using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
 using UrbanX.Order.Application.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
+using UrbanX.Order.Application.Usecases.V1.Command.Common;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
-using UrbanX.Order.Domain.ValueObjects;
-using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 
@@ -68,36 +67,20 @@ public sealed class PlaceSalesOrderCommandHandler(
         salesCompensationContext.SaleUserId      = userId;
         salesCompensationContext.SaleReservedQty = totalQty;
 
-        var validationResult = await ValidateBusinessRulesAsync(
-            request, productValidator, shippingValidator, salePricingValidator, ct);
-        if (validationResult.IsFailure)
-            return Result.Failure<Guid>(validationResult.Error);
+        var validation = await ParallelValidator.RunAsync(ct,
+            token => productValidator.ValidateAsync(request.Items, token),
+            token => shippingValidator.ValidateAsync(request.ShippingAddress, token),
+            token => salePricingValidator.ValidateAsync(request.CampaignId, request.PricingSnapshot, request.Items, token));
+        if (validation.IsFailure)
+            return Result.Failure<Guid>(validation.Error);
 
-        var orderNumber = GenerateOrderNumber();
-        var address = ShippingAddress.Create(
-            request.ShippingAddress.Address, request.ShippingAddress.Ward,
-            request.ShippingAddress.District, request.ShippingAddress.City,
-            request.ShippingAddress.Province, request.ShippingAddress.Country,
-            request.ShippingAddress.ZipCode, request.ShippingAddress.FullName,
-            request.ShippingAddress.Phone);
-
-        var specs = request.Items.Select(i => new NewOrderItemSpec(
-            i.ProductId, i.ProductName, i.ProductSlug,
-            i.VariantId, i.VariantSku, i.VariantName,
-            i.SellerId, i.SellerName,
-            i.UnitPrice, i.Quantity, DiscountAmount: 0m,
-            i.ImageUrl)).ToList();
-
-        var order = OrderEntity.Create(
-            orderNumber, userId,
-            customerEmail: request.CustomerEmail?.Trim() ?? string.Empty,
-            customerName: request.ShippingAddress.FullName,
-            customerPhone: request.ShippingAddress.Phone,
-            address, request.ShippingFee,
-            couponCode: request.CouponCode, couponDiscount: 0m,
-            request.CustomerNote, request.IdempotencyKey, specs,
+        var order = OrderFactory.Build(
+            request,
+            userId,
+            OrderNumberGenerator.Generate("SALE"),
             orderType: OrderType.Sales,
-            campaignId: request.CampaignId);
+            campaignId: request.CampaignId,
+            useItemDiscount: false);
 
         orderRepository.Add(order);
 
@@ -140,44 +123,5 @@ public sealed class PlaceSalesOrderCommandHandler(
         }
 
         return Result.Success(order.Id);
-    }
-
-    private static async Task<Result> ValidateBusinessRulesAsync(
-        PlaceSalesOrderCommand request,
-        IProductValidator productValidator,
-        IShippingValidator shippingValidator,
-        ISalePricingValidator salePricingValidator,
-        CancellationToken ct)
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var running = new List<Task<Result>>
-        {
-            productValidator.ValidateAsync(request.Items, cts.Token),
-            shippingValidator.ValidateAsync(request.ShippingAddress, cts.Token),
-            salePricingValidator.ValidateAsync(request.CampaignId, request.PricingSnapshot, request.Items, cts.Token)
-        };
-
-        while (running.Count > 0)
-        {
-            var completed = await Task.WhenAny(running);
-            running.Remove(completed);
-            var result = await completed;
-            if (result.IsFailure)
-            {
-                cts.Cancel();
-                _ = Task.WhenAll(running).ContinueWith(
-                    _ => { }, CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-                return result;
-            }
-        }
-        return Result.Success();
-    }
-
-    private static string GenerateOrderNumber()
-    {
-        var date   = DateTimeOffset.UtcNow.ToString("yyyyMMdd");
-        var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
-        return $"SALE-{date}-{suffix}";
     }
 }
