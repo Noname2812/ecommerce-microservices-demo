@@ -390,21 +390,9 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
 
     // ── Domain operations ────────────────────────────────────────────────────
 
-    private async Task ConfirmOrderAsSalesAsync(PlaceSalesOrderSagaState saga)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
-        var uow  = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        await uow.ExecuteInTransactionAsync(async () =>
-        {
-            var order = await repo.GetByIdAsync(saga.OrderId);
-            if (order is null) return;
-            var userId = Guid.Parse(saga.UserId);
-            order.SetConfirmedAsSalesOrder(saga.ReservationId!.Value, saga.CouponClaimId,
-                saga.CampaignId, userId, string.Empty);
-        });
-    }
+    // TODO(TASK-08): Remove WhenEnter hook — sales order uses MarkReadyForPayment in SetPaymentSessionAsync (CampaignId set at Create).
+    private Task ConfirmOrderAsSalesAsync(PlaceSalesOrderSagaState saga) =>
+        Task.CompletedTask;
 
     private async Task SetPaymentSessionAsync(PlaceSalesOrderSagaState saga, string paymentUrl, string? qrCodeUrl)
     {
@@ -415,7 +403,14 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
         await uow.ExecuteInTransactionAsync(async () =>
         {
             var order = await repo.GetByIdAsync(saga.OrderId);
-            order?.SetPaymentSession(paymentUrl, qrCodeUrl);
+            if (order is null || saga.ReservationId is null) return;
+            order.MarkReadyForPayment(
+                saga.ReservationId.Value,
+                saga.CouponClaimId,
+                paymentUrl,
+                qrCodeUrl,
+                Guid.Parse(saga.UserId),
+                string.Empty);
         });
     }
 

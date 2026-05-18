@@ -12,7 +12,9 @@ internal static class OrderFactory
         string orderNumber,
         string orderType = OrderType.Normal,
         Guid? campaignId = null,
-        bool useItemDiscount = true)
+        bool useItemDiscount = true,
+        decimal saleDiscount = 0m,
+        decimal? originalPrice = null)
     {
         var address = ShippingAddress.Create(
             request.ShippingAddress.Address,
@@ -33,20 +35,26 @@ internal static class OrderFactory
             useItemDiscount ? i.DiscountAmount : 0m,
             i.ImageUrl)).ToList();
 
+        var preDiscountTotal = originalPrice ?? request.Items.Sum(i => i.UnitPrice * i.Quantity);
+
         return OrderEntity.Create(
+            // TODO(TASK-06): accept orderId from saga ticket instead of generating.
+            Guid.NewGuid(),
             orderNumber,
             userId,
-            customerEmail: request.CustomerEmail?.Trim() ?? string.Empty,
-            customerName: request.ShippingAddress.FullName,
-            customerPhone: request.ShippingAddress.Phone,
+            request.CustomerEmail?.Trim() ?? string.Empty,
+            request.ShippingAddress.FullName,
+            request.ShippingAddress.Phone,
             address,
             request.ShippingFee,
             request.CouponCode,
             couponDiscount: 0m,
+            saleDiscount,
+            preDiscountTotal,
             request.CustomerNote,
             request.IdempotencyKey,
             specs,
-            orderType: orderType,
-            campaignId: campaignId);
+            orderType,
+            campaignId);
     }
 }

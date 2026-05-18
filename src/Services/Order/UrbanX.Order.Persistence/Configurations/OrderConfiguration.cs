@@ -32,6 +32,8 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<OrderEntity>
                 value => JsonSerializer.Serialize(value, (JsonSerializerOptions?)null),
                 value => JsonSerializer.Deserialize<ShippingAddress>(value, (JsonSerializerOptions?)null)!);
 
+        builder.Property(o => o.OriginalPrice).HasColumnType("decimal(18,2)").IsRequired();
+        builder.Property(o => o.SaleDiscount).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
         builder.Property(o => o.Subtotal).HasColumnType("decimal(18,2)").IsRequired();
         builder.Property(o => o.DiscountAmount).HasColumnType("decimal(18,2)").HasDefaultValue(0m);
         builder.Property(o => o.ShippingFee).HasColumnType("decimal(18,2)").HasDefaultValue(0m);

@@ -1,6 +1,7 @@
-using Shared.Kernel.Domain;
-using UrbanX.Order.Domain.ValueObjects;
 using System.Text.Json;
+using Shared.Kernel.Domain;
+using UrbanX.Order.Domain.Exceptions;
+using UrbanX.Order.Domain.ValueObjects;
 
 namespace UrbanX.Order.Domain.Models;
 
@@ -14,6 +15,8 @@ public sealed class Order : BaseEntity<Guid>
     public string CustomerName { get; private set; } = null!;
     public string? CustomerPhone { get; private set; }
     public ShippingAddress ShippingAddress { get; private set; } = null!;
+    public decimal OriginalPrice { get; private set; }
+    public decimal SaleDiscount { get; private set; }
     public decimal Subtotal { get; private set; }
     public decimal DiscountAmount { get; private set; }
     public decimal ShippingFee { get; private set; }
@@ -23,7 +26,7 @@ public sealed class Order : BaseEntity<Guid>
     public string PricingSnapshot { get; private set; } = "{}";
     public string? CouponCode { get; private set; }
     public decimal CouponDiscount { get; private set; }
-    public string Status { get; private set; } = OrderStatus.Pending;
+    public string Status { get; private set; } = OrderStatus.Processing;
     public string PaymentStatus { get; private set; } = Models.PaymentStatus.Unpaid;
     public string? PaymentMethod { get; private set; }
     public string? PaymentReference { get; private set; }
@@ -53,6 +56,7 @@ public sealed class Order : BaseEntity<Guid>
     private Order() { }
 
     public static Order Create(
+        Guid orderId,
         string orderNumber,
         Guid userId,
         string customerEmail,
@@ -62,6 +66,8 @@ public sealed class Order : BaseEntity<Guid>
         decimal shippingFee,
         string? couponCode,
         decimal couponDiscount,
+        decimal saleDiscount,
+        decimal originalPrice,
         string? customerNote,
         string idempotencyKey,
         IReadOnlyList<NewOrderItemSpec> items,
@@ -69,7 +75,6 @@ public sealed class Order : BaseEntity<Guid>
         Guid? campaignId = null)
     {
         var now = DateTimeOffset.UtcNow;
-        var orderId = Guid.NewGuid();
 
         var order = new Order
         {
@@ -85,9 +90,11 @@ public sealed class Order : BaseEntity<Guid>
             ShippingFee = shippingFee,
             CouponCode = couponCode,
             CouponDiscount = couponDiscount,
+            SaleDiscount = saleDiscount,
+            OriginalPrice = originalPrice,
             CustomerNote = customerNote,
             IdempotencyKey = idempotencyKey,
-            Status = OrderStatus.Pending,
+            Status = OrderStatus.Processing,
             PaymentStatus = Models.PaymentStatus.Unpaid,
             CreatedAt = now,
             UpdatedAt = now,
@@ -106,14 +113,16 @@ public sealed class Order : BaseEntity<Guid>
             order._items.Add(item);
         }
 
-        order.Subtotal = order._items.Sum(i => i.Subtotal);
-        var grossBeforeCoupon = order.Subtotal + shippingFee + order.TaxAmount;
-        var rawDiscountTotal = couponDiscount + order._items.Sum(i => i.DiscountAmount);
-        order.DiscountAmount = Math.Min(rawDiscountTotal, grossBeforeCoupon);
-        order.TotalAmount = Math.Max(0, grossBeforeCoupon - couponDiscount);
-        order.FinalAmount = order.TotalAmount;
+        order.Subtotal = order._items.Sum(i => i.UnitPrice * i.Quantity);
+        var itemLevelDiscounts = order._items.Sum(i => i.DiscountAmount);
+        var rawDiscountTotal = saleDiscount + couponDiscount + itemLevelDiscounts;
+        order.DiscountAmount = Math.Min(rawDiscountTotal, originalPrice);
+        order.FinalAmount = originalPrice - order.DiscountAmount + shippingFee + order.TaxAmount;
+        order.TotalAmount = order.FinalAmount;
         order.PricingSnapshot = JsonSerializer.Serialize(new
         {
+            order.OriginalPrice,
+            order.SaleDiscount,
             order.Subtotal,
             order.DiscountAmount,
             order.ShippingFee,
@@ -124,61 +133,56 @@ public sealed class Order : BaseEntity<Guid>
         });
 
         order._statusHistory.Add(OrderStatusHistory.Create(
-            orderId, null, OrderStatus.Pending, "Order placed", userId, customerName));
+            orderId, null, OrderStatus.Processing, "Order created", userId, customerName));
 
         return order;
     }
 
     public bool CanBeCancelledBy(Guid userId) =>
-        (Status == OrderStatus.Pending || Status == OrderStatus.Confirmed) &&
-        UserId == userId;
+        (Status == OrderStatus.Processing
+         || Status == OrderStatus.PendingPayment
+         || Status == OrderStatus.Confirmed)
+        && UserId == userId;
 
-    public void SetConfirmedWithReservation(Guid reservationId, Guid? claimId, Guid changedById, string changedByName)
-    {
-        var prev = Status;
-        ReservationId = reservationId;
-        CouponClaimId = claimId;
-        Status = OrderStatus.Confirmed;
-        UpdatedAt = DateTimeOffset.UtcNow;
-        _statusHistory.Add(OrderStatusHistory.Create(
-            Id, prev, OrderStatus.Confirmed, null, changedById, changedByName));
-    }
-
-    public void SetConfirmedAsSalesOrder(
+    public void MarkReadyForPayment(
         Guid reservationId, Guid? claimId,
-        Guid campaignId,
+        string paymentUrl, string? qrCodeUrl,
         Guid changedById, string changedByName)
     {
+        if (Status != OrderStatus.Processing) return;
+
         var prev = Status;
         ReservationId = reservationId;
         CouponClaimId = claimId;
-        CampaignId = campaignId;
-        OrderType = Models.OrderType.Sales;
-        Status = OrderStatus.Confirmed;
-        UpdatedAt = DateTimeOffset.UtcNow;
-        _statusHistory.Add(OrderStatusHistory.Create(
-            Id, prev, OrderStatus.Confirmed, null, changedById, changedByName));
-    }
-
-    public void SetPaymentSession(string paymentUrl, string? qrCodeUrl)
-    {
         PaymentUrl = paymentUrl;
         QrCodeUrl = qrCodeUrl;
         PaymentStatus = Models.PaymentStatus.AwaitingPayment;
+        Status = OrderStatus.PendingPayment;
         UpdatedAt = DateTimeOffset.UtcNow;
+        _statusHistory.Add(OrderStatusHistory.Create(
+            Id, prev, OrderStatus.PendingPayment, "Awaiting payment", changedById, changedByName));
     }
 
     public void MarkPaid(string paymentSessionId, Guid changedById, string changedByName)
     {
+        if (Status == OrderStatus.Cancelled) return;
+        if (Status == OrderStatus.Confirmed && PaymentStatus == Models.PaymentStatus.Paid) return;
+        if (Status != OrderStatus.PendingPayment)
+            throw new OrderExceptions.CannotMarkPaidInStatus(Status);
+
+        var prev = Status;
+        Status = OrderStatus.Confirmed;
         PaymentStatus = Models.PaymentStatus.Paid;
         PaymentReference = paymentSessionId;
         UpdatedAt = DateTimeOffset.UtcNow;
         _statusHistory.Add(OrderStatusHistory.Create(
-            Id, Status, Status, "Payment completed", changedById, changedByName));
+            Id, prev, OrderStatus.Confirmed, "Payment completed", changedById, changedByName));
     }
 
     public void Cancel(string reason, Guid? changedById, string? changedByName)
     {
+        if (Status == OrderStatus.Cancelled) return;
+
         var prev = Status;
         Status = OrderStatus.Cancelled;
         CancelledReason = reason;

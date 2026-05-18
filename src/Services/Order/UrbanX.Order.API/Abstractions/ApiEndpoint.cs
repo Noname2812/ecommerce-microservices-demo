@@ -14,7 +14,7 @@ public abstract class ApiEndpoint
             detail: result.Error.Message,
             statusCode: StatusCodes.Status401Unauthorized,
             type: result.Error.Code),
-        { Error.Code: "ORDER_RATE_LIMITED" } => Results.Problem(
+        { Error.Code: "ORDER_RATE_LIMITED" or "Order.TooManyPending" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status429TooManyRequests,
             type: result.Error.Code),
@@ -22,11 +22,22 @@ public abstract class ApiEndpoint
             detail: result.Error.Message,
             statusCode: StatusCodes.Status403Forbidden,
             type: result.Error.Code),
-        { Error.Code: "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED" } => Results.Problem(
+        { Error.Code: "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED"
+            or "Order.FlashSaleSoldOut" or "Order.SaleExpired" or "Order.PriceMismatch"
+            or "Order.CouponAlreadyUsed" or "Order.UserAlreadyBoughtFromSale" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status409Conflict,
             type: result.Error.Code),
-        { Error.Code: "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE" or "CATALOG_UNAVAILABLE" } => Results.Problem(
+        { Error.Code: "Order.CouponNotEligible" } => Results.Problem(
+            detail: result.Error.Message,
+            statusCode: StatusCodes.Status403Forbidden,
+            type: result.Error.Code),
+        { Error.Code: "Order.CouponExhausted" } => Results.Problem(
+            detail: result.Error.Message,
+            statusCode: StatusCodes.Status410Gone,
+            type: result.Error.Code),
+        { Error.Code: "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE"
+            or "CATALOG_UNAVAILABLE" or "Order.CatalogUnavailable" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable,
             type: result.Error.Code),
@@ -39,7 +50,7 @@ public abstract class ApiEndpoint
             detail: result.Error.Message,
             statusCode: StatusCodes.Status409Conflict,
             type: result.Error.Code),
-        { Error.Code: "Order.SaleWindowExpired" or "Order.SaleCampaignInvalid" or "Order.SalePricingUnavailable" or "Order.PriceMismatch" } => Results.Problem(
+        { Error.Code: "Order.SaleWindowExpired" or "Order.SaleCampaignInvalid" or "Order.SalePricingUnavailable" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status422UnprocessableEntity,
             type: result.Error.Code),
@@ -59,15 +70,19 @@ public abstract class ApiEndpoint
         var status = result.Error.Code switch
         {
             "AUTH_REQUIRED" => StatusCodes.Status401Unauthorized,
-            "ORDER_RATE_LIMITED" => StatusCodes.Status429TooManyRequests,
-            "FORBIDDEN" or "ORDER_FORBIDDEN" => StatusCodes.Status403Forbidden,
+            "ORDER_RATE_LIMITED" or "Order.TooManyPending" => StatusCodes.Status429TooManyRequests,
+            "FORBIDDEN" or "ORDER_FORBIDDEN" or "Order.CouponNotEligible" => StatusCodes.Status403Forbidden,
             "ORDER_NOT_FOUND" => StatusCodes.Status404NotFound,
-            "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED" => StatusCodes.Status409Conflict,
-            "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE" or "CATALOG_UNAVAILABLE" => StatusCodes.Status503ServiceUnavailable,
+            "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED"
+                or "Order.FlashSaleSoldOut" or "Order.SaleExpired" or "Order.PriceMismatch"
+                or "Order.CouponAlreadyUsed" or "Order.UserAlreadyBoughtFromSale" => StatusCodes.Status409Conflict,
+            "Order.CouponExhausted" => StatusCodes.Status410Gone,
+            "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE"
+                or "CATALOG_UNAVAILABLE" or "Order.CatalogUnavailable" => StatusCodes.Status503ServiceUnavailable,
             "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" or "PRICE_MISMATCH"
                 => StatusCodes.Status422UnprocessableEntity,
             "Order.SaleQuotaExceeded" or "Order.SaleUserLimitExceeded" => StatusCodes.Status409Conflict,
-            "Order.SaleWindowExpired" or "Order.SaleCampaignInvalid" or "Order.SalePricingUnavailable" or "Order.PriceMismatch"
+            "Order.SaleWindowExpired" or "Order.SaleCampaignInvalid" or "Order.SalePricingUnavailable"
                 => StatusCodes.Status422UnprocessableEntity,
             _ => StatusCodes.Status400BadRequest
         };

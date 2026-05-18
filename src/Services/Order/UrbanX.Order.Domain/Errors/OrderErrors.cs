@@ -25,7 +25,7 @@ public static class OrderErrors
     public static Error ShippingNotAvailable(string city, string district) =>
         new("SHIPPING_NOT_AVAILABLE", $"Shipping is not available for {district}, {city}.");
 
-    public static Error PriceMismatch(Guid variantId, decimal currentPrice, decimal snapshotPrice) =>
+    public static Error VariantPriceMismatch(Guid variantId, decimal currentPrice, decimal snapshotPrice) =>
         new PriceMismatchError(variantId, currentPrice, snapshotPrice);
 
     public static Error OutOfStock(string detail) =>
@@ -50,15 +50,56 @@ public static class OrderErrors
     public static readonly Error SalePricingUnavailable =
         new("Order.SalePricingUnavailable", "Unable to retrieve sale prices. Please try again.");
 
-    public static Error PriceMismatch(string sku, decimal expected, decimal actual) =>
+    /// <summary>
+    /// Per-SKU sale price check. Shares code <c>Order.PriceMismatch</c> with <see cref="PriceMismatch"/>
+    /// (server total) — both map to HTTP 409 by design (TASK-02).
+    /// </summary>
+    public static Error SaleLinePriceMismatch(string sku, decimal expected, decimal actual) =>
         new("Order.PriceMismatch",
             $"Price mismatch for SKU '{sku}': expected {expected:F2}, got {actual:F2}.");
 
     public static readonly Error GuardUnavailable =
         new("SALES_ORDER_GUARD_UNAVAILABLE", "Service temporarily unavailable, please retry");
 
+    // Common
+    public static readonly Error TooManyPendingOrders =
+        new("Order.TooManyPending", "User has reached maximum pending orders");
+
+    public static readonly Error TicketNotFound =
+        new("Order.TicketNotFound", "Ticket not found");
+
+    // Catalog
+    public static Error CatalogValidationFailed(string reason) =>
+        new("Order.CatalogValidationFailed", reason);
+
     public static readonly Error CatalogUnavailable =
-        new("CATALOG_UNAVAILABLE", "Catalog service is unavailable.");
+        new("Order.CatalogUnavailable", "Catalog service unavailable");
+
+    // Sales
+    public static Error FlashSaleSoldOut(Guid saleId) =>
+        new("Order.FlashSaleSoldOut", $"Flash sale {saleId} is sold out");
+
+    public static readonly Error SaleExpired =
+        new("Order.SaleExpired", "Flash sale has expired");
+
+    public static readonly Error UserAlreadyBoughtFromSale =
+        new("Order.UserAlreadyBoughtFromSale", "User already bought from this sale");
+
+    /// <summary>
+    /// Server-computed order total vs client expected (&gt;1% tolerance). Same code as
+    /// <see cref="SaleLinePriceMismatch"/> — API cannot distinguish; both return 409 (TASK-02).
+    /// </summary>
+    public static readonly Error PriceMismatch =
+        new("Order.PriceMismatch", "Server-calculated price differs from expected (>1%)");
+
+    public static readonly Error CouponNotEligible =
+        new("Order.CouponNotEligible", "User is not eligible for this coupon");
+
+    public static readonly Error CouponAlreadyUsed =
+        new("Order.CouponAlreadyUsed", "User has already used this coupon");
+
+    public static readonly Error CouponExhausted =
+        new("Order.CouponExhausted", "Coupon has no remaining quota");
 }
 
 public sealed class PriceMismatchError : Error

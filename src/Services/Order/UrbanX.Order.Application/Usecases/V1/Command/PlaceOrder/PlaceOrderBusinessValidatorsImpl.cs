@@ -74,7 +74,7 @@ public sealed class PricingValidator(IProductSnapshotCache snapshotCache) : IPri
             var lowerBound = item.UnitPrice * (1 - AllowedTolerance);
             var upperBound = item.UnitPrice * (1 + AllowedTolerance);
             if (current.CurrentPrice < lowerBound || current.CurrentPrice > upperBound)
-                return Result.Failure(OrderErrors.PriceMismatch(item.VariantId, current.CurrentPrice, item.UnitPrice));
+                return Result.Failure(OrderErrors.VariantPriceMismatch(item.VariantId, current.CurrentPrice, item.UnitPrice));
         }
 
         return Result.Success();

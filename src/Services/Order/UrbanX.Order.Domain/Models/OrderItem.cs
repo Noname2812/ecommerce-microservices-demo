@@ -18,7 +18,7 @@ public sealed class OrderItem : BaseEntity<Guid>
     public decimal DiscountAmount { get; private set; }
     public decimal Subtotal { get; private set; }
     public string? ImageUrl { get; private set; }
-    public string Status { get; private set; } = OrderStatus.Pending;
+    public string Status { get; private set; } = OrderStatus.Processing;
     public int RefundedQuantity { get; private set; }
 
     private OrderItem() { }
@@ -53,7 +53,7 @@ public sealed class OrderItem : BaseEntity<Guid>
         DiscountAmount = discountAmount,
         Subtotal = unitPrice * quantity - discountAmount,
         ImageUrl = imageUrl,
-        Status = OrderStatus.Pending,
+        Status = OrderStatus.Processing,
         RefundedQuantity = 0
     };
 }

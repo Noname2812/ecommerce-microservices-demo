@@ -34,7 +34,7 @@ internal sealed class SalePricingValidator(ISaleSnapshotCache snapshotCache)
                 return Result.Failure(OrderErrors.SalePricingUnavailable);
 
             if (Math.Abs(item.UnitPrice - expectedPrice) > Tolerance)
-                return Result.Failure(OrderErrors.PriceMismatch(item.VariantSku, expectedPrice, item.UnitPrice));
+                return Result.Failure(OrderErrors.SaleLinePriceMismatch(item.VariantSku, expectedPrice, item.UnitPrice));
         }
 
         return Result.Success();
