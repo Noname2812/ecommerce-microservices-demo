@@ -12,7 +12,6 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     public string? CouponCode { get; set; }
     public decimal Subtotal { get; set; }
     public decimal ShippingFee { get; set; }
-    public decimal PromotionDiscount { get; set; }
     public decimal CouponDiscount { get; set; }
 
     // JSON: List<NormalOrderItemSnapshot>
@@ -29,8 +28,15 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     public Guid? ReservationId { get; set; }
     public Guid? CouponClaimId { get; set; }
 
+    // Catalog validation cache
+    public string? VariantsJson { get; set; }       // List<CatalogVariantInfo> — set after ValidateThroughCatalog
+    public string? ValidationError { get; set; }
+
     // Payment
     public string? PaymentSessionId { get; set; }
+    public string? PaymentUrl { get; set; }
+    public string? QrCodeUrl { get; set; }
+    public DateTimeOffset? PaymentExpiresAt { get; set; }
 
     // Scheduled timeout tokens
     public Guid? StepTimeoutTokenId { get; set; }

@@ -75,6 +75,18 @@ public static class OrderErrors
     public static readonly Error CatalogUnavailable =
         new("Order.CatalogUnavailable", "Catalog service unavailable");
 
+    public static Error VariantNotFound(Guid variantId) =>
+        new("VARIANT_NOT_FOUND", $"Variant {variantId} was not found in catalog.");
+
+    public static Error VariantInactive(Guid variantId) =>
+        new("VARIANT_INACTIVE", $"Variant {variantId} is no longer available.");
+
+    public static Error ProductInactive(Guid productId) =>
+        new("PRODUCT_INACTIVE", $"Product {productId} is no longer available.");
+
+    public static Error SellerInactive(Guid sellerId) =>
+        new("SELLER_INACTIVE", $"Seller {sellerId} is no longer active.");
+
     // Sales
     public static Error FlashSaleSoldOut(Guid saleId) =>
         new("Order.FlashSaleSoldOut", $"Flash sale {saleId} is sold out");

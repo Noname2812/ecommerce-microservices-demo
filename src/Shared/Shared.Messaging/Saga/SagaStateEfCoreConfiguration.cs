@@ -38,6 +38,7 @@ namespace Shared.Messaging.Saga
             entity.HasKey(x => x.CorrelationId);
             entity.Property(x => x.CorrelationId).ValueGeneratedNever();
 
+            // Required in DB; in-memory new instances may have null CurrentState until the first transition.
             entity.Property(x => x.CurrentState).HasMaxLength(100).IsRequired();
             entity.Property(x => x.CreatedAt).IsRequired();
             entity.Property(x => x.UpdatedAt).IsRequired();
