@@ -37,7 +37,7 @@ public abstract class ApiEndpoint
             statusCode: StatusCodes.Status410Gone,
             type: result.Error.Code),
         { Error.Code: "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE"
-            or "CATALOG_UNAVAILABLE" or "Order.CatalogUnavailable" } => Results.Problem(
+            or "Order.CatalogUnavailable" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable,
             type: result.Error.Code),
@@ -78,7 +78,7 @@ public abstract class ApiEndpoint
                 or "Order.CouponAlreadyUsed" or "Order.UserAlreadyBoughtFromSale" => StatusCodes.Status409Conflict,
             "Order.CouponExhausted" => StatusCodes.Status410Gone,
             "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE"
-                or "CATALOG_UNAVAILABLE" or "Order.CatalogUnavailable" => StatusCodes.Status503ServiceUnavailable,
+                or "Order.CatalogUnavailable" => StatusCodes.Status503ServiceUnavailable,
             "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" or "PRICE_MISMATCH"
                 => StatusCodes.Status422UnprocessableEntity,
             "Order.SaleQuotaExceeded" or "Order.SaleUserLimitExceeded" => StatusCodes.Status409Conflict,

@@ -179,7 +179,6 @@ public sealed class PlaceOrderNormalSagaStateMachine
 
         // ── PaymentPending — entered via WhenEnter, events handled via During ──
         WhenEnter(PaymentPending, binder => binder
-            .ThenAsync(ctx => ConfirmOrderAsync(ctx.Saga))
             .Schedule(PaymentExpiry, ctx => new PaymentExpiryTimeoutV1 { OrderId = ctx.Saga.OrderId })
             .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(new
             {
@@ -264,10 +263,6 @@ public sealed class PlaceOrderNormalSagaStateMachine
     }
 
     // ── Domain operations (create scope to avoid captive scoped dependency) ──
-
-    // TODO(TASK-07): Remove WhenEnter hook — reservation + payment URL are applied via MarkReadyForPayment in SetPaymentSessionAsync.
-    private Task ConfirmOrderAsync(PlaceOrderNormalSagaState saga) =>
-        Task.CompletedTask;
 
     private async Task SetPaymentSessionAsync(PlaceOrderNormalSagaState saga, string paymentUrl, string? qrCodeUrl)
     {

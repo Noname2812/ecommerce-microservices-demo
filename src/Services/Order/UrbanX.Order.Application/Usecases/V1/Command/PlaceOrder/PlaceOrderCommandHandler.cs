@@ -13,9 +13,7 @@ public sealed class PlaceOrderCommandHandler(
     IOrderRepository orderRepository,
     IOutboxWriter outboxWriter,
     IUserContext userContext,
-    IProductValidator productValidator,
-    IShippingValidator shippingValidator,
-    IPricingValidator pricingValidator)
+    IShippingValidator shippingValidator)
     : ICommandHandler<PlaceOrderCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(PlaceOrderCommand cmd, CancellationToken ct)
@@ -26,10 +24,8 @@ public sealed class PlaceOrderCommandHandler(
 
         var userId = currentUserId.Value;
 
-        var validation = await ParallelValidator.RunAsync(ct,
-            token => productValidator.ValidateAsync(cmd.Items, token),
-            token => shippingValidator.ValidateAsync(cmd.ShippingAddress, token),
-            token => pricingValidator.ValidateAsync(cmd.PricingSnapshot, cmd.Items, token));
+        // TODO(TASK-07): product/pricing validation moves to saga + ICatalogServiceClient
+        var validation = await shippingValidator.ValidateAsync(cmd.ShippingAddress, ct);
         if (validation.IsFailure)
             return Result.Failure<Guid>(validation.Error);
 

@@ -284,7 +284,6 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
 
         // ── Confirming → PaymentPending ────────────────────────────────────────
         WhenEnter(Confirming, binder => binder
-            .ThenAsync(ctx => ConfirmOrderAsSalesAsync(ctx.Saga))
             .Schedule(PaymentExpiry, ctx => new PaymentExpiryTimeoutV1 { OrderId = ctx.Saga.OrderId })
             .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(new
             {
@@ -389,10 +388,6 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
     }
 
     // ── Domain operations ────────────────────────────────────────────────────
-
-    // TODO(TASK-08): Remove WhenEnter hook — sales order uses MarkReadyForPayment in SetPaymentSessionAsync (CampaignId set at Create).
-    private Task ConfirmOrderAsSalesAsync(PlaceSalesOrderSagaState saga) =>
-        Task.CompletedTask;
 
     private async Task SetPaymentSessionAsync(PlaceSalesOrderSagaState saga, string paymentUrl, string? qrCodeUrl)
     {

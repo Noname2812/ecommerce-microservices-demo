@@ -6,7 +6,6 @@ using Shared.Contract.Dtos.Order;
 using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
-using UrbanX.Order.Application.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Application.Usecases.V1.Command.Common;
 using UrbanX.Order.Domain.Errors;
@@ -19,13 +18,8 @@ public sealed class PlaceSalesOrderCommandHandler(
     IOrderRepository orderRepository,
     IOutboxWriter outboxWriter,
     IUserContext userContext,
-    IProductValidator productValidator,
     IShippingValidator shippingValidator,
-    ISaleEligibilityValidator eligibilityValidator,
-    ISaleAllocationGate allocationGate,
-    ISalePricingValidator salePricingValidator,
     ICacheService cache,
-    PlaceSalesOrderCompensationContext salesCompensationContext,
     ILogger<PlaceSalesOrderCommandHandler> logger)
     : ICommandHandler<PlaceSalesOrderCommand, Guid>
 {
@@ -54,23 +48,10 @@ public sealed class PlaceSalesOrderCommandHandler(
             return Result.Failure<Guid>(OrderErrors.GuardUnavailable);
         }
 
-        var validation = await ParallelValidator.RunAsync(ct,
-            token => eligibilityValidator.ValidateAsync(request.CampaignId, userId, request.Items, token),
-            token => productValidator.ValidateAsync(request.Items, token),
-            token => shippingValidator.ValidateAsync(request.ShippingAddress, token),
-            token => salePricingValidator.ValidateAsync(request.CampaignId, request.PricingSnapshot, request.Items, token));
+        // TODO(TASK-06): product/sale eligibility/pricing/quota validation moves to saga + HTTP clients
+        var validation = await shippingValidator.ValidateAsync(request.ShippingAddress, ct);
         if (validation.IsFailure)
             return Result.Failure<Guid>(validation.Error);
-
-        var totalQty = request.Items.Sum(i => i.Quantity);
-        var quotaResult = await allocationGate.TryReserveAsync(request.CampaignId, userId, totalQty, ct);
-        if (quotaResult.IsFailure)
-            return Result.Failure<Guid>(quotaResult.Error);
-
-        salesCompensationContext.SaleQuotaKey    = quotaResult.Value;
-        salesCompensationContext.SaleCampaignId  = request.CampaignId;
-        salesCompensationContext.SaleUserId      = userId;
-        salesCompensationContext.SaleReservedQty = totalQty;
 
         var order = OrderFactory.Build(
             request,
