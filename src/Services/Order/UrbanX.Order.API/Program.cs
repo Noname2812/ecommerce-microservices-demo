@@ -56,7 +56,7 @@ builder.Services.AddHealthChecks()
 builder.Services.AddProblemDetails();
 
 // Add Infrastructure
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure();
 
 // Add Persistence
 builder.Services.AddPersistence();

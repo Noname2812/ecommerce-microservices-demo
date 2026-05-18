@@ -115,5 +115,39 @@ namespace UrbanX.Catalog.Persistence
                 .Where(v => ids.Contains(v.Id) && v.DeletedAt == null)
                 .ToDictionaryAsync(v => v.Id, v => v.Price, cancellationToken);
         }
+
+        public async Task<IReadOnlyList<VariantCatalogSnapshot>> GetVariantsByIdsAsync(
+            IReadOnlyCollection<Guid> variantIds,
+            CancellationToken cancellationToken = default)
+        {
+            var ids = variantIds
+                .Where(static id => id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (ids.Length == 0)
+                return Array.Empty<VariantCatalogSnapshot>();
+
+            return await _db.ProductVariants
+                .AsNoTracking()
+                .Where(v => ids.Contains(v.Id)
+                            && v.DeletedAt == null
+                            && v.Product.DeletedAt == null
+                            && v.Product.Status != ProductStatus.Deleted)
+                .Select(v => new VariantCatalogSnapshot(
+                    v.ProductId,
+                    v.Product.Name,
+                    v.Product.Status == ProductStatus.Active,
+                    v.Id,
+                    v.Sku,
+                    v.Name,
+                    v.IsActive,
+                    v.Price,
+                    v.Product.SellerId,
+                    v.Product.SellerName,
+                    v.Product.Status == ProductStatus.Active,
+                    v.ImageUrl))
+                .ToListAsync(cancellationToken);
+        }
     }
 }

@@ -9,7 +9,4 @@ public sealed class CatalogClientOptions
     [Required]
     [Url]
     public string BaseAddress { get; init; } = "";
-
-    [Range(100, 120_000)]
-    public int TimeoutMilliseconds { get; init; } = 3_000;
 }

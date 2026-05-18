@@ -34,6 +34,10 @@ namespace UrbanX.Catalog.Domain
             IReadOnlyCollection<Guid> variantIds,
             CancellationToken cancellationToken = default);
 
+        Task<IReadOnlyList<VariantCatalogSnapshot>> GetVariantsByIdsAsync(
+            IReadOnlyCollection<Guid> variantIds,
+            CancellationToken cancellationToken = default);
+
         Task AddAsync(Product product, CancellationToken cancellationToken = default);
         Task AddPriceHistoryAsync(VariantPriceHistory row, CancellationToken cancellationToken = default);
         Task AddSkuHistoryAsync(VariantSkuHistory row, CancellationToken cancellationToken = default);
