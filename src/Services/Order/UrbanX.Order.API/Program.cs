@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Messaging.Idempotency;
-using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
 using UrbanX.Order.Application.Sagas;
@@ -23,17 +22,19 @@ builder.Services.AddOpenApi();
 // Database
 builder.AddNpgsqlDbContext<OrderDbContext>("orderdb", 
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
-builder.Services.AddOutbox<OrderDbContext>(
-    configureDb: null,
-    builder.Configuration
-);
-builder.Services.AddCompensationOutbox(builder.Configuration);
-
 // Messaging
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(builder.Configuration, configureBus: bus =>
     {
+        bus.AddEntityFrameworkOutbox<OrderDbContext>(o =>
+        {
+            o.UsePostgres();
+            o.UseBusOutbox();
+            o.QueryDelay = TimeSpan.FromSeconds(1);
+            o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
+        });
+
         bus.AddSagaStateMachine<PlaceSalesOrderSagaStateMachine, PlaceSalesOrderSagaState>()
             .EntityFrameworkRepository(r =>
             {
