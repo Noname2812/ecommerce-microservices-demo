@@ -77,7 +77,7 @@ public abstract class ApiEndpoint
             "AUTH_REQUIRED" => StatusCodes.Status401Unauthorized,
             "ORDER_RATE_LIMITED" or "Order.TooManyPending" => StatusCodes.Status429TooManyRequests,
             "FORBIDDEN" or "ORDER_FORBIDDEN" or "Order.CouponNotEligible" => StatusCodes.Status403Forbidden,
-            "ORDER_NOT_FOUND" => StatusCodes.Status404NotFound,
+            "ORDER_NOT_FOUND" or "Order.TicketNotFound" => StatusCodes.Status404NotFound,
             "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED"
                 or "Order.FlashSaleSoldOut" or "Order.SaleExpired" or "Order.PriceMismatch"
                 or "Order.CouponAlreadyUsed" or "Order.CouponConcurrentClaim"

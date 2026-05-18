@@ -6,6 +6,7 @@ using UrbanX.Order.Application.Usecases.V1.Command;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceSalesOrder;
 using UrbanX.Order.Application.Usecases.V1.Query;
+using UrbanX.Order.Application.Usecases.V1.Query.GetOrderByTicket;
 using UrbanX.Order.Application.Usecases.V1.Query.GetSalesOrderStatus;
 
 namespace UrbanX.Order.API.Apis;
@@ -24,6 +25,8 @@ public class OrderApis : ApiEndpoint, ICarterModule
             .WithSummary("Place a flash-sale order");
         group.MapGet("/sales/{id:guid}/status", GetSalesOrderStatusV1)
             .WithSummary("Get flash-sale order processing status");
+        group.MapGet("/ticket/{ticketId:guid}", GetByTicketV1)
+            .WithSummary("Poll place-order ticket status");
         group.MapGet("/my", ListMyOrdersV1);
         group.MapGet("/{id:guid}", GetOrderByIdV1);
         group.MapPut("/{id:guid}/cancel", CancelOrderV1);
@@ -47,6 +50,15 @@ public class OrderApis : ApiEndpoint, ICarterModule
         var result = await sender.Send(body, ct);
         if (result.IsFailure) return HandleFailure(result);
         return PlaceOrderEndpointHelpers.Accepted202(result.Value, $"/api/v1/orders/ticket/{result.Value}");
+    }
+
+    private static async Task<IResult> GetByTicketV1(
+        [FromServices] ISender sender,
+        [FromRoute] Guid ticketId,
+        CancellationToken ct)
+    {
+        var result = await sender.Send(new GetOrderByTicketQuery(ticketId), ct);
+        return ToOrderResult(result);
     }
 
     private static async Task<IResult> GetSalesOrderStatusV1(

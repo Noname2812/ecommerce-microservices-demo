@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<ISalesOrderStatusQuery, SalesOrderStatusQuery>();
+        services.AddScoped<IOrderTicketStatusQuery, OrderTicketStatusQuery>();
         return services;
     }
 }
