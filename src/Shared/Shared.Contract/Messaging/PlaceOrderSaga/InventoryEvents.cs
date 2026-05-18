@@ -35,7 +35,7 @@ public record InventoryReserveItem(Guid ProductId, Guid VariantId, int Quantity)
 
 public record OutOfStockProduct(Guid ProductId, int Available);
 
-public record ConfirmInventoryRequestedV1 : IntegrationEventBase
+public record ConfirmInventoryRequestedV1 : IntegrationEventBase, IConfirmInventoryRequested
 {
     public override string Source => "order-service";
 

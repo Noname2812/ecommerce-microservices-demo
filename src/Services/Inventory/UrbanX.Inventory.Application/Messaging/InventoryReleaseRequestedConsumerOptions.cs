@@ -24,6 +24,7 @@ public sealed class InventoryReleaseRequestedConsumerOptions
     public ushort? PrefetchCount { get; set; }
 
     /// <summary>Concurrent message limit for this endpoint; omit for transport default.</summary>
+    [Range(1, 1024)]
     public int? ConcurrentMessageLimit { get; set; }
 }
 

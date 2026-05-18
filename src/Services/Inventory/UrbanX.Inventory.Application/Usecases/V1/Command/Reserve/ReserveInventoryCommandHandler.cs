@@ -62,18 +62,14 @@ public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInve
             item.QuantityReserved += qty;
             item.UpdatedAt = utc;
 
-            newRows.Add(new InventoryReservation
-            {
-                Id = Guid.NewGuid(),
-                InventoryItemId = item.Id,
-                ProductId = pid,
-                OrderIdempotencyKey = request.IdempotencyKey,
-                Quantity = qty,
-                Status = ReservationStatus.Pending,
-                ExpiresAt = expiresAt,
-                CreatedAt = utc,
-                UpdatedAt = utc
-            });
+            newRows.Add(InventoryReservation.CreatePending(
+                id:                  Guid.NewGuid(),
+                inventoryItemId:     item.Id,
+                productId:           pid,
+                orderIdempotencyKey: request.IdempotencyKey,
+                quantity:            qty,
+                expiresAt:           expiresAt,
+                utcNow:              utc));
         }
 
         _reservations.AddRange(newRows);

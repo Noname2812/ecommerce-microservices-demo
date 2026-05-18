@@ -20,6 +20,7 @@ internal sealed class InventoryReservationConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
         builder.Property(x => x.ReleasedAt);
+        builder.Property(x => x.ConfirmedAt).IsRequired(false);
         builder.Property(x => x.OrderIdempotencyKey).HasMaxLength(50).IsRequired();
         builder.Property(x => x.ProductId).IsRequired();
 

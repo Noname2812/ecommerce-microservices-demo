@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Shared.Kernel.Primitives;
+using UrbanX.Inventory.Application.DependencyInjection.Options;
 using UrbanX.Inventory.Application.Jobs;
 using UrbanX.Inventory.Domain;
 using UrbanX.Inventory.Domain.Models;
@@ -42,17 +43,15 @@ public class ReleaseExpiredReservationsJobTests
             QuantityReserved = 5,
         };
 
-        var reservation = new InventoryReservation
-        {
-            Id = Guid.NewGuid(),
-            InventoryItemId = item.Id,
-            ProductId = item.ProductId,
-            OrderIdempotencyKey = "key-1",
-            Quantity = 5,
-            Status = ReservationStatus.Pending,
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-10),
-            InventoryItem = item,
-        };
+        var reservation = InventoryReservation.CreatePending(
+            Guid.NewGuid(),
+            item.Id,
+            item.ProductId,
+            "key-1",
+            5,
+            DateTimeOffset.UtcNow.AddMinutes(-10),
+            DateTimeOffset.UtcNow);
+        reservation.InventoryItem = item;
 
         _repoMock
             .Setup(r => r.GetExpiredPendingBatchAsync(200, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
@@ -79,17 +78,15 @@ public class ReleaseExpiredReservationsJobTests
             QuantityReserved = 3,
         };
 
-        var reservation = new InventoryReservation
-        {
-            Id = Guid.NewGuid(),
-            InventoryItemId = item.Id,
-            ProductId = item.ProductId,
-            OrderIdempotencyKey = "key-2",
-            Quantity = 3,
-            Status = ReservationStatus.Pending,
-            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
-            InventoryItem = item,
-        };
+        var reservation = InventoryReservation.CreatePending(
+            Guid.NewGuid(),
+            item.Id,
+            item.ProductId,
+            "key-2",
+            3,
+            DateTimeOffset.UtcNow.AddHours(1),
+            DateTimeOffset.UtcNow);
+        reservation.InventoryItem = item;
 
         // Repository returns empty batch because the DB WHERE clause filters out non-expired rows
         _repoMock
@@ -117,17 +114,15 @@ public class ReleaseExpiredReservationsJobTests
             QuantityReserved = 4,
         };
 
-        var reservation = new InventoryReservation
-        {
-            Id = Guid.NewGuid(),
-            InventoryItemId = item.Id,
-            ProductId = item.ProductId,
-            OrderIdempotencyKey = "key-3",
-            Quantity = 4,
-            Status = ReservationStatus.Pending,
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-5),
-            InventoryItem = item,
-        };
+        var reservation = InventoryReservation.CreatePending(
+            Guid.NewGuid(),
+            item.Id,
+            item.ProductId,
+            "key-3",
+            4,
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            DateTimeOffset.UtcNow);
+        reservation.InventoryItem = item;
 
         // First call: returns the expired reservation
         // Second call: returns empty (already RELEASED — filtered out by WHERE Status='PENDING')

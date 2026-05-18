@@ -118,18 +118,14 @@ public class ReserveInventoryCommandHandlerTests
     {
         var rid = Guid.Parse("40000000-0000-4000-8000-000000000001");
         var expires = DateTimeOffset.Parse("2026-01-02T00:00:00Z");
-        var existing = new InventoryReservation
-        {
-            Id = rid,
-            InventoryItemId = Guid.NewGuid(),
-            ProductId = Guid.NewGuid(),
-            OrderIdempotencyKey = IdemSame,
-            Quantity = 2,
-            Status = ReservationStatus.Pending,
-            ExpiresAt = expires,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow
-        };
+        var existing = InventoryReservation.CreatePending(
+            rid,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            IdemSame,
+            2,
+            expires,
+            DateTimeOffset.UtcNow);
 
         _reservations
             .Setup(r => r.GetReservationsForIdempotentReplayAsync(IdemSame, It.IsAny<CancellationToken>()))

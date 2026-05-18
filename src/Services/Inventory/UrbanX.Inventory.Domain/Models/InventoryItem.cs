@@ -40,4 +40,24 @@ public class InventoryItem : BaseEntity<Guid>
         UpdatedAt = utcNow;
         return null;
     }
+
+    /// <summary>
+    /// Applies hard deduct: decreases <see cref="QuantityReserved"/> and <see cref="QuantityOnHand"/> by <paramref name="quantity"/>.
+    /// </summary>
+    public void ConfirmDeduction(int quantity, DateTimeOffset utcNow)
+    {
+        if (quantity <= 0)
+            throw new InventoryDomainException(
+                "InventoryItem.InvalidConfirmQuantity",
+                "Confirm quantity must be positive");
+
+        if (quantity > QuantityReserved)
+            throw new InventoryDomainException(
+                "InventoryItem.InsufficientReservedForConfirm",
+                $"Cannot confirm {quantity}; only {QuantityReserved} reserved");
+
+        QuantityReserved -= quantity;
+        QuantityOnHand -= quantity;
+        UpdatedAt = utcNow;
+    }
 }

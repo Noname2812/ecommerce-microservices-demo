@@ -17,6 +17,13 @@ public interface IInventoryReservationRepository
 
     Task<InventoryReservation?> GetTrackedByIdWithInventoryItemAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Loads reservation + item under <c>SELECT … FOR UPDATE</c> on the reservation row (call inside an open transaction).
+    /// </summary>
+    Task<InventoryReservation?> GetTrackedByIdWithInventoryItemForUpdateAsync(
+        Guid id,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<InventoryReservation>> GetExpiredPendingBatchAsync(
         int batchSize,
         DateTimeOffset expiredBefore,

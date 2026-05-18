@@ -12,4 +12,7 @@ public static class InventoryReservationReleaseErrors
 
     public static readonly Error InventoryLineMissing =
         new("InventoryReservation.InventoryLineMissing", "Inventory line for this reservation is missing.");
+
+    public static readonly Error NotConfirmable =
+        new("InventoryReservation.NotConfirmable", "Reservation cannot be confirmed in its current status.");
 }

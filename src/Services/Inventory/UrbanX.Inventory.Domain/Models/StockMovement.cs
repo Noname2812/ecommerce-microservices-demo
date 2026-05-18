@@ -1,4 +1,5 @@
 using Shared.Kernel.Domain;
+using UrbanX.Inventory.Domain.ValueObjects;
 
 namespace UrbanX.Inventory.Domain.Models;
 
@@ -17,4 +18,32 @@ public class StockMovement : BaseEntity<Guid>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public InventoryItem? InventoryItem { get; set; }
+
+    public static StockMovement CreateSale(
+        Guid inventoryItemId,
+        int quantity,
+        string referenceType,
+        Guid? referenceId,
+        string note,
+        Guid? createdById,
+        string? createdByName,
+        DateTimeOffset utcNow,
+        int quantityOnHandBefore)
+    {
+        return new StockMovement
+        {
+            Id = Guid.NewGuid(),
+            InventoryItemId = inventoryItemId,
+            MovementType = ValueObjects.MovementType.Sale,
+            QuantityChange = -quantity,
+            QuantityBefore = quantityOnHandBefore,
+            QuantityAfter = quantityOnHandBefore - quantity,
+            ReferenceType = referenceType,
+            ReferenceId = referenceId,
+            Note = note,
+            CreatedById = createdById,
+            CreatedByName = createdByName,
+            CreatedAt = utcNow
+        };
+    }
 }
