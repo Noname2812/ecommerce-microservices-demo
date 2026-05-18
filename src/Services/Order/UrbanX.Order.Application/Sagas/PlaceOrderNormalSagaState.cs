@@ -18,6 +18,13 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     // JSON: List<NormalOrderItemSnapshot>
     public string? ItemsJson { get; set; }
 
+    public string? ShippingAddressJson { get; set; }
+    public string PricingSnapshotJson { get; set; } = "{}";
+    public string CustomerEmail { get; set; } = "";
+    public string CustomerName { get; set; } = "";
+    public string? CustomerPhone { get; set; }
+    public string? CustomerNote { get; set; }
+
     // Side-effect tracking (compensation)
     public Guid? ReservationId { get; set; }
     public Guid? CouponClaimId { get; set; }

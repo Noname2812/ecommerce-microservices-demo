@@ -41,6 +41,10 @@ public abstract class ApiEndpoint
             detail: result.Error.Message,
             statusCode: StatusCodes.Status503ServiceUnavailable,
             type: result.Error.Code),
+        { Error.Code: "Order.CatalogValidationFailed" } => Results.Problem(
+            detail: result.Error.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            type: result.Error.Code),
         { Error.Code: "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status422UnprocessableEntity,
@@ -79,6 +83,7 @@ public abstract class ApiEndpoint
             "Order.CouponExhausted" => StatusCodes.Status410Gone,
             "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE"
                 or "Order.CatalogUnavailable" => StatusCodes.Status503ServiceUnavailable,
+            "Order.CatalogValidationFailed" => StatusCodes.Status400BadRequest,
             "PRODUCT_NOT_FOUND" or "PRODUCT_UNAVAILABLE" or "SHIPPING_NOT_AVAILABLE" or "PRICE_MISMATCH"
                 => StatusCodes.Status422UnprocessableEntity,
             "Order.SaleQuotaExceeded" or "Order.SaleUserLimitExceeded" => StatusCodes.Status409Conflict,

@@ -136,8 +136,8 @@ public sealed class RedisPendingOrderSlotServiceIntegrationTests : IAsyncLifetim
         try
         {
             Assert.True((await _sut!.TryAcquireAsync(userId, OrderType.Normal, CancellationToken.None)).IsSuccess);
-            await _sut.ReleaseAsync(userId, CancellationToken.None);
-            await _sut.ReleaseAsync(userId, CancellationToken.None);
+            await _sut.ReleaseAsync(userId, OrderType.Normal, CancellationToken.None);
+            await _sut.ReleaseAsync(userId, OrderType.Normal, CancellationToken.None);
 
             var value = await _db!.StringGetAsync(normalKey);
             Assert.True(value.IsNull || (long)value <= 0);

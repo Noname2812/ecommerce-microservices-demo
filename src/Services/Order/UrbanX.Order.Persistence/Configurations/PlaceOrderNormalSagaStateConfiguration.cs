@@ -24,6 +24,12 @@ internal sealed class PlaceOrderNormalSagaStateConfiguration
         builder.Property(x => x.CouponDiscount).HasPrecision(18, 2).IsRequired();
 
         builder.Property(x => x.ItemsJson).HasColumnType("jsonb");
+        builder.Property(x => x.ShippingAddressJson).HasColumnType("jsonb");
+        builder.Property(x => x.PricingSnapshotJson).HasColumnType("jsonb");
+        builder.Property(x => x.CustomerEmail).HasMaxLength(320);
+        builder.Property(x => x.CustomerName).HasMaxLength(255);
+        builder.Property(x => x.CustomerPhone).HasMaxLength(32);
+        builder.Property(x => x.CustomerNote).HasMaxLength(1000);
         builder.Property(x => x.PaymentSessionId).HasMaxLength(255);
 
         builder.Property(x => x.FailureStep).HasMaxLength(64);

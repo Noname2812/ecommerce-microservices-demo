@@ -2,50 +2,57 @@ using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
+using UrbanX.Order.Application.Services;
 using UrbanX.Order.Application.Usecases.V1.Command.Common;
 using UrbanX.Order.Domain.Errors;
-using UrbanX.Order.Domain.Repositories;
+using UrbanX.Order.Domain.Models;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 public sealed class PlaceOrderCommandHandler(
-    IOrderRepository orderRepository,
-    IOutboxWriter outboxWriter,
-    IUserContext userContext,
-    IShippingValidator shippingValidator)
+    IEventPublisher eventPublisher,
+    IPendingOrderSlotService pendingSlots,
+    IUserContext userContext)
     : ICommandHandler<PlaceOrderCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(PlaceOrderCommand cmd, CancellationToken ct)
     {
-        var currentUserId = userContext.UserId;
-        if (currentUserId is null || currentUserId == Guid.Empty)
+        var userId = userContext.UserId ?? Guid.Empty;
+        if (userId == Guid.Empty)
             return Result.Failure<Guid>(OrderErrors.Forbidden);
 
-        var userId = currentUserId.Value;
+        var slot = await pendingSlots.TryAcquireAsync(userId, OrderType.Normal, ct);
+        if (slot.IsFailure)
+            return Result.Failure<Guid>(slot.Error);
 
-        // TODO(TASK-07): product/pricing validation moves to saga + ICatalogServiceClient
-        var validation = await shippingValidator.ValidateAsync(cmd.ShippingAddress, ct);
-        if (validation.IsFailure)
-            return Result.Failure<Guid>(validation.Error);
+        var ticketId = Guid.NewGuid();
 
-        var order = OrderFactory.Build(cmd, userId, OrderNumberGenerator.Generate("ORD"));
-
-        orderRepository.Add(order);
-
-        await outboxWriter.WriteAsync(new PlaceOrderRequestedV1
+        try
         {
-            OrderId        = order.Id,
-            UserId         = userId.ToString("D"),
-            IdempotencyKey = cmd.IdempotencyKey,
-            CouponCode     = cmd.CouponCode,
-            Subtotal       = order.Subtotal,
-            ShippingFee    = order.ShippingFee,
-            Items          = order.Items
-                .Select(i => new NormalOrderItemSnapshot(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice))
-                .ToList()
-        }, ct);
+            await eventPublisher.PublishAsync(new PlaceOrderRequestedV1
+            {
+                OrderId = ticketId,
+                CorrelationId = ticketId.ToString("D"),
+                UserId = userId.ToString("D"),
+                IdempotencyKey = cmd.IdempotencyKey,
+                CouponCode = cmd.CouponCode,
+                Subtotal = PlaceOrderEventMappings.SumLineTotal(cmd.Items),
+                ShippingFee = cmd.ShippingFee,
+                ShippingAddress = PlaceOrderEventMappings.MapShipping(cmd.ShippingAddress),
+                PricingSnapshotJson = PlaceOrderEventMappings.SerializePricingSnapshot(cmd.PricingSnapshot),
+                CustomerEmail = cmd.CustomerEmail?.Trim() ?? string.Empty,
+                CustomerName = cmd.ShippingAddress.FullName,
+                CustomerPhone = cmd.ShippingAddress.Phone,
+                CustomerNote = cmd.CustomerNote,
+                Items = PlaceOrderEventMappings.MapNormalItems(cmd.Items)
+            }, ct);
+        }
+        catch
+        {
+            await pendingSlots.ReleaseAsync(userId, OrderType.Normal, ct);
+            throw;
+        }
 
-        return Result.Success(order.Id);
+        return Result.Success(ticketId);
     }
 }

@@ -15,6 +15,7 @@ public sealed class PlaceSalesOrderSagaState : SagaStateBase
 
     // ── Pricing snapshot ──────────────────────────────────────────────────────
     public decimal Subtotal { get; set; }
+    public decimal ExpectedTotal { get; set; }
     public decimal ShippingFee { get; set; }
     public decimal PromotionDiscount { get; set; }
     public decimal CouponDiscount { get; set; }

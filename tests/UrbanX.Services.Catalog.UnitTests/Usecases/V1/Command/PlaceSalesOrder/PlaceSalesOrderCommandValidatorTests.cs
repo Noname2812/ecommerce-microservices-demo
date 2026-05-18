@@ -9,7 +9,6 @@ public class PlaceSalesOrderCommandValidatorTests
     private readonly PlaceSalesOrderCommandValidator _sut = new();
 
     private static PlaceSalesOrderCommand ValidCommand() => new(
-        UserId: Guid.NewGuid(),
         CampaignId: Guid.NewGuid(),
         ShippingAddress: new("Nguyen Van A", "0912345678",
             "123 Le Loi", null, "District 1", "Ho Chi Minh", null, "VN", null),
@@ -18,6 +17,7 @@ public class PlaceSalesOrderCommandValidatorTests
         CustomerNote: null,
         IdempotencyKey: Guid.NewGuid().ToString("D"),
         PricingSnapshot: new(DateTimeOffset.UtcNow.AddMinutes(-1)),
+        ExpectedTotal: 130_000,
         Items: [new(Guid.NewGuid(), "Product A", null, Guid.NewGuid(),
             "SKU-001", null, Guid.NewGuid(), "Seller A", 100_000, 1, 0, null)]
     );
@@ -36,33 +36,16 @@ public class PlaceSalesOrderCommandValidatorTests
     }
 
     [Fact]
-    public void PricingSnapshot_Within5Minutes_ShouldNotHaveError()
+    public void ExpectedTotal_Zero_ShouldHaveError()
     {
-        var cmd = ValidCommand() with
-        {
-            PricingSnapshot = new(DateTimeOffset.UtcNow.AddMinutes(-4))
-        };
-        _sut.TestValidate(cmd).ShouldNotHaveValidationErrorFor(x => x.PricingSnapshot.CapturedAt);
+        var cmd = ValidCommand() with { ExpectedTotal = 0 };
+        _sut.TestValidate(cmd).ShouldHaveValidationErrorFor(x => x.ExpectedTotal);
     }
 
     [Fact]
-    public void PricingSnapshot_OlderThan5Minutes_ShouldHaveError()
+    public void ExpectedTotal_Positive_ShouldNotHaveError()
     {
-        var cmd = ValidCommand() with
-        {
-            PricingSnapshot = new(DateTimeOffset.UtcNow.AddMinutes(-6))
-        };
-        _sut.TestValidate(cmd).ShouldHaveValidationErrorFor(x => x.PricingSnapshot.CapturedAt);
-    }
-
-    [Fact]
-    public void PricingSnapshot_OlderThan30Minutes_ShouldHaveError()
-    {
-        var cmd = ValidCommand() with
-        {
-            PricingSnapshot = new(DateTimeOffset.UtcNow.AddMinutes(-31))
-        };
-        _sut.TestValidate(cmd).ShouldHaveValidationErrorFor(x => x.PricingSnapshot.CapturedAt);
+        _sut.TestValidate(ValidCommand()).ShouldNotHaveValidationErrorFor(x => x.ExpectedTotal);
     }
 
     [Fact]

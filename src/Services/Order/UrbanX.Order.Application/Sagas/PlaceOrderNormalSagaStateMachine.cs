@@ -326,6 +326,14 @@ public sealed class PlaceOrderNormalSagaStateMachine
         saga.Subtotal      = msg.Subtotal;
         saga.ShippingFee   = msg.ShippingFee;
         saga.ItemsJson     = JsonSerializer.Serialize(msg.Items);
+        saga.ShippingAddressJson = msg.ShippingAddress is null
+            ? null
+            : JsonSerializer.Serialize(msg.ShippingAddress);
+        saga.PricingSnapshotJson = msg.PricingSnapshotJson;
+        saga.CustomerEmail = msg.CustomerEmail;
+        saga.CustomerName = msg.CustomerName;
+        saga.CustomerPhone = msg.CustomerPhone;
+        saga.CustomerNote = msg.CustomerNote;
     }
 
     // ── Message factories ────────────────────────────────────────────────────

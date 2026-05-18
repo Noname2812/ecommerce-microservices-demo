@@ -1,7 +1,6 @@
 using Carter;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Shared.Application.Authorization;
 using UrbanX.Order.API.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
@@ -30,32 +29,24 @@ public class OrderApis : ApiEndpoint, ICarterModule
         group.MapPut("/{id:guid}/cancel", CancelOrderV1);
     }
 
-    public static async Task<IResult> PlaceOrderV1(
+    private static async Task<IResult> PlaceOrderV1(
         [FromServices] ISender sender,
-        [FromServices] IUserContext userContext,
         [FromBody] PlaceOrderCommand body,
         CancellationToken cancellationToken)
     {
-        if (PlaceOrderEndpointHelpers.RequireUserId(userContext) is { } unauthorized)
-            return unauthorized;
-
         var result = await sender.Send(body, cancellationToken);
         if (result.IsFailure) return HandleFailure(result);
-        return PlaceOrderEndpointHelpers.Accepted202(result.Value, $"/api/v1/orders/{result.Value}");
+        return PlaceOrderEndpointHelpers.Accepted202(result.Value, $"/api/v1/orders/ticket/{result.Value}");
     }
 
     private static async Task<IResult> PlaceSalesOrderV1(
         [FromServices] ISender sender,
-        [FromServices] IUserContext userContext,
         [FromBody] PlaceSalesOrderCommand body,
         CancellationToken ct)
     {
-        if (PlaceOrderEndpointHelpers.RequireUserId(userContext) is { } unauthorized)
-            return unauthorized;
-
         var result = await sender.Send(body, ct);
         if (result.IsFailure) return HandleFailure(result);
-        return PlaceOrderEndpointHelpers.Accepted202(result.Value, $"/api/v1/orders/sales/{result.Value}/status");
+        return PlaceOrderEndpointHelpers.Accepted202(result.Value, $"/api/v1/orders/ticket/{result.Value}");
     }
 
     private static async Task<IResult> GetSalesOrderStatusV1(
@@ -67,7 +58,7 @@ public class OrderApis : ApiEndpoint, ICarterModule
         return ToOrderResult(result);
     }
 
-    public static async Task<IResult> ListMyOrdersV1(
+    private static async Task<IResult> ListMyOrdersV1(
         [FromServices] ISender sender,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
@@ -77,7 +68,7 @@ public class OrderApis : ApiEndpoint, ICarterModule
         return ToOrderResult(result);
     }
 
-    public static async Task<IResult> GetOrderByIdV1(
+    private static async Task<IResult> GetOrderByIdV1(
         [FromServices] ISender sender,
         [FromRoute] Guid id,
         CancellationToken cancellationToken)
@@ -86,7 +77,7 @@ public class OrderApis : ApiEndpoint, ICarterModule
         return ToOrderResult(result);
     }
 
-    public static async Task<IResult> CancelOrderV1(
+    private static async Task<IResult> CancelOrderV1(
         [FromServices] ISender sender,
         [FromRoute] Guid id,
         [FromBody] CancelOrderBody body,

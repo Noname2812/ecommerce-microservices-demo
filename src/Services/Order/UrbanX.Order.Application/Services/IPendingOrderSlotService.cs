@@ -6,5 +6,5 @@ public interface IPendingOrderSlotService
 {
     Task<Result> TryAcquireAsync(Guid userId, string orderType, CancellationToken ct);
 
-    Task ReleaseAsync(Guid userId, CancellationToken ct);
+    Task ReleaseAsync(Guid userId, string orderType, CancellationToken ct);
 }

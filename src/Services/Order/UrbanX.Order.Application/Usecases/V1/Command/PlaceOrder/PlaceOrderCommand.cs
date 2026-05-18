@@ -52,7 +52,6 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
 {
     private const int MaxItems = 20;
     private const int MaxQtyPerItem = 100;
-    private static readonly TimeSpan PricingWindow = TimeSpan.FromMinutes(30);
 
     public PlaceOrderCommandValidator()
     {
@@ -62,9 +61,6 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
         this.RuleForCouponCode();
         this.RuleForCustomerEmail();
         this.RuleForPricingSnapshot();
-        this.RuleForPricingWindow(
-            PricingWindow,
-            "Pricing snapshot must be captured within the last 30 minutes.");
         this.RuleForItems(
             MaxItems,
             MaxQtyPerItem,

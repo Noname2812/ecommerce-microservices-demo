@@ -19,6 +19,7 @@ internal sealed class PlaceSalesOrderSagaStateConfiguration
         builder.Property(x => x.IdempotencyKey).HasMaxLength(128).IsRequired();
 
         builder.Property(x => x.Subtotal).HasPrecision(18, 2).IsRequired();
+        builder.Property(x => x.ExpectedTotal).HasPrecision(18, 2).IsRequired();
         builder.Property(x => x.ShippingFee).HasPrecision(18, 2).IsRequired();
         builder.Property(x => x.PromotionDiscount).HasPrecision(18, 2).IsRequired();
         builder.Property(x => x.CouponDiscount).HasPrecision(18, 2).IsRequired();

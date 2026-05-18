@@ -121,13 +121,14 @@ public sealed class RedisPendingOrderSlotServiceTests
         Assert.Equal(_options.MaxNormalPendingPerUser, (int)capturedArgs[1]);
     }
 
-    [Fact]
-    public async Task Release_DecrementsBothNormalAndSalesKeys()
+    [Theory]
+    [InlineData(OrderType.Normal, "normal")]
+    [InlineData(OrderType.Sales, "sales")]
+    public async Task Release_DecrementsOnlyMatchingOrderTypeKey(string orderType, string keySegment)
     {
         var userId = Guid.NewGuid();
-        var normalKey = $"{InstanceName}:pending-orders:normal:{userId:D}";
-        var salesKey = $"{InstanceName}:pending-orders:sales:{userId:D}";
-        var releasedKeys = new List<string>();
+        var expectedKey = $"{InstanceName}:pending-orders:{keySegment}:{userId:D}";
+        string? releasedKey = null;
 
         var sut = CreateSut();
         _cache
@@ -137,14 +138,12 @@ public sealed class RedisPendingOrderSlotServiceTests
                 It.Is<RedisValue[]?>(a => a == null),
                 It.IsAny<CancellationToken>()))
             .Callback<string, RedisKey[], RedisValue[]?, CancellationToken>((_, keys, _, _) =>
-                releasedKeys.Add(keys[0]!))
+                releasedKey = keys[0]!)
             .ReturnsAsync(RedisResult.Create((RedisValue)1));
 
-        await sut.ReleaseAsync(userId, CancellationToken.None);
+        await sut.ReleaseAsync(userId, orderType, CancellationToken.None);
 
-        Assert.Contains(normalKey, releasedKeys);
-        Assert.Contains(salesKey, releasedKeys);
-        Assert.Equal(2, releasedKeys.Count);
+        Assert.Equal(expectedKey, releasedKey);
     }
 
     [Fact]
@@ -158,7 +157,7 @@ public sealed class RedisPendingOrderSlotServiceTests
         Assert.True((await sut.TryAcquireAsync(userId, OrderType.Normal, CancellationToken.None)).IsSuccess);
         Assert.True((await sut.TryAcquireAsync(userId, OrderType.Normal, CancellationToken.None)).IsFailure);
 
-        await sut.ReleaseAsync(userId, CancellationToken.None);
+        await sut.ReleaseAsync(userId, OrderType.Normal, CancellationToken.None);
 
         Assert.True((await sut.TryAcquireAsync(userId, OrderType.Normal, CancellationToken.None)).IsSuccess);
     }

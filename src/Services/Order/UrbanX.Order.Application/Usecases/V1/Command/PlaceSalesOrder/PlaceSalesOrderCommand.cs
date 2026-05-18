@@ -15,6 +15,7 @@ public record PlaceSalesOrderCommand(
     string? CustomerNote,
     string IdempotencyKey,
     PlaceOrderPricingSnapshotDto PricingSnapshot,
+    decimal ExpectedTotal,
     IReadOnlyList<PlaceOrderLineDto> Items,
     string? CustomerEmail = null
 ) : ICommand<Guid>, IIdempotentCommand, IPlaceOrderRequest
@@ -26,11 +27,11 @@ public sealed class PlaceSalesOrderCommandValidator : AbstractValidator<PlaceSal
 {
     private const int MaxItems = 10;
     private const int MaxQtyPerItem = 5;
-    private static readonly TimeSpan PricingWindow = TimeSpan.FromMinutes(5);
 
     public PlaceSalesOrderCommandValidator()
     {
         RuleFor(x => x.CampaignId).NotEmpty().WithMessage("CampaignId is required for sales orders.");
+        RuleFor(x => x.ExpectedTotal).GreaterThan(0);
 
         this.RuleForShippingAddress();
         this.RuleForShippingFee();
@@ -38,9 +39,6 @@ public sealed class PlaceSalesOrderCommandValidator : AbstractValidator<PlaceSal
         this.RuleForCouponCode();
         this.RuleForCustomerEmail();
         this.RuleForPricingSnapshot();
-        this.RuleForPricingWindow(
-            PricingWindow,
-            "Pricing snapshot must be captured within the last 5 minutes for sales orders.");
         this.RuleForItems(
             MaxItems,
             MaxQtyPerItem,

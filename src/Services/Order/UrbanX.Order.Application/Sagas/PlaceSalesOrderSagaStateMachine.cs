@@ -503,6 +503,7 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
         saga.CampaignId     = msg.CampaignId;
         saga.IdempotencyKey = msg.IdempotencyKey;
         saga.Subtotal       = msg.Subtotal;
+        saga.ExpectedTotal  = msg.ExpectedTotal;
         saga.ShippingFee    = msg.ShippingFee;
         saga.CouponCode     = msg.CouponCode;
         saga.ItemsJson      = JsonSerializer.Serialize(msg.Items);

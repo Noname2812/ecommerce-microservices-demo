@@ -65,10 +65,14 @@ public sealed class RedisPendingOrderSlotService(
         return Result.Success();
     }
 
-    public Task ReleaseAsync(Guid userId, CancellationToken ct) =>
-        Task.WhenAll(
-            cache.EvalAsync(ReleaseScript, [$"{_prefix}:normal:{userId:D}"], null, ct),
-            cache.EvalAsync(ReleaseScript, [$"{_prefix}:sales:{userId:D}"], null, ct));
+    public Task ReleaseAsync(Guid userId, string orderType, CancellationToken ct)
+    {
+        var key = orderType == OrderType.Sales
+            ? $"{_prefix}:sales:{userId:D}"
+            : $"{_prefix}:normal:{userId:D}";
+
+        return cache.EvalAsync(ReleaseScript, [key], null, ct);
+    }
 
     private static long ToInt64(RedisResult result) =>
         result.IsNull ? 0 : (long)result;

@@ -1,3 +1,9 @@
+using System.Text.Json;
+using Shared.Contract.Dtos.Order;
+using Shared.Contract.Messaging.PlaceOrder;
+using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Application.Sagas;
+using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.ValueObjects;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
@@ -16,16 +22,7 @@ internal static class OrderFactory
         decimal saleDiscount = 0m,
         decimal? originalPrice = null)
     {
-        var address = ShippingAddress.Create(
-            request.ShippingAddress.Address,
-            request.ShippingAddress.Ward,
-            request.ShippingAddress.District,
-            request.ShippingAddress.City,
-            request.ShippingAddress.Province,
-            request.ShippingAddress.Country,
-            request.ShippingAddress.ZipCode,
-            request.ShippingAddress.FullName,
-            request.ShippingAddress.Phone);
+        var address = MapShippingAddress(request.ShippingAddress);
 
         var specs = request.Items.Select(i => new NewOrderItemSpec(
             i.ProductId, i.ProductName, i.ProductSlug,
@@ -38,7 +35,6 @@ internal static class OrderFactory
         var preDiscountTotal = originalPrice ?? request.Items.Sum(i => i.UnitPrice * i.Quantity);
 
         return OrderEntity.Create(
-            // TODO(TASK-06): accept orderId from saga ticket instead of generating.
             Guid.NewGuid(),
             orderNumber,
             userId,
@@ -56,5 +52,91 @@ internal static class OrderFactory
             specs,
             orderType,
             campaignId);
+    }
+
+    public static OrderEntity BuildFromSaga(
+        PlaceOrderNormalSagaState saga,
+        IDictionary<Guid, CatalogVariantInfo> variants,
+        Guid orderId)
+    {
+        var snapshots = JsonSerializer.Deserialize<List<NormalOrderItemSnapshot>>(saga.ItemsJson ?? "[]")
+            ?? throw new InvalidOperationException("ItemsJson is null or invalid.");
+
+        if (snapshots.Count == 0)
+            throw new InvalidOperationException("ItemsJson must contain at least one item.");
+
+        var items = snapshots
+            .Select(i =>
+            {
+                if (!variants.TryGetValue(i.VariantId, out var variant))
+                    throw new InvalidOperationException($"Catalog variant {i.VariantId} was not found.");
+
+                return new NewOrderItemSpec(
+                    variant.ProductId,
+                    variant.ProductName,
+                    ProductSlug: null,
+                    variant.VariantId,
+                    variant.Sku,
+                    variant.VariantName,
+                    variant.SellerId,
+                    variant.SellerName,
+                    i.UnitPrice,
+                    i.Quantity,
+                    DiscountAmount: 0m,
+                    variant.ImageUrl);
+            })
+            .ToList();
+
+        var shipping = DeserializeShipping(saga.ShippingAddressJson);
+        var userId = Guid.Parse(saga.UserId);
+        var subtotal = items.Sum(i => i.UnitPrice * i.Quantity);
+
+        return OrderEntity.Create(
+            orderId,
+            OrderNumberGenerator.Generate("ORD"),
+            userId,
+            saga.CustomerEmail,
+            saga.CustomerName,
+            saga.CustomerPhone,
+            shipping,
+            saga.ShippingFee,
+            saga.CouponCode,
+            couponDiscount: saga.CouponDiscount,
+            saleDiscount: 0m,
+            originalPrice: subtotal,
+            saga.CustomerNote,
+            saga.IdempotencyKey,
+            items,
+            OrderType.Normal);
+    }
+
+    private static ShippingAddress MapShippingAddress(PlaceOrderShippingAddressDto dto) =>
+        ShippingAddress.Create(
+            dto.Address,
+            dto.Ward,
+            dto.District,
+            dto.City,
+            dto.Province,
+            dto.Country,
+            dto.ZipCode,
+            dto.FullName,
+            dto.Phone);
+
+    private static ShippingAddress DeserializeShipping(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            throw new InvalidOperationException("Shipping address is required to build an order from saga state.");
+
+        var snapshot = JsonSerializer.Deserialize<OrderDtos.ShippingAddressSnapshot>(json)!;
+        return ShippingAddress.Create(
+            snapshot.Address,
+            string.IsNullOrWhiteSpace(snapshot.Ward) ? null : snapshot.Ward,
+            snapshot.District,
+            snapshot.City,
+            string.IsNullOrWhiteSpace(snapshot.Province) ? null : snapshot.Province,
+            snapshot.Country,
+            snapshot.ZipCode,
+            snapshot.FullName,
+            snapshot.Phone);
     }
 }

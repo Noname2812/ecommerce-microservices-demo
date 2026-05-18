@@ -11,6 +11,7 @@ public record PlaceSalesOrderRequestedV1 : IntegrationEventBase
     public required string UserId { get; init; }
     public required Guid CampaignId { get; init; }
     public required string IdempotencyKey { get; init; }
+    public required decimal ExpectedTotal { get; init; }
     public required decimal Subtotal { get; init; }
     public required decimal ShippingFee { get; init; }
     public required OrderDtos.ShippingAddressSnapshot ShippingAddress { get; init; }

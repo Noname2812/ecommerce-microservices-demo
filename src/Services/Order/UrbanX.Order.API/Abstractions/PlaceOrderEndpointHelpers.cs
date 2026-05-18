@@ -15,8 +15,8 @@ internal static class PlaceOrderEndpointHelpers
         return null;
     }
 
-    public static IResult Accepted202(Guid orderId, string locationUri)
+    public static IResult Accepted202(Guid ticketId, string locationUri)
         => Results.Accepted(
             uri: locationUri,
-            value: new { orderId, status = "Pending" });
+            value: new { ticketId });
 }

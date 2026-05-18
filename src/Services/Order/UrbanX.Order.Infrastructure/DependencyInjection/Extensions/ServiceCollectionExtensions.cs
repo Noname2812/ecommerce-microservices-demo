@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
             });
 
         services.AddSingleton<IPendingOrderSlotService, RedisPendingOrderSlotService>();
+        services.AddSingleton<IFlashSaleStockService, RedisFlashSaleStockService>();
 
         return services;
     }
