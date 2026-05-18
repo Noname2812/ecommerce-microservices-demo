@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using UrbanX.Order.Application.Clients;
+using UrbanX.Order.Application.Services;
 using UrbanX.Order.Infrastructure.DependencyInjection.Options;
 using UrbanX.Order.Infrastructure.Services;
 
@@ -24,6 +25,8 @@ public static class ServiceCollectionExtensions
                 client.Timeout = TimeSpan.FromMilliseconds(options.TimeoutMilliseconds);
             })
             .AddStandardResilienceHandler();
+
+        services.AddSingleton<IPendingOrderSlotService, RedisPendingOrderSlotService>();
 
         return services;
     }

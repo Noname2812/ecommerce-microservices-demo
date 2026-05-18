@@ -18,6 +18,11 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<PlaceOrderOptions>()
+            .BindConfiguration(PlaceOrderOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
         services.AddScoped<IShippingValidator, ShippingValidator>();
         return services;
