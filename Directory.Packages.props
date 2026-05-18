@@ -57,7 +57,7 @@
     <PackageVersion Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageVersion Include="AspNetCore.HealthChecks.Npgsql" Version="9.0.0" />
-    <PackageVersion Include="AspNetCore.HealthChecks.Rabbitmq" Version="9.0.0" />
+    <PackageVersion Include="AspNetCore.HealthChecks.Rabbitmq" Version="8.0.2" />
     <!-- ========== OpenTelemetry (observability, used by ServiceDefaults) ========== -->
     <PackageVersion Include="OpenTelemetry" Version="1.15.2" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.15.2" />
@@ -72,6 +72,7 @@
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
     <PackageVersion Include="MediatR" Version="14.1.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
+    <PackageVersion Include="RabbitMQ.Client" Version="6.8.1" />
     <PackageVersion Include="Refit" Version="10.1.6" />
     <PackageVersion Include="Refit.HttpClientFactory" Version="10.1.6" />
     <PackageVersion Include="StackExchange.Redis" Version="2.12.1" />

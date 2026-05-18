@@ -16,7 +16,7 @@ function GuestRoute() {
 }
 
 export const router = createBrowserRouter([
-  { path: "/test/place-order", element: <TestPlaceOrderPage /> },
+  { path: "/test", element: <TestPlaceOrderPage /> },
   {
     element: <GuestRoute />,
     children: [{ path: "/login", element: <LoginPage /> }],

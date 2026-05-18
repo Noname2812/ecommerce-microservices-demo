@@ -4,7 +4,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { OrderStatusPoller } from "@/features/test-order/components/OrderStatusPoller";
+import { TicketStatusPoller } from "@/features/test-order/components/TicketStatusPoller";
 
 const SEED_PRODUCT_ID = "00000001-0000-4000-8000-000000000001";
 const SEED_VARIANT_ID = "00000001-0000-4000-8000-000000000002";
@@ -27,25 +27,63 @@ function uuidV4(): string {
   });
 }
 
+function parseTicketIdFromResponse(
+  status: number,
+  data: unknown,
+  headers: Record<string, string>
+): string | null {
+  if (data && typeof data === "object" && "ticketId" in data) {
+    const id = (data as { ticketId: unknown }).ticketId;
+    if (typeof id === "string" && id) return id;
+  }
+  if (typeof data === "string" && data) return data;
+
+  const location = headers.location ?? headers.Location;
+  if (location) {
+    const match = location.match(/\/ticket\/([0-9a-f-]{36})/i);
+    if (match) return match[1];
+  }
+
+  if (status === 202 && data && typeof data === "object" && "id" in data) {
+    return String((data as { id: unknown }).id);
+  }
+
+  return null;
+}
+
 type CallResult =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ok"; status: number; body: unknown; headers: Record<string, string>; requestBody: unknown; requestHeaders: Record<string, string> }
-  | { kind: "err"; status?: number; body: unknown; message: string; requestBody: unknown; requestHeaders: Record<string, string> };
+  | {
+      kind: "ok";
+      status: number;
+      body: unknown;
+      headers: Record<string, string>;
+      ticketId: string | null;
+      requestBody: unknown;
+      requestHeaders: Record<string, string>;
+    }
+  | {
+      kind: "err";
+      status?: number;
+      body: unknown;
+      message: string;
+      requestBody: unknown;
+      requestHeaders: Record<string, string>;
+    };
 
 export function TestPlaceOrderPage() {
   const [userId, setUserId] = useState("11111111-1111-4111-8111-111111111111");
   const [scope, setScope] = useState<"own" | "all">("own");
   const [quantity, setQuantity] = useState(2);
   const [result, setResult] = useState<CallResult>({ kind: "idle" });
-  const [trackedOrderId, setTrackedOrderId] = useState<string | null>(null);
-  const [manualOrderId, setManualOrderId] = useState("");
+  const [trackedTicketId, setTrackedTicketId] = useState<string | null>(null);
+  const [manualTicketId, setManualTicketId] = useState("");
 
   async function handlePlaceOrder() {
     setResult({ kind: "loading" });
 
-    const idempotencyHeader = uuidV4();
-    const idempotencyBody = uuidV4();
+    const idempotencyKey = uuidV4();
     const capturedAt = new Date().toISOString();
 
     const body = {
@@ -63,7 +101,7 @@ export function TestPlaceOrderPage() {
       shippingFee: 25000,
       couponCode: null,
       customerNote: "Đặt thử từ UI mock",
-      idempotencyKey: idempotencyBody,
+      idempotencyKey,
       pricingSnapshot: { capturedAt },
       items: [
         {
@@ -89,7 +127,7 @@ export function TestPlaceOrderPage() {
       "X-User-Id": userId,
       "X-User-Roles": "customer",
       "X-Permission-Scope": scope,
-      "Idempotency-Key": idempotencyHeader,
+      "Idempotency-Key": idempotencyKey,
     };
 
     try {
@@ -103,19 +141,17 @@ export function TestPlaceOrderPage() {
       );
 
       if (res.status >= 200 && res.status < 300) {
+        const ticketId = parseTicketIdFromResponse(res.status, res.data, flatHeaders);
         setResult({
           kind: "ok",
           status: res.status,
           body: res.data,
           headers: flatHeaders,
+          ticketId,
           requestBody: body,
           requestHeaders: headers,
         });
-        if (typeof res.data === "string") {
-          setTrackedOrderId(res.data);
-        } else if (res.data && typeof res.data === "object" && "id" in (res.data as Record<string, unknown>)) {
-          setTrackedOrderId(String((res.data as Record<string, unknown>).id));
-        }
+        if (ticketId) setTrackedTicketId(ticketId);
       } else {
         setResult({
           kind: "err",
@@ -143,10 +179,12 @@ export function TestPlaceOrderPage() {
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-3xl space-y-4">
         <div>
-          <h1 className="text-2xl font-bold">Test — Place Normal Order</h1>
+          <h1 className="text-2xl font-bold">Test — Place Order (async)</h1>
           <p className="text-sm text-muted-foreground">
-            Gọi thẳng vào Order service qua proxy <code>/order-api</code> → <code>http://localhost:5010</code>.
-            Fake gateway headers, bỏ qua auth.
+            POST <code>/order-api/v1/orders</code> → <strong>202 Accepted</strong> +{" "}
+            <code>ticketId</code>, sau đó poll{" "}
+            <code>GET /order-api/v1/orders/ticket/{"{ticketId}"}</code>. Proxy → Order service (
+            <code>localhost:5010</code>). Fake gateway headers, bỏ qua JWT.
           </p>
         </div>
 
@@ -159,6 +197,10 @@ export function TestPlaceOrderPage() {
               <Label htmlFor="userId">X-User-Id (Guid)</Label>
               <Input id="userId" value={userId} onChange={(e) => setUserId(e.target.value)} />
             </div>
+            <p className="text-xs text-muted-foreground">
+              Phải khớp user có quyền đọc ticket (mặc định seed buyer). Scope <code>own</code> chỉ
+              xem ticket của chính user.
+            </p>
 
             <div className="space-y-1">
               <Label htmlFor="scope">X-Permission-Scope</Label>
@@ -174,7 +216,7 @@ export function TestPlaceOrderPage() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="qty">Quantity (item seed n=1, price 110.000)</Label>
+              <Label htmlFor="qty">Quantity (seed product n=1, price 110.000)</Label>
               <Input
                 id="qty"
                 type="number"
@@ -192,45 +234,46 @@ export function TestPlaceOrderPage() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Mỗi lần bấm sẽ sinh mới <code>Idempotency-Key</code> + body <code>idempotencyKey</code> (UUID v4)
-              và <code>pricingSnapshot.capturedAt</code> = now (UTC).
+              Mỗi lần bấm sinh mới <code>Idempotency-Key</code> (header + body) và{" "}
+              <code>pricingSnapshot.capturedAt</code> (UTC). Cần Catalog + Inventory seed và Order
+              service đang chạy.
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Track an existing order</CardTitle>
+            <CardTitle className="text-base">Track ticket</CardTitle>
           </CardHeader>
-          <CardContent className="flex items-end gap-2">
-            <div className="flex-1 space-y-1">
-              <Label htmlFor="manualOrderId">Order ID (Guid)</Label>
+          <CardContent className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[200px] flex-1 space-y-1">
+              <Label htmlFor="manualTicketId">Ticket ID (Guid)</Label>
               <Input
-                id="manualOrderId"
-                placeholder="paste order id..."
-                value={manualOrderId}
-                onChange={(e) => setManualOrderId(e.target.value)}
+                id="manualTicketId"
+                placeholder="paste ticketId from 202 response..."
+                value={manualTicketId}
+                onChange={(e) => setManualTicketId(e.target.value)}
               />
             </div>
             <Button
               variant="outline"
-              onClick={() => manualOrderId && setTrackedOrderId(manualOrderId.trim())}
-              disabled={!manualOrderId}
+              onClick={() => manualTicketId && setTrackedTicketId(manualTicketId.trim())}
+              disabled={!manualTicketId}
             >
               Track
             </Button>
-            {trackedOrderId && (
-              <Button variant="ghost" onClick={() => setTrackedOrderId(null)}>
+            {trackedTicketId && (
+              <Button variant="ghost" onClick={() => setTrackedTicketId(null)}>
                 Clear
               </Button>
             )}
           </CardContent>
         </Card>
 
-        {trackedOrderId && (
-          <OrderStatusPoller
-            key={trackedOrderId}
-            orderId={trackedOrderId}
+        {trackedTicketId && (
+          <TicketStatusPoller
+            key={trackedTicketId}
+            ticketId={trackedTicketId}
             userId={userId}
             scope={scope}
           />
@@ -242,18 +285,32 @@ export function TestPlaceOrderPage() {
               <CardTitle className="text-base">
                 Response —{" "}
                 <span className={result.kind === "ok" ? "text-green-600" : "text-red-600"}>
-                  {result.kind === "ok" ? "OK" : `Error${result.status ? ` ${result.status}` : ""}`}
+                  {result.kind === "ok" ? `OK ${result.status}` : `Error${result.status ? ` ${result.status}` : ""}`}
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {result.kind === "ok" && result.status === 202 && (
+                <p className="text-sm text-muted-foreground">
+                  Async accepted — dùng <code>ticketId</code> để poll. Location header (nếu có) trỏ
+                  tới endpoint ticket.
+                </p>
+              )}
+              {result.kind === "ok" && result.ticketId && (
+                <div className="text-sm">
+                  <span className="font-medium">Ticket ID:</span>{" "}
+                  <code className="text-xs">{result.ticketId}</code>
+                </div>
+              )}
               {"status" in result && (
                 <div className="text-sm">
                   <span className="font-medium">Status:</span> {result.status ?? "-"}
                 </div>
               )}
               <div>
-                <div className="mb-1 text-xs font-medium uppercase text-muted-foreground">Response body</div>
+                <div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+                  Response body
+                </div>
                 <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
                   {JSON.stringify(result.body, null, 2)}
                 </pre>

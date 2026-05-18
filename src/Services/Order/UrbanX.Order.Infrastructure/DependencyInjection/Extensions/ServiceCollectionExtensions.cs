@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
@@ -36,10 +37,12 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddResilientHttpClient<ICatalogServiceClient, CatalogServiceClient, CatalogClientOptions, CatalogClientResilienceOptions>(
-            o => o.BaseAddress);
+            o => o.BaseAddress,
+            aspireServiceName: "catalog");
 
         services.AddResilientHttpClient<ISaleEligibilityService, PromotionSaleEligibilityClient, PromotionClientOptions, PromotionClientResilienceOptions>(
-            o => o.BaseAddress);
+            o => o.BaseAddress,
+            aspireServiceName: "promotion");
 
         services.AddSingleton<IPendingOrderSlotService, RedisPendingOrderSlotService>();
         services.AddSingleton<IFlashSaleStockService, RedisFlashSaleStockService>();
@@ -55,7 +58,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static void AddResilientHttpClient<TClient, TImpl, TClientOptions, TResilience>(
         this IServiceCollection services,
-        Func<TClientOptions, string> baseAddressSelector)
+        Func<TClientOptions, string> baseAddressSelector,
+        string aspireServiceName)
         where TClient : class
         where TImpl : class, TClient
         where TClientOptions : class
@@ -64,8 +68,13 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<TClient, TImpl>()
             .ConfigureHttpClient((sp, client) =>
             {
+                var config  = sp.GetRequiredService<IConfiguration>();
                 var options = sp.GetRequiredService<IOptions<TClientOptions>>().Value;
-                client.BaseAddress = new Uri(baseAddressSelector(options));
+                var baseUrl = ServiceEndpointResolver.Resolve(
+                    config,
+                    aspireServiceName,
+                    baseAddressSelector(options));
+                client.BaseAddress = new Uri(baseUrl);
                 client.Timeout     = Timeout.InfiniteTimeSpan;
             })
             .AddStandardResilienceHandler()

@@ -118,7 +118,7 @@ public static class CatalogDataSeeder
             context.ProductDetailViews.Add(detailView);
         }
 
-        await context.SaveChangesAsync(cancellationToken);
+       await context.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>

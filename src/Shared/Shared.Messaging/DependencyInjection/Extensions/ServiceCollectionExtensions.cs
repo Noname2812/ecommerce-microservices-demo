@@ -49,6 +49,9 @@ namespace Shared.Messaging.DependencyInjection.Extensions
             services.AddMassTransit(bus =>
             {
                 bus.SetKebabCaseEndpointNameFormatter();
+                // Publish-based scheduler for saga Schedule(...) / timeout messages.
+                // Avoids queue:scheduler&bind=false (invalid RabbitMQ entity name) and does not need the delayed-exchange plugin.
+                bus.AddPublishMessageScheduler();
 
                 foreach (var assembly in consumerAssemblies)
                     bus.AddConsumers(assembly);
@@ -57,6 +60,7 @@ namespace Shared.Messaging.DependencyInjection.Extensions
 
                 bus.UsingRabbitMq((ctx, cfg) =>
                 {
+                    cfg.UsePublishMessageScheduler();
                     // Exclude base types
                     cfg.PublishTopology.GetMessageTopology<IIntegrationEvent>().Exclude = true;
                     cfg.PublishTopology.GetMessageTopology<IntegrationEventBase>().Exclude = true;
@@ -108,11 +112,9 @@ namespace Shared.Messaging.DependencyInjection.Extensions
             var amqpUri = RabbitMqConnectionResolver.ResolveAmqpUri(configuration);
             if (!string.IsNullOrWhiteSpace(amqpUri))
             {
-                var uri = amqpUri.Trim();
-                services.AddSingleton(_ => new RabbitMqBrokerHealthConnection(uri));
                 services.AddHealthChecks()
                     .AddRabbitMQ(
-                        sp => Task.FromResult(sp.GetRequiredService<RabbitMqBrokerHealthConnection>().Connection),
+                        rabbitConnectionString: amqpUri.Trim(),
                         name: "rabbitmq",
                         tags: ["ready", "messaging"]);
             }

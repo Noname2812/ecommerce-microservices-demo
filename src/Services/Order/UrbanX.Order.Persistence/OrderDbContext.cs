@@ -1,3 +1,4 @@
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using UrbanX.Order.Application.Sagas;
 using UrbanX.Order.Domain.Models;
@@ -16,6 +17,11 @@ public sealed class OrderDbContext(DbContextOptions<OrderDbContext> options) : D
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.AddInboxStateEntity();
+        builder.AddOutboxMessageEntity();
+        builder.AddOutboxStateEntity();
+
         builder.ApplyConfigurationsFromAssembly(AssemblyReference.Assembly);
     }
 }
