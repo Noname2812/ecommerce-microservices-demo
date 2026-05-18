@@ -1,16 +1,20 @@
+using MassTransit;
 using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
+using Shared.Messaging;
 using UrbanX.Order.Application.Services;
 using UrbanX.Order.Application.Usecases.V1.Command.Common;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
+using UrbanX.Order.Domain.Repositories;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 public sealed class PlaceOrderCommandHandler(
-    IEventPublisher eventPublisher,
+    IOrderRepository orderRepository,
+    IPublishEndpoint publishEndpoint,
     IPendingOrderSlotService pendingSlots,
     IUserContext userContext)
     : ICommandHandler<PlaceOrderCommand, Guid>
@@ -21,31 +25,46 @@ public sealed class PlaceOrderCommandHandler(
         if (userId == Guid.Empty)
             return Result.Failure<Guid>(OrderErrors.Forbidden);
 
+        var existing = await orderRepository.GetByIdempotencyKeyAsync(cmd.IdempotencyKey, ct);
+        if (existing is not null)
+            return Result.Success(existing.Id);
+
         var slot = await pendingSlots.TryAcquireAsync(userId, OrderType.Normal, ct);
         if (slot.IsFailure)
             return Result.Failure<Guid>(slot.Error);
 
-        var ticketId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
 
         try
         {
-            await eventPublisher.PublishAsync(new PlaceOrderRequestedV1
-            {
-                OrderId = ticketId,
-                CorrelationId = ticketId.ToString("D"),
-                UserId = userId.ToString("D"),
-                IdempotencyKey = cmd.IdempotencyKey,
-                CouponCode = cmd.CouponCode,
-                Subtotal = PlaceOrderEventMappings.SumLineTotal(cmd.Items),
-                ShippingFee = cmd.ShippingFee,
-                ShippingAddress = PlaceOrderEventMappings.MapShipping(cmd.ShippingAddress),
-                PricingSnapshotJson = PlaceOrderEventMappings.SerializePricingSnapshot(cmd.PricingSnapshot),
-                CustomerEmail = cmd.CustomerEmail?.Trim() ?? string.Empty,
-                CustomerName = cmd.ShippingAddress.FullName,
-                CustomerPhone = cmd.ShippingAddress.Phone,
-                CustomerNote = cmd.CustomerNote,
-                Items = PlaceOrderEventMappings.MapNormalItems(cmd.Items)
-            }, ct);
+            var order = OrderFactory.Build(
+                cmd,
+                userId,
+                orderId,
+                OrderNumberGenerator.Generate("ORD"));
+
+            orderRepository.Add(order);
+
+            await publishEndpoint.Publish(
+                new PlaceOrderRequestedV1
+                {
+                    OrderId = orderId,
+                    CorrelationId = orderId.ToString("D"),
+                    UserId = userId.ToString("D"),
+                    IdempotencyKey = cmd.IdempotencyKey,
+                    CouponCode = cmd.CouponCode,
+                    Subtotal = PlaceOrderEventMappings.SumLineTotal(cmd.Items),
+                    ShippingFee = cmd.ShippingFee,
+                    ShippingAddress = PlaceOrderEventMappings.MapShipping(cmd.ShippingAddress),
+                    PricingSnapshotJson = PlaceOrderEventMappings.SerializePricingSnapshot(cmd.PricingSnapshot),
+                    CustomerEmail = cmd.CustomerEmail?.Trim() ?? string.Empty,
+                    CustomerName = cmd.ShippingAddress.FullName,
+                    CustomerPhone = cmd.ShippingAddress.Phone,
+                    CustomerNote = cmd.CustomerNote,
+                    Items = PlaceOrderEventMappings.MapNormalItems(cmd.Items)
+                },
+                ctx => ctx.MessageId = DeterministicMessageId.From($"place-order-requested:{orderId}"),
+                ct);
         }
         catch
         {
@@ -53,6 +72,6 @@ public sealed class PlaceOrderCommandHandler(
             throw;
         }
 
-        return Result.Success(ticketId);
+        return Result.Success(orderId);
     }
 }

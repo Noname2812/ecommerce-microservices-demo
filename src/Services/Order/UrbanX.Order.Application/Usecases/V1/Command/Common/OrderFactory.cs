@@ -25,6 +25,7 @@ internal static class OrderFactory
     public static OrderEntity Build(
         IPlaceOrderRequest request,
         Guid userId,
+        Guid orderId,
         string orderNumber,
         string orderType = OrderType.Normal,
         Guid? campaignId = null,
@@ -45,7 +46,7 @@ internal static class OrderFactory
         var preDiscountTotal = originalPrice ?? request.Items.Sum(i => i.UnitPrice * i.Quantity);
 
         return OrderEntity.Create(
-            Guid.NewGuid(),
+            orderId,
             orderNumber,
             userId,
             request.CustomerEmail?.Trim() ?? string.Empty,

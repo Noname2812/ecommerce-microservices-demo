@@ -13,7 +13,6 @@ using System.Text.Json;
 using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.DependencyInjection.Options;
 using UrbanX.Order.Application.Services;
-using UrbanX.Order.Application.Usecases.V1.Command.Common;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
@@ -22,7 +21,7 @@ namespace UrbanX.Order.Application.Sagas;
 
 /// <summary>
 /// Orchestrates the place-normal-order flow:
-///   Initial → ValidateCatalog → OrderPersist → InventoryReserving
+///   Initial → ValidateCatalog → InventoryReserving
 ///   → [CouponClaiming] → PaymentSessionCreating → PaymentPending → Finalized
 ///   On failure → Compensating (releases already-acquired resources) → Faulted
 /// </summary>
@@ -73,11 +72,11 @@ public sealed class PlaceOrderNormalSagaStateMachine
                 .IfElse(
                     ctx => ctx.Saga.ValidationError != null,
                     fail => fail
-                        .ThenAsync(ctx => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken))
+                        .ThenAsync(ctx => CancelOrderAsync(ctx.Saga, ctx.Saga.ValidationError!, ctx.CancellationToken))
                         .ThenAsync(ctx => PublishOrderCancelledAsync(ctx.Saga, ctx.Saga.ValidationError!, ctx.CancellationToken))
+                        .ThenAsync(ctx => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken))
                         .TransitionTo(Faulted),
                     ok => ok
-                        .ThenAsync(ctx => CreateOrderProcessingAsync(ctx))
                         .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
                         .PublishAsync(ctx => ctx.Init<ReserveInventoryRequestedV1>(BuildInventoryRequest(ctx.Saga)))
                         .TransitionTo(InventoryReserving)));
@@ -291,34 +290,6 @@ public sealed class PlaceOrderNormalSagaStateMachine
 
         ctx.Saga.VariantsJson = JsonSerializer.Serialize(result.Value);
         StampInstance(ctx.Saga);
-    }
-
-    private async Task CreateOrderProcessingAsync(
-        BehaviorContext<PlaceOrderNormalSagaState, PlaceOrderRequestedV1> ctx)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
-        var uow  = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        var existing = await repo.GetByIdempotencyKeyAsync(ctx.Saga.IdempotencyKey, ctx.CancellationToken);
-        if (existing is not null)
-        {
-            Logger.LogInformation(
-                "Order already exists for idempotency key {IdempotencyKey}, skipping create (order {OrderId})",
-                ctx.Saga.IdempotencyKey,
-                existing.Id);
-            return;
-        }
-
-        // Set only when ValidateThroughCatalogAsync succeeded (ValidationError is null).
-        var variants = JsonSerializer.Deserialize<List<CatalogVariantInfo>>(ctx.Saga.VariantsJson!)!
-            .ToDictionary(v => v.VariantId);
-
-        await uow.ExecuteInTransactionAsync(async () =>
-        {
-            var order = OrderFactory.BuildFromSaga(ctx.Saga, variants, ctx.Saga.OrderId);
-            repo.Add(order);
-        }, ctx.CancellationToken);
     }
 
     private async Task MarkReadyForPaymentAsync(
