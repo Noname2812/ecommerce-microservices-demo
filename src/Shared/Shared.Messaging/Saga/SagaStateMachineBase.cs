@@ -95,6 +95,24 @@ namespace Shared.Messaging.Saga
         }
 
         /// <summary>
+        /// Runs a compensation step on a best-effort basis. Logs and continues when a step throws so
+        /// a transient failure in one release (Redis, DB) does not abort the rest of the chain.
+        /// </summary>
+        protected async Task SafeCompensateAsync(string step, Func<Task> action)
+        {
+            try
+            {
+                await action();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex,
+                    "Saga compensation step {Step} failed (best-effort); continuing chain",
+                    step);
+            }
+        }
+
+        /// <summary>
         /// Sets CorrelationId on the saga instance from the incoming message context.
         /// Only assigns if the instance does not already have a non-empty CorrelationId.
         /// Call this inside your initial event handler (Initially / When).

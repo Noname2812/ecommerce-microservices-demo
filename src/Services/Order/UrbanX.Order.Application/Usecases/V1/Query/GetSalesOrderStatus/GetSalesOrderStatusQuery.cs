@@ -21,6 +21,7 @@ public record SalesOrderStatusDto(
     string SagaState,
     Guid? ReservationId,
     Guid? CouponClaimId,
+    bool CouponLocked,
     string? FailureStep,
     string? FailureReason,
     DateTimeOffset UpdatedAt);

@@ -21,7 +21,9 @@ internal sealed class SalesOrderStatusQuery(OrderDbContext db) : ISalesOrderStat
                 o.UpdatedAt,
                 (string?)s.CurrentState,
                 (Guid?)s.ReservationId,
-                (Guid?)s.CouponClaimId,
+                // TASK-08: Sales flow now uses Redis Lua coupon lock — no claim id surfaces.
+                (Guid?)null,
+                s != null && s.CouponLocked,
                 (string?)s.FailureStep,
                 (string?)s.FailureReason,
                 (DateTimeOffset?)s.UpdatedAt)

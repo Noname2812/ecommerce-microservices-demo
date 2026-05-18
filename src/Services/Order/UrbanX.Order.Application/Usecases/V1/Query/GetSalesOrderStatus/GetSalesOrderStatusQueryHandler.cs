@@ -28,6 +28,7 @@ public sealed class GetSalesOrderStatusQueryHandler(
             SagaState:     data.SagaCurrentState ?? "Pending",
             ReservationId: data.ReservationId,
             CouponClaimId: data.CouponClaimId,
+            CouponLocked:  data.CouponLocked,
             FailureStep:   data.FailureStep,
             FailureReason: data.FailureReason,
             UpdatedAt:     data.SagaUpdatedAt ?? data.OrderUpdatedAt));

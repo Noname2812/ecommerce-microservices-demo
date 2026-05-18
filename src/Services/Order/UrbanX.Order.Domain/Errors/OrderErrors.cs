@@ -110,6 +110,16 @@ public static class OrderErrors
     public static readonly Error CouponAlreadyUsed =
         new("Order.CouponAlreadyUsed", "User has already used this coupon");
 
+    /// <summary>
+    /// User is holding an in-flight lock on the coupon (another order in their session has
+    /// reserved it and has not yet confirmed or released). Distinct from
+    /// <see cref="CouponAlreadyUsed"/> — this state is transient and clears on lock TTL or
+    /// the other saga's outcome. Maps to HTTP 409; the message tells the user/CS to retry shortly.
+    /// </summary>
+    public static readonly Error CouponConcurrentClaim =
+        new("Order.CouponConcurrentClaim",
+            "Coupon is currently held by another in-flight order; please retry shortly");
+
     public static readonly Error CouponExhausted =
         new("Order.CouponExhausted", "Coupon has no remaining quota");
 }

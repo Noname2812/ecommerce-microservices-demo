@@ -53,7 +53,7 @@ public sealed class RedisFlashSaleStockServiceIntegrationTests : IAsyncLifetime
     private string StockKey(Guid campaignId) =>
         $"{InstanceName}:flashsale:{campaignId:D}:stock";
 
-    [Fact]
+    [SkippableFact]
     public async Task TryReserve_NoStock_ReturnsSoldOut()
     {
         RequireRedis();
@@ -66,7 +66,7 @@ public sealed class RedisFlashSaleStockServiceIntegrationTests : IAsyncLifetime
         Assert.Equal("Order.FlashSaleSoldOut", result.Error.Code);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task TryReserve_QuantityExceedsRemaining_ReturnsSoldOut()
     {
         RequireRedis();
@@ -80,7 +80,7 @@ public sealed class RedisFlashSaleStockServiceIntegrationTests : IAsyncLifetime
         Assert.Equal(2, (int)await _db.StringGetAsync(key));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ConcurrentReserve_StockFive_ExactlyFiveSucceed()
     {
         RequireRedis();

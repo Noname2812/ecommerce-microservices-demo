@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Domain.Errors;
@@ -39,7 +40,8 @@ public sealed class CatalogServiceClientResilienceTests
             .Configure((options, sp) =>
             {
                 var resilience = sp.GetRequiredService<IOptions<CatalogClientResilienceOptions>>().Value;
-                ServiceCollectionExtensions.ApplyCatalogClientResilience(options, resilience);
+                ServiceCollectionExtensions.ApplyResilience(
+                    options, resilience, NullLogger<CatalogServiceClient>.Instance);
             });
 
         await using var provider = services.BuildServiceProvider();

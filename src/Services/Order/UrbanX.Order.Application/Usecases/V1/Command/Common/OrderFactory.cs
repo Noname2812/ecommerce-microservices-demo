@@ -1,14 +1,24 @@
 using System.Text.Json;
 using Shared.Contract.Dtos.Order;
 using Shared.Contract.Messaging.PlaceOrder;
+using Shared.Contract.Messaging.PlaceOrderSaga;
 using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.Sagas;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.ValueObjects;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
+using SalesOrderItemSnapshot = Shared.Contract.Messaging.PlaceOrderSaga.OrderItemSnapshot;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.Common;
+
+/// <summary>Pricing inputs for <see cref="OrderFactory.BuildSalesFromSaga"/> — all server-computed.</summary>
+public record SalesPricingSnapshot(
+    decimal OriginalPrice,
+    decimal SaleDiscount,
+    decimal CouponDiscount,
+    decimal ShippingFee,
+    decimal FinalTotal);
 
 internal static class OrderFactory
 {
@@ -108,6 +118,64 @@ internal static class OrderFactory
             saga.IdempotencyKey,
             items,
             OrderType.Normal);
+    }
+
+    public static OrderEntity BuildSalesFromSaga(
+        PlaceSalesOrderSagaState saga,
+        IDictionary<Guid, CatalogVariantInfo> variants,
+        SalesPricingSnapshot pricing,
+        Guid orderId)
+    {
+        var snapshots = JsonSerializer.Deserialize<List<SalesOrderItemSnapshot>>(saga.ItemsJson ?? "[]")
+            ?? throw new InvalidOperationException("ItemsJson is null or invalid.");
+
+        if (snapshots.Count == 0)
+            throw new InvalidOperationException("ItemsJson must contain at least one item.");
+
+        var items = snapshots
+            .Select(i =>
+            {
+                if (!variants.TryGetValue(i.VariantId, out var variant))
+                    throw new InvalidOperationException($"Catalog variant {i.VariantId} was not found.");
+
+                // Use catalog current price as authoritative — server-side pricing.
+                return new NewOrderItemSpec(
+                    variant.ProductId,
+                    variant.ProductName,
+                    ProductSlug: null,
+                    variant.VariantId,
+                    variant.Sku,
+                    variant.VariantName,
+                    variant.SellerId,
+                    variant.SellerName,
+                    variant.CurrentPrice,
+                    i.Quantity,
+                    DiscountAmount: 0m,
+                    variant.ImageUrl);
+            })
+            .ToList();
+
+        var shipping = DeserializeShipping(saga.ShippingAddressJson);
+        var userId   = Guid.Parse(saga.UserId);
+
+        return OrderEntity.Create(
+            orderId,
+            OrderNumberGenerator.Generate("SAL"),
+            userId,
+            saga.CustomerEmail,
+            saga.CustomerName,
+            saga.CustomerPhone,
+            shipping,
+            pricing.ShippingFee,
+            saga.CouponCode,
+            couponDiscount: pricing.CouponDiscount,
+            saleDiscount:   pricing.SaleDiscount,
+            originalPrice:  pricing.OriginalPrice,
+            saga.CustomerNote,
+            saga.IdempotencyKey,
+            items,
+            OrderType.Sales,
+            campaignId: saga.CampaignId);
     }
 
     private static ShippingAddress MapShippingAddress(PlaceOrderShippingAddressDto dto) =>

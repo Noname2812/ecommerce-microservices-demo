@@ -46,7 +46,8 @@ public sealed class CatalogServiceClientIntegrationTests : IAsyncLifetime
                 .Configure((options, sp) =>
                 {
                     var resilience = sp.GetRequiredService<IOptions<CatalogClientResilienceOptions>>().Value;
-                    ServiceCollectionExtensions.ApplyCatalogClientResilience(options, resilience);
+                    ServiceCollectionExtensions.ApplyResilience(
+                        options, resilience, NullLogger<CatalogServiceClient>.Instance);
                 });
             services.AddSingleton(NullLogger<CatalogServiceClient>.Instance);
 

@@ -24,7 +24,8 @@ public abstract class ApiEndpoint
             type: result.Error.Code),
         { Error.Code: "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED"
             or "Order.FlashSaleSoldOut" or "Order.SaleExpired" or "Order.PriceMismatch"
-            or "Order.CouponAlreadyUsed" or "Order.UserAlreadyBoughtFromSale" } => Results.Problem(
+            or "Order.CouponAlreadyUsed" or "Order.CouponConcurrentClaim"
+            or "Order.UserAlreadyBoughtFromSale" } => Results.Problem(
             detail: result.Error.Message,
             statusCode: StatusCodes.Status409Conflict,
             type: result.Error.Code),
@@ -79,7 +80,8 @@ public abstract class ApiEndpoint
             "ORDER_NOT_FOUND" => StatusCodes.Status404NotFound,
             "INVENTORY_OUT_OF_STOCK" or "COUPON_CLAIM_FAILED"
                 or "Order.FlashSaleSoldOut" or "Order.SaleExpired" or "Order.PriceMismatch"
-                or "Order.CouponAlreadyUsed" or "Order.UserAlreadyBoughtFromSale" => StatusCodes.Status409Conflict,
+                or "Order.CouponAlreadyUsed" or "Order.CouponConcurrentClaim"
+                or "Order.UserAlreadyBoughtFromSale" => StatusCodes.Status409Conflict,
             "Order.CouponExhausted" => StatusCodes.Status410Gone,
             "INVENTORY_UNAVAILABLE" or "SALES_ORDER_GUARD_UNAVAILABLE"
                 or "Order.CatalogUnavailable" => StatusCodes.Status503ServiceUnavailable,

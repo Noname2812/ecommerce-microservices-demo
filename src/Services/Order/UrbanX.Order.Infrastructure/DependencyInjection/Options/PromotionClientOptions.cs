@@ -2,9 +2,18 @@ using System.ComponentModel.DataAnnotations;
 
 namespace UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
-public sealed class CatalogClientResilienceOptions : IHttpClientResilienceOptions
+public sealed class PromotionClientOptions
 {
-    public const string SectionName = "Order:CatalogClient:Resilience";
+    public const string SectionName = "Order:PromotionClient";
+
+    [Required]
+    [Url]
+    public string BaseAddress { get; init; } = "";
+}
+
+public sealed class PromotionClientResilienceOptions : IHttpClientResilienceOptions
+{
+    public const string SectionName = "Order:PromotionClient:Resilience";
 
     [Range(1, 1000)]
     public int CbSamplingDurationSeconds { get; init; } = 30;

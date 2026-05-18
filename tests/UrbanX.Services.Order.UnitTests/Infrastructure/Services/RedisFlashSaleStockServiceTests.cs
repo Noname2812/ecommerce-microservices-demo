@@ -45,6 +45,16 @@ public sealed class RedisFlashSaleStockServiceTests
     }
 
     [Fact]
+    public async Task Restore_RedisThrows_DoesNotPropagate()
+    {
+        _cache
+            .Setup(c => c.EvalAsync(It.IsAny<string>(), It.IsAny<RedisKey[]>(), It.IsAny<RedisValue[]?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "down"));
+
+        await CreateSut().RestoreAsync(Guid.NewGuid(), 2, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Restore_CallsIncrBy()
     {
         var campaignId = Guid.NewGuid();

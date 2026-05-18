@@ -2,47 +2,46 @@ using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Shared.Contract.Messaging.Order;
 using Shared.Contract.Messaging.Payment;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
+using Shared.Messaging;
 using Shared.Messaging.Saga;
 using System.Text.Json;
+using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.DependencyInjection.Options;
+using UrbanX.Order.Application.Services;
+using UrbanX.Order.Application.Usecases.V1.Command.Common;
+using UrbanX.Order.Domain.Errors;
+using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
+using SalesOrderItemSnapshot = Shared.Contract.Messaging.PlaceOrderSaga.OrderItemSnapshot;
 
 namespace UrbanX.Order.Application.Sagas;
 
 /// <summary>
-/// Orchestrates the place-sales-order flow:
-///   Initial → PromotionRedeeming → InventoryReserving → [CouponClaiming] → PaymentProcessing → Confirming → PaymentPending → Finalized
+/// Orchestrates the place-sales-order flow (TASK-08):
+///   Initial (catalog + sale eligibility + coupon lock + persist order)
+///     → InventoryReserving → PaymentSessionCreating → PaymentPending → Finalized
+///   On failure → Compensating (restore flash-sale stock + release coupon + cancel) → Faulted
 ///
-/// On any failure the saga transitions to Compensating (publishes rollback events)
-/// then immediately to Faulted.
-///
-/// Requires a MassTransit message scheduler (Quartz or InMemory) for per-step timeouts.
-/// Register: bus.UseInMemoryScheduler() or bus.UseQuartzScheduler() in Program.cs.
+/// Server-side pricing recalc with configurable tolerance vs client ExpectedTotal.
+/// Coupon uses Redis Lua atomic lock (not event-based). Flash sale stock was already
+/// decremented by the handler; saga only restores on failure / timeout.
 /// </summary>
 public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<PlaceSalesOrderSagaState>
 {
     // ── Workflow states ───────────────────────────────────────────────────────
-    public State PromotionRedeeming { get; private set; } = default!;
-    public State InventoryReserving { get; private set; } = default!;
-    public State CouponClaiming     { get; private set; } = default!;
-    public State PaymentProcessing  { get; private set; } = default!;
-    public State Confirming         { get; private set; } = default!;
-    public State PaymentPending     { get; private set; } = default!;
+    public State InventoryReserving     { get; private set; } = default!;
+    public State PaymentSessionCreating { get; private set; } = default!;
+    public State PaymentPending         { get; private set; } = default!;
 
     // ── Events ────────────────────────────────────────────────────────────────
     public Event<PlaceSalesOrderRequestedV1>  Requested              { get; private set; } = default!;
-    public Event<PromotionRedeemedV1>         PromotionRedeemed      { get; private set; } = default!;
-    public Event<PromotionRedeemFailedV1>     PromotionRedeemFailed  { get; private set; } = default!;
     public Event<InventoryReservedV1>         InventoryReserved      { get; private set; } = default!;
     public Event<InventoryReserveFailedV1>    InventoryReserveFailed { get; private set; } = default!;
-    public Event<CouponClaimedV1>             CouponClaimed          { get; private set; } = default!;
-    public Event<CouponClaimFailedV1>         CouponClaimFailed      { get; private set; } = default!;
-    public Event<PaymentProcessedV1>          PaymentProcessed       { get; private set; } = default!;
-    public Event<PaymentProcessFailedV1>      PaymentProcessFailed   { get; private set; } = default!;
     public Event<PaymentSessionCreatedV1>     PaymentSessionCreated  { get; private set; } = default!;
     public Event<PaymentSessionCompletedV1>   PaymentCompleted       { get; private set; } = default!;
 
@@ -51,103 +50,50 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
     public Schedule<PlaceSalesOrderSagaState, PaymentExpiryTimeoutV1> PaymentExpiry { get; private set; } = default!;
 
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly OrderPaymentOptions  _paymentOptions;
+    private readonly decimal              _priceTolerance;
 
     public PlaceSalesOrderSagaStateMachine(
         IOptions<OrderPaymentOptions> paymentOptions,
+        IOptions<PlaceOrderOptions> placeOrderOptions,
         IServiceScopeFactory scopeFactory,
         ILogger<PlaceSalesOrderSagaStateMachine> logger)
         : base(logger)
     {
-        _scopeFactory = scopeFactory;
+        _scopeFactory   = scopeFactory;
+        _paymentOptions = paymentOptions.Value;
+        _priceTolerance = placeOrderOptions.Value.PriceMismatchTolerance;
 
         InstanceState(x => x.CurrentState);
 
         ConfigureEvents();
-        ConfigureSchedules(paymentOptions.Value);
+        ConfigureSchedules();
 
-        // ── Initial ───────────────────────────────────────────────────────────
+        // ── Initially ─────────────────────────────────────────────────────────
+        // One async method runs the full validation + persist pipeline. If any step sets
+        // ValidationError the whole block short-circuits and we branch into compensation.
         Initially(
             When(Requested)
-                .Then(SnapshotRequest)
-                .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
-                .PublishAsync(ctx => ctx.Init<RedeemSalePromotionRequestedV1>(new
-                {
-                    CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                    ctx.Saga.OrderId,
-                    ctx.Saga.UserId,
-                    ctx.Saga.CampaignId,
-                    ctx.Saga.CouponCode,
-                    ctx.Saga.Subtotal,
-                    Items = (IReadOnlyList<PromotionOrderItem>)ctx.Message.Items
-                        .Select(i => new PromotionOrderItem(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice))
-                        .ToList()
-                }))
-                .TransitionTo(PromotionRedeeming));
+                .Then(ctx => SnapshotRequest(ctx.Saga, ctx.Message))
+                .ThenAsync(ValidateAndPersistAsync)
+                .IfElse(
+                    ctx => ctx.Saga.ValidationError != null,
+                    // Single compensation entry-point: `Compensating` handles every release path
+                    // (coupon, flash sale stock, inventory, slot, optional order cancel) gated by
+                    // saga flags. Avoids a parallel CompensateValidationFailureAsync that drifted
+                    // from the post-persist path during code review.
+                    fail => fail.TransitionTo(Compensating),
+                    ok => ok
+                        .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .PublishAsync(ctx => ctx.Init<ReserveInventoryRequestedV1>(BuildInventoryRequest(ctx.Saga)))
+                        .TransitionTo(InventoryReserving)));
 
-        // ── PromotionRedeeming ─────────────────────────────────────────────────
-        During(PromotionRedeeming,
-            When(PromotionRedeemed)
-                .Then(ctx =>
-                {
-                    ctx.Saga.PromotionDiscount = ctx.Message.OrderLevelDiscount
-                        + ctx.Message.ItemDiscounts.Sum(d => d.DiscountAmount);
-                    ctx.Saga.ClaimedFlashSaleSlotsJson =
-                        JsonSerializer.Serialize(ctx.Message.ClaimedFlashSaleSlots);
-                    ctx.Saga.QuotaReserved = true;
-                    StampInstance(ctx.Saga);
-                })
-                .Unschedule(StepTimeout)
-                .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
-                .PublishAsync(ctx => ctx.Init<ReserveInventoryRequestedV1>(BuildInventoryRequest(ctx.Saga)))
-                .TransitionTo(InventoryReserving),
-
-            When(PromotionRedeemFailed)
-                .Then(ctx =>
-                {
-                    ctx.Saga.FailureStep   = "PromotionRedeem";
-                    ctx.Saga.FailureReason = ctx.Message.ErrorMessage;
-                    StampInstance(ctx.Saga);
-                })
-                .Unschedule(StepTimeout)
-                .TransitionTo(Compensating),
-
-            When(StepTimeout.Received)
-                .Then(ctx =>
-                {
-                    ctx.Saga.FailureStep   = "PromotionTimeout";
-                    ctx.Saga.FailureReason = "Promotion service did not respond within the allowed time.";
-                    StampInstance(ctx.Saga);
-                })
-                .TransitionTo(Compensating));
-
-        // ── InventoryReserving ─────────────────────────────────────────────────
+        // ── InventoryReserving ────────────────────────────────────────────────
         During(InventoryReserving,
             When(InventoryReserved)
-                .Then(ctx =>
-                {
-                    ctx.Saga.ReservationId = ctx.Message.ReservationId;
-                    StampInstance(ctx.Saga);
-                })
+                .Then(ctx => { ctx.Saga.ReservationId = ctx.Message.ReservationId; StampInstance(ctx.Saga); })
                 .Unschedule(StepTimeout)
-                .IfElse(
-                    ctx => ctx.Saga.CouponCode != null,
-                    hasCoupon => hasCoupon
-                        .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
-                        .PublishAsync(ctx => ctx.Init<ClaimCouponRequestedV1>(new
-                        {
-                            CorrelationId       = ctx.Saga.OrderId.ToString("D"),
-                            ctx.Saga.OrderId,
-                            OrderIdempotencyKey = $"{ctx.Saga.IdempotencyKey}:cpn",
-                            ctx.Saga.UserId,
-                            CouponCode          = ctx.Saga.CouponCode!,
-                            OrderTotal          = ctx.Saga.Subtotal - ctx.Saga.PromotionDiscount + ctx.Saga.ShippingFee
-                        }))
-                        .TransitionTo(CouponClaiming),
-                    noCoupon => noCoupon
-                        .Then(ctx => { ctx.Saga.CouponDiscount = 0; StampInstance(ctx.Saga); })
-                        .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
-                        .PublishAsync(ctx => ctx.Init<ProcessPaymentRequestedV1>(BuildPaymentRequest(ctx.Saga)))
-                        .TransitionTo(PaymentProcessing)),
+                .TransitionTo(PaymentSessionCreating),
 
             When(InventoryReserveFailed)
                 .Then(ctx =>
@@ -157,8 +103,6 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
                     StampInstance(ctx.Saga);
                 })
                 .Unschedule(StepTimeout)
-                .If(ctx => ctx.Saga.QuotaReserved,
-                    b => b.PublishAsync(ctx => ctx.Init<SaleQuotaReleaseRequestedV1>(BuildQuotaRelease(ctx.Saga))))
                 .TransitionTo(Compensating),
 
             When(StepTimeout.Received)
@@ -168,248 +112,368 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
                     ctx.Saga.FailureReason = "Inventory service did not respond within the allowed time.";
                     StampInstance(ctx.Saga);
                 })
-                .If(ctx => ctx.Saga.QuotaReserved,
-                    b => b.PublishAsync(ctx => ctx.Init<SaleQuotaReleaseRequestedV1>(BuildQuotaRelease(ctx.Saga))))
                 .TransitionTo(Compensating));
 
-        // ── CouponClaiming ─────────────────────────────────────────────────────
-        During(CouponClaiming,
-            When(CouponClaimed)
-                .Then(ctx =>
-                {
-                    ctx.Saga.CouponClaimId  = ctx.Message.ClaimId;
-                    ctx.Saga.CouponDiscount = ctx.Message.DiscountAmount;
-                    StampInstance(ctx.Saga);
-                })
-                .Unschedule(StepTimeout)
-                .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
-                .PublishAsync(ctx => ctx.Init<ProcessPaymentRequestedV1>(BuildPaymentRequest(ctx.Saga)))
-                .TransitionTo(PaymentProcessing),
+        // ── PaymentSessionCreating ────────────────────────────────────────────
+        WhenEnter(PaymentSessionCreating, b => b
+            .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+            .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(BuildPaymentSessionRequest(ctx.Saga))));
 
-            When(CouponClaimFailed)
-                .Then(ctx =>
-                {
-                    ctx.Saga.FailureStep   = "CouponClaim";
-                    ctx.Saga.FailureReason = ctx.Message.ErrorMessage;
-                    StampInstance(ctx.Saga);
-                })
-                .Unschedule(StepTimeout)
-                .PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(new
-                {
-                    CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                    ReservationId = ctx.Saga.ReservationId!.Value,
-                    Reason        = ctx.Saga.FailureReason
-                }))
-                .If(ctx => ctx.Saga.QuotaReserved,
-                    b => b.PublishAsync(ctx => ctx.Init<SaleQuotaReleaseRequestedV1>(BuildQuotaRelease(ctx.Saga))))
-                .TransitionTo(Compensating),
-
-            When(StepTimeout.Received)
-                .Then(ctx =>
-                {
-                    ctx.Saga.FailureStep   = "CouponTimeout";
-                    ctx.Saga.FailureReason = "Coupon service did not respond within the allowed time.";
-                    StampInstance(ctx.Saga);
-                })
-                .PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(new
-                {
-                    CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                    ReservationId = ctx.Saga.ReservationId!.Value,
-                    Reason        = ctx.Saga.FailureReason
-                }))
-                .If(ctx => ctx.Saga.QuotaReserved,
-                    b => b.PublishAsync(ctx => ctx.Init<SaleQuotaReleaseRequestedV1>(BuildQuotaRelease(ctx.Saga))))
-                .TransitionTo(Compensating));
-
-        // ── PaymentProcessing ──────────────────────────────────────────────────
-        During(PaymentProcessing,
-            When(PaymentProcessed)
-                .Then(ctx =>
-                {
-                    ctx.Saga.PaymentId = ctx.Message.PaymentId;
-                    StampInstance(ctx.Saga);
-                })
-                .Unschedule(StepTimeout)
-                .PublishAsync(ctx => ctx.Init<PlaceSalesOrderConfirmedV1>(BuildConfirmedEvent(ctx.Saga)))
-                .TransitionTo(Confirming),
-
-            When(PaymentProcessFailed)
-                .Then(ctx =>
-                {
-                    ctx.Saga.FailureStep   = "PaymentProcess";
-                    ctx.Saga.FailureReason = ctx.Message.ErrorMessage;
-                    StampInstance(ctx.Saga);
-                })
-                .Unschedule(StepTimeout)
-                .PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(new
-                {
-                    CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                    ReservationId = ctx.Saga.ReservationId!.Value,
-                    Reason        = ctx.Saga.FailureReason
-                }))
-                .If(ctx => ctx.Saga.CouponClaimId.HasValue,
-                    b => b.PublishAsync(ctx => ctx.Init<CouponReleaseRequestedV1>(new
-                    {
-                        CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                        ClaimId       = ctx.Saga.CouponClaimId!.Value,
-                        Reason        = ctx.Saga.FailureReason
-                    })))
-                .If(ctx => ctx.Saga.QuotaReserved,
-                    b => b.PublishAsync(ctx => ctx.Init<SaleQuotaReleaseRequestedV1>(BuildQuotaRelease(ctx.Saga))))
-                .TransitionTo(Compensating),
-
-            When(StepTimeout.Received)
-                .Then(ctx =>
-                {
-                    ctx.Saga.FailureStep   = "PaymentTimeout";
-                    ctx.Saga.FailureReason = "Payment service did not respond within the allowed time.";
-                    StampInstance(ctx.Saga);
-                })
-                .PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(new
-                {
-                    CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                    ReservationId = ctx.Saga.ReservationId!.Value,
-                    Reason        = ctx.Saga.FailureReason
-                }))
-                .If(ctx => ctx.Saga.CouponClaimId.HasValue,
-                    b => b.PublishAsync(ctx => ctx.Init<CouponReleaseRequestedV1>(new
-                    {
-                        CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                        ClaimId       = ctx.Saga.CouponClaimId!.Value,
-                        Reason        = ctx.Saga.FailureReason
-                    })))
-                .If(ctx => ctx.Saga.QuotaReserved,
-                    b => b.PublishAsync(ctx => ctx.Init<SaleQuotaReleaseRequestedV1>(BuildQuotaRelease(ctx.Saga))))
-                .TransitionTo(Compensating));
-
-        // ── Confirming → PaymentPending ────────────────────────────────────────
-        WhenEnter(Confirming, binder => binder
-            .Schedule(PaymentExpiry, ctx => new PaymentExpiryTimeoutV1 { OrderId = ctx.Saga.OrderId })
-            .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(new
-            {
-                CorrelationId  = ctx.Saga.OrderId.ToString("D"),
-                ctx.Saga.OrderId,
-                IdempotencyKey = $"{ctx.Saga.IdempotencyKey}:pay",
-                Amount         = ctx.Saga.Subtotal - ctx.Saga.PromotionDiscount
-                                 - ctx.Saga.CouponDiscount + ctx.Saga.ShippingFee,
-                Currency       = "VND"
-            }))
-            .TransitionTo(PaymentPending));
-
-        // ── PaymentPending ─────────────────────────────────────────────────────
-        During(PaymentPending,
+        During(PaymentSessionCreating,
             When(PaymentSessionCreated)
-                .ThenAsync(ctx => SetPaymentSessionAsync(
-                    ctx.Saga, ctx.Message.PaymentUrl, ctx.Message.QrCodeUrl))
+                .Unschedule(StepTimeout)
+                .ThenAsync(ctx => MarkReadyForPaymentAsync(ctx))
+                .IfElse(
+                    ctx => ctx.Saga.FailureStep != null,
+                    fail => fail.TransitionTo(Compensating),
+                    ok => ok
+                        .Schedule(PaymentExpiry, ctx => new PaymentExpiryTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .TransitionTo(PaymentPending)),
+
+            When(StepTimeout.Received)
                 .Then(ctx =>
                 {
-                    ctx.Saga.PaymentSessionId = ctx.Message.PaymentSessionId;
+                    ctx.Saga.FailureStep   = "PaymentSessionTimeout";
+                    ctx.Saga.FailureReason = "Payment session create timeout";
                     StampInstance(ctx.Saga);
-                }),
+                })
+                .TransitionTo(Compensating));
 
+        // ── PaymentPending ────────────────────────────────────────────────────
+        During(PaymentPending,
             When(PaymentCompleted)
                 .Unschedule(PaymentExpiry)
-                .ThenAsync(ctx => MarkOrderPaidAsync(ctx.Saga, ctx.Message.PaymentSessionId))
+                .ThenAsync(ctx => MarkOrderPaidAsync(ctx))
+                .ThenAsync(ctx => ConfirmCouponUseAsync(ctx.Saga, ctx.CancellationToken))
+                .PublishAsync(ctx => ctx.Init<ConfirmInventoryRequestedV1>(BuildConfirmInventoryRequest(ctx.Saga)))
+                .ThenAsync(ctx => PublishOrderConfirmedAsync(ctx.Saga, ctx.CancellationToken))
+                .ThenAsync(ctx => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken))
                 .Finalize(),
 
             When(PaymentExpiry.Received)
                 .Then(ctx =>
                 {
                     ctx.Saga.FailureStep   = "PaymentExpiry";
-                    ctx.Saga.FailureReason = "Payment window expired.";
+                    ctx.Saga.FailureReason = "Payment expired";
                     StampInstance(ctx.Saga);
                 })
-                .PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(new
-                {
-                    CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                    ReservationId = ctx.Saga.ReservationId!.Value,
-                    Reason        = ctx.Saga.FailureReason
-                }))
-                .If(ctx => ctx.Saga.CouponClaimId.HasValue,
-                    b => b.PublishAsync(ctx => ctx.Init<CouponReleaseRequestedV1>(new
-                    {
-                        CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                        ClaimId       = ctx.Saga.CouponClaimId!.Value,
-                        Reason        = ctx.Saga.FailureReason
-                    })))
-                .If(ctx => ctx.Saga.QuotaReserved,
-                    b => b.PublishAsync(ctx => ctx.Init<SaleQuotaReleaseRequestedV1>(BuildQuotaRelease(ctx.Saga))))
-                .ThenAsync(ctx => CancelOrderAsync(ctx.Saga, "Payment expired"))
-                .TransitionTo(Faulted));
+                .TransitionTo(Compensating));
 
-        // ── Compensating ──────────────────────────────────────────────────────
-        WhenEnter(Compensating, binder => binder
-            .PublishAsync(ctx => ctx.Init<PlaceSalesOrderFailedV1>(new
-            {
-                CorrelationId = ctx.Saga.OrderId.ToString("D"),
-                ctx.Saga.OrderId,
-                ctx.Saga.UserId,
-                FailureStep   = ctx.Saga.FailureStep ?? "Unknown",
-                FailureReason = ctx.Saga.FailureReason ?? "An unexpected error occurred.",
-                OccurredAt    = DateTimeOffset.UtcNow
-            }))
-            .ThenAsync(ctx => CancelOrderAsync(ctx.Saga, ctx.Saga.FailureReason ?? "Order failed"))
+        // ── Compensating ─────────────────────────────────────────────────────
+        // Releases every side-effect we may have acquired so far. Each release is gated by a saga
+        // flag so the same path safely handles validation-phase failures (no ReservationId, no
+        // persisted order) and post-persist failures (full cleanup).
+        //
+        // Order matters: publish inventory release first (durable via broker) — Redis ops run
+        // afterwards on best-effort semantics inside their adapters (try/catch + log).
+        WhenEnter(Compensating, b => b
+            .If(ctx => ctx.Saga.ReservationId.HasValue,
+                x => x.PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(BuildInventoryRelease(ctx.Saga))))
+            .ThenAsync(ctx => SafeCompensateAsync("ReleaseCoupon",
+                () => ReleaseCouponLockAsync(ctx.Saga, ctx.CancellationToken)))
+            .ThenAsync(ctx => SafeCompensateAsync("RestoreFlashSaleStock",
+                () => RestoreFlashSaleStockAsync(ctx.Saga, ctx.CancellationToken)))
+            .If(ctx => ctx.Saga.OrderPersisted,
+                x => x
+                    .ThenAsync(ctx => SafeCompensateAsync("CancelOrder",
+                        () => CancelOrderAsync(ctx.Saga, FailureReasonOf(ctx.Saga), ctx.CancellationToken)))
+                    .ThenAsync(ctx => SafeCompensateAsync("PublishOrderCancelled",
+                        () => PublishOrderCancelledAsync(ctx.Saga, FailureReasonOf(ctx.Saga), ctx.CancellationToken))))
+            .ThenAsync(ctx => SafeCompensateAsync("ReleasePendingSlot",
+                () => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken)))
             .TransitionTo(Faulted));
 
         SetCompletedWhenFinalized();
         RegisterStateLogging();
     }
 
-    // ── Event & schedule configuration ──────────────────────────────────────
+    // ── Event & schedule configuration ───────────────────────────────────────
 
     private void ConfigureEvents()
     {
         Event(() => Requested,              e => e.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PromotionRedeemed,      e => e.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PromotionRedeemFailed,  e => e.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => InventoryReserved,      e => e.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => InventoryReserveFailed, e => e.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => CouponClaimed,          e => e.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => CouponClaimFailed,      e => e.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PaymentProcessed,       e => e.CorrelateById(ctx => ctx.Message.OrderId));
-        Event(() => PaymentProcessFailed,   e => e.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => PaymentSessionCreated,  e => e.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => PaymentCompleted,       e => e.CorrelateById(ctx => ctx.Message.OrderId));
     }
 
-    private void ConfigureSchedules(OrderPaymentOptions opts)
+    /// <remarks>
+    /// MassTransit <c>Schedule(...)</c> evaluates <c>cfg.Delay</c> exactly once when the saga
+    /// state machine is built. Because the state machine is a singleton, runtime changes to
+    /// <c>OrderPaymentOptions.StepTimeoutSeconds</c> / <c>SalesOrderExpiryMinutes</c> via config
+    /// reload will <em>not</em> take effect — restart the host to apply new timeout values.
+    /// </remarks>
+    private void ConfigureSchedules()
     {
-        Schedule(() => StepTimeout, x => x.TimeoutTokenId, cfg =>
+        Schedule(() => StepTimeout, x => x.StepTimeoutTokenId, cfg =>
         {
-            cfg.Delay    = TimeSpan.FromSeconds(30);
+            cfg.Delay    = TimeSpan.FromSeconds(_paymentOptions.StepTimeoutSeconds);
             cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
         });
 
         Schedule(() => PaymentExpiry, x => x.PaymentExpiryTokenId, cfg =>
         {
-            cfg.Delay    = TimeSpan.FromMinutes(opts.SalesOrderExpiryMinutes);
+            cfg.Delay    = TimeSpan.FromMinutes(_paymentOptions.SalesOrderExpiryMinutes);
             cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
         });
     }
 
-    // ── Domain operations ────────────────────────────────────────────────────
+    // ── Validation + persist pipeline ────────────────────────────────────────
 
-    private async Task SetPaymentSessionAsync(PlaceSalesOrderSagaState saga, string paymentUrl, string? qrCodeUrl)
+    /// <summary>
+    /// Runs each validation step in sequence; the first one to set <c>ValidationError</c>
+    /// aborts the rest. Persists the Order at the end if everything passes.
+    ///
+    /// Idempotency runs first — before catalog/sale/coupon calls — so a duplicate
+    /// IdempotencyKey doesn't waste an HTTP round-trip or acquire a redundant coupon lock.
+    /// </summary>
+    private async Task ValidateAndPersistAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
+    {
+        if (!IsUserIdValid(ctx.Saga)) return;
+
+        await CheckIdempotencyAsync(ctx);
+        if (ctx.Saga.ValidationError != null) return;
+
+        await ValidateThroughCatalogAsync(ctx);
+        if (ctx.Saga.ValidationError != null) return;
+
+        await ValidateSaleEligibilityAsync(ctx);
+        if (ctx.Saga.ValidationError != null) return;
+
+        await LockCouponAsync(ctx);
+        if (ctx.Saga.ValidationError != null) return;
+
+        ComputeFinalTotal(ctx.Saga);
+        if (ctx.Saga.ValidationError != null) return;
+
+        await CreateSalesOrderAsync(ctx);
+    }
+
+    private async Task CheckIdempotencyAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        var existing = await repo.GetByIdempotencyKeyAsync(ctx.Saga.IdempotencyKey, ctx.CancellationToken);
+        if (existing is null) return;
+
+        Logger.LogWarning(
+            "Sales order already exists for idempotency key {IdempotencyKey} as {ExistingOrderId}; aborting saga {OrderId}",
+            ctx.Saga.IdempotencyKey, existing.Id, ctx.Saga.OrderId);
+
+        ctx.Saga.ValidationError = "IDEMPOTENCY_CONFLICT";
+        ctx.Saga.FailureStep     = "Persist";
+        ctx.Saga.FailureReason   = $"Order already exists ({existing.Id})";
+        StampInstance(ctx.Saga);
+    }
+
+    private async Task ValidateThroughCatalogAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var catalog = scope.ServiceProvider.GetRequiredService<ICatalogServiceClient>();
+
+        var variantIds = ctx.Message.Items.Select(i => i.VariantId).Distinct().ToArray();
+        var result     = await catalog.GetVariantsAsync(variantIds, ctx.CancellationToken);
+
+        if (result.IsFailure)
+        {
+            ctx.Saga.ValidationError = result.Error.Code == OrderErrors.CatalogUnavailable.Code
+                ? "CATALOG_UNAVAILABLE"
+                : "VARIANT_VALIDATION_FAILED";
+            ctx.Saga.FailureStep     = "CatalogValidation";
+            ctx.Saga.FailureReason   = result.Error.Message;
+            StampInstance(ctx.Saga);
+            return;
+        }
+
+        var validation = ValidateBusinessRules(result.Value!, ctx.Message.Items);
+        if (validation.IsFailure)
+        {
+            ctx.Saga.ValidationError = validation.Error.Code;
+            ctx.Saga.FailureStep     = "CatalogValidation";
+            ctx.Saga.FailureReason   = validation.Error.Message;
+            StampInstance(ctx.Saga);
+            return;
+        }
+
+        ctx.Saga.VariantsJson = JsonSerializer.Serialize(result.Value);
+
+        // Server-side subtotal authoritative; uses catalog current price * client quantity.
+        var variantMap = result.Value!.ToDictionary(v => v.VariantId);
+        ctx.Saga.Subtotal      = ctx.Message.Items.Sum(i => variantMap[i.VariantId].CurrentPrice * i.Quantity);
+        ctx.Saga.OriginalPrice = ctx.Saga.Subtotal;
+        StampInstance(ctx.Saga);
+    }
+
+    private async Task ValidateSaleEligibilityAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var sale = scope.ServiceProvider.GetRequiredService<ISaleEligibilityService>();
+
+        var items = ctx.Message.Items
+            .Select(i => new SaleEligibilityItem(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice))
+            .ToList();
+
+        var result = await sale.ValidateAsync(
+            ctx.Saga.CampaignId, GetUserId(ctx.Saga), items, ctx.CancellationToken);
+
+        if (result.IsFailure)
+        {
+            ctx.Saga.ValidationError = result.Error.Code;
+            ctx.Saga.FailureStep     = "SaleValidation";
+            ctx.Saga.FailureReason   = result.Error.Message;
+            StampInstance(ctx.Saga);
+            return;
+        }
+
+        ctx.Saga.SaleDiscount = result.Value!.SaleDiscountAmount;
+        ctx.Saga.SaleStartAt  = result.Value.StartAt;
+        ctx.Saga.SaleEndAt    = result.Value.EndAt;
+        StampInstance(ctx.Saga);
+    }
+
+    private async Task LockCouponAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
+    {
+        if (string.IsNullOrEmpty(ctx.Saga.CouponCode)) return;
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var coupon = scope.ServiceProvider.GetRequiredService<ICouponLockService>();
+
+        var result = await coupon.TryLockAsync(
+            ctx.Saga.CouponCode!, GetUserId(ctx.Saga), ctx.CancellationToken);
+
+        if (result.IsFailure)
+        {
+            ctx.Saga.ValidationError = result.Error.Code;
+            ctx.Saga.FailureStep     = "CouponLock";
+            ctx.Saga.FailureReason   = result.Error.Message;
+            StampInstance(ctx.Saga);
+            return;
+        }
+
+        ctx.Saga.CouponDiscount = result.Value!.DiscountAmount;
+        ctx.Saga.CouponLocked   = true;
+        StampInstance(ctx.Saga);
+    }
+
+    private void ComputeFinalTotal(PlaceSalesOrderSagaState saga)
+    {
+        saga.FinalTotal = Math.Max(
+            0m,
+            saga.OriginalPrice - saga.SaleDiscount - saga.CouponDiscount + saga.ShippingFee);
+
+        // Price mismatch tolerance — relative drift if FinalTotal > 0, otherwise reject when
+        // ExpectedTotal is non-zero (a "free" order should match an expected total of 0).
+        var mismatch = saga.FinalTotal > 0m
+            ? Math.Abs(saga.ExpectedTotal - saga.FinalTotal) / saga.FinalTotal > _priceTolerance
+            : saga.ExpectedTotal > 0m;
+
+        if (mismatch)
+        {
+            saga.ValidationError = OrderErrors.PriceMismatch.Code;
+            saga.FailureStep     = "PriceMismatch";
+            saga.FailureReason   = $"Expected {saga.ExpectedTotal:F2}, server computed {saga.FinalTotal:F2}";
+        }
+
+        StampInstance(saga);
+    }
+
+    private async Task CreateSalesOrderAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
         var uow  = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
+        // Idempotency was already verified in CheckIdempotencyAsync — no second lookup here.
+        var variants = JsonSerializer.Deserialize<List<CatalogVariantInfo>>(ctx.Saga.VariantsJson!)!
+            .ToDictionary(v => v.VariantId);
+
+        var pricing = new SalesPricingSnapshot(
+            OriginalPrice:  ctx.Saga.OriginalPrice,
+            SaleDiscount:   ctx.Saga.SaleDiscount,
+            CouponDiscount: ctx.Saga.CouponDiscount,
+            ShippingFee:    ctx.Saga.ShippingFee,
+            FinalTotal:     ctx.Saga.FinalTotal);
+
         await uow.ExecuteInTransactionAsync(async () =>
         {
-            var order = await repo.GetByIdAsync(saga.OrderId);
-            if (order is null || saga.ReservationId is null) return;
+            var order = OrderFactory.BuildSalesFromSaga(ctx.Saga, variants, pricing, ctx.Saga.OrderId);
+            repo.Add(order);
+        }, ctx.CancellationToken);
+
+        ctx.Saga.OrderPersisted = true;
+        StampInstance(ctx.Saga);
+    }
+
+    // ── Post-persist saga operations ─────────────────────────────────────────
+
+    private async Task MarkReadyForPaymentAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PaymentSessionCreatedV1> ctx)
+    {
+        var userId = GetUserId(ctx.Saga);
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        var uow  = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        // Lambda is pure DB work — returns a bool to signal "found and updated".
+        // Saga state mutation is deferred to *after* the (possibly retried) transaction commits,
+        // so EF Core execution-strategy retries can't double-stamp inconsistent state.
+        var updated = false;
+        await uow.ExecuteInTransactionAsync(async () =>
+        {
+            var order = await repo.GetByIdAsync(ctx.Saga.OrderId, ctx.CancellationToken);
+            if (order is null) return;
+
             order.MarkReadyForPayment(
-                saga.ReservationId.Value,
-                saga.CouponClaimId,
-                paymentUrl,
-                qrCodeUrl,
-                Guid.Parse(saga.UserId),
+                ctx.Saga.ReservationId!.Value,
+                claimId: null,                 // Sales flow uses Redis coupon lock, not event-based claim id
+                ctx.Message.PaymentUrl,
+                ctx.Message.QrCodeUrl,
+                userId,
                 string.Empty);
-        });
+            updated = true;
+        }, ctx.CancellationToken);
+
+        if (!updated)
+        {
+            ctx.Saga.FailureStep   = "OrderNotFound";
+            ctx.Saga.FailureReason = $"Order {ctx.Saga.OrderId} not found during MarkReadyForPayment";
+            StampInstance(ctx.Saga);
+            return;
+        }
+
+        ctx.Saga.PaymentSessionId = ctx.Message.PaymentSessionId;
+        ctx.Saga.PaymentUrl       = ctx.Message.PaymentUrl;
+        ctx.Saga.QrCodeUrl        = ctx.Message.QrCodeUrl;
+        ctx.Saga.PaymentExpiresAt = DateTimeOffset.UtcNow.AddMinutes(_paymentOptions.SalesOrderExpiryMinutes);
+        StampInstance(ctx.Saga);
     }
 
-    private async Task MarkOrderPaidAsync(PlaceSalesOrderSagaState saga, string paymentSessionId)
+    private async Task MarkOrderPaidAsync(
+        BehaviorContext<PlaceSalesOrderSagaState, PaymentSessionCompletedV1> ctx)
+    {
+        var userId = GetUserId(ctx.Saga);
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        var uow  = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        await uow.ExecuteInTransactionAsync(async () =>
+        {
+            var order = await repo.GetByIdAsync(ctx.Saga.OrderId, ctx.CancellationToken);
+            if (order is null) return;
+            order.MarkPaid(ctx.Message.PaymentSessionId, userId, string.Empty);
+        }, ctx.CancellationToken);
+    }
+
+    private async Task CancelOrderAsync(PlaceSalesOrderSagaState saga, string reason, CancellationToken ct = default)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
@@ -417,102 +481,232 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
 
         await uow.ExecuteInTransactionAsync(async () =>
         {
-            var order = await repo.GetByIdAsync(saga.OrderId);
+            var order = await repo.GetByIdAsync(saga.OrderId, ct);
             if (order is null) return;
-            var userId = Guid.Parse(saga.UserId);
-            order.MarkPaid(paymentSessionId, userId, string.Empty);
-        });
+            order.Cancel(reason, GetUserId(saga), null);
+        }, ct);
     }
 
-    private async Task CancelOrderAsync(PlaceSalesOrderSagaState saga, string reason)
+    // ── Compensation helpers ──────────────────────────────────────────────────
+
+    private async Task ReleaseCouponLockAsync(PlaceSalesOrderSagaState saga, CancellationToken ct)
+    {
+        if (!saga.CouponLocked || string.IsNullOrEmpty(saga.CouponCode)) return;
+        if (!Guid.TryParse(saga.UserId, out var uid)) return;   // INVALID_USER_ID path
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var coupon = scope.ServiceProvider.GetRequiredService<ICouponLockService>();
+        await coupon.ReleaseAsync(saga.CouponCode!, uid, ct);
+        saga.CouponLocked = false;
+        StampInstance(saga);
+    }
+
+    private async Task ConfirmCouponUseAsync(PlaceSalesOrderSagaState saga, CancellationToken ct)
+    {
+        if (!saga.CouponLocked || string.IsNullOrEmpty(saga.CouponCode)) return;
+        if (!Guid.TryParse(saga.UserId, out var uid)) return;
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var coupon = scope.ServiceProvider.GetRequiredService<ICouponLockService>();
+        await coupon.ConfirmUseAsync(saga.CouponCode!, uid, ct);
+        saga.CouponLocked = false;
+        StampInstance(saga);
+    }
+
+    private async Task RestoreFlashSaleStockAsync(PlaceSalesOrderSagaState saga, CancellationToken ct)
+    {
+        var items = DeserializeItems(saga);
+        if (items.Count == 0) return;
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var stock = scope.ServiceProvider.GetRequiredService<IFlashSaleStockService>();
+        var totalQty = items.Sum(i => i.Quantity);
+        if (totalQty > 0)
+            await stock.RestoreAsync(saga.CampaignId, totalQty, ct);
+    }
+
+    private async Task ReleasePendingSlotAsync(PlaceSalesOrderSagaState saga, CancellationToken ct = default)
+    {
+        // If UserId is malformed (INVALID_USER_ID path), skip — the handler-side slot has a TTL
+        // that will clean up automatically; we have no key to release with.
+        if (!Guid.TryParse(saga.UserId, out var uid)) return;
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var slots = scope.ServiceProvider.GetRequiredService<IPendingOrderSlotService>();
+        await slots.ReleaseAsync(uid, OrderType.Sales, ct);
+    }
+
+    private async Task PublishOrderConfirmedAsync(PlaceSalesOrderSagaState saga, CancellationToken ct = default)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
-        var uow  = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var publisher = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
+        var repo      = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
 
-        await uow.ExecuteInTransactionAsync(async () =>
+        var order = await repo.GetByIdAsync(saga.OrderId, ct);
+        if (order is null) return;
+
+        await publisher.Publish(new OrderConfirmedV1(
+            order.Id,
+            order.OrderNumber,
+            order.UserId,
+            order.CustomerEmail,
+            order.FinalAmount,
+            DateTimeOffset.UtcNow,
+            order.Items.Select(i =>
+                new OrderItemSummary(i.ProductId, i.VariantId, i.VariantSku, i.Quantity, i.UnitPrice)).ToList()
+        ), msgCtx =>
         {
-            var order = await repo.GetByIdAsync(saga.OrderId);
-            if (order is null) return;
-            var userId = Guid.TryParse(saga.UserId, out var uid) ? uid : (Guid?)null;
-            order.Cancel(reason, userId, null);
-        });
+            msgCtx.MessageId = DeterministicMessageId.From($"order-confirmed:{order.Id}");
+        }, ct);
     }
 
-    // ── Message factories ────────────────────────────────────────────────────
-
-    private static object BuildInventoryRequest(PlaceSalesOrderSagaState saga)
+    private async Task PublishOrderCancelledAsync(PlaceSalesOrderSagaState saga, string reason, CancellationToken ct = default)
     {
-        var items = JsonSerializer.Deserialize<List<OrderItemSnapshot>>(saga.ItemsJson!)!
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var publisher = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
+        var repo      = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+
+        var order       = await repo.GetByIdAsync(saga.OrderId, ct);
+        var orderNumber = order?.OrderNumber ?? string.Empty;
+
+        await publisher.Publish(new OrderIntegrationEvents.OrderCancelledV1(
+            saga.OrderId,
+            orderNumber,
+            reason
+        ), msgCtx =>
+        {
+            msgCtx.MessageId = DeterministicMessageId.From($"order-cancelled:{saga.OrderId}");
+        }, ct);
+    }
+
+    // ── Snapshot + invariants ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Snapshots the inbound request onto the saga instance. Captures everything the saga needs
+    /// for both happy and compensation paths. UserId validity is checked separately in
+    /// <see cref="IsUserIdValid"/> so a malformed value flows through the normal validation-error
+    /// path (Compensating restores flash sale stock + releases the pending slot) instead of
+    /// throwing and triggering MassTransit's retry-to-DLQ loop on what is an unrecoverable input.
+    /// </summary>
+    private static void SnapshotRequest(PlaceSalesOrderSagaState saga, PlaceSalesOrderRequestedV1 msg)
+    {
+        saga.CorrelationId       = msg.OrderId;
+        saga.OrderId             = msg.OrderId;
+        saga.UserId              = msg.UserId;
+        saga.CampaignId          = msg.CampaignId;
+        saga.IdempotencyKey      = msg.IdempotencyKey;
+        saga.CouponCode          = msg.CouponCode;
+        saga.ExpectedTotal       = msg.ExpectedTotal;
+        saga.ShippingFee         = msg.ShippingFee;
+        saga.ItemsJson           = JsonSerializer.Serialize(msg.Items);
+        saga.ShippingAddressJson = JsonSerializer.Serialize(msg.ShippingAddress);
+        saga.CustomerEmail       = msg.CustomerEmail;
+        saga.CustomerName        = msg.CustomerName;
+        saga.CustomerPhone       = msg.CustomerPhone;
+        saga.CustomerNote        = msg.CustomerNote;
+    }
+
+    /// <summary>
+    /// First-step gate inside <see cref="ValidateAndPersistAsync"/>: marks the saga with a
+    /// <c>ValidationError</c> if the inbound UserId is unusable. Compensating still runs to
+    /// restore the flash-sale stock the handler already decremented and to release the
+    /// pending slot the handler already acquired.
+    /// </summary>
+    private bool IsUserIdValid(PlaceSalesOrderSagaState saga)
+    {
+        if (Guid.TryParse(saga.UserId, out _)) return true;
+
+        saga.ValidationError = "INVALID_USER_ID";
+        saga.FailureStep     = "Snapshot";
+        saga.FailureReason   = $"UserId '{saga.UserId}' is not a valid Guid";
+        StampInstance(saga);
+        return false;
+    }
+
+    /// <summary>UserId is guaranteed valid once <see cref="IsUserIdValid"/> returned true.</summary>
+    private static Guid GetUserId(PlaceSalesOrderSagaState saga) => Guid.Parse(saga.UserId);
+
+    /// <summary>
+    /// Best human-readable reason for compensation publish: prefer the per-step
+    /// <c>FailureReason</c> (set by each validation step to <c>result.Error.Message</c>),
+    /// fall back to the machine code, then a generic string.
+    /// </summary>
+    private static string FailureReasonOf(PlaceSalesOrderSagaState saga) =>
+        saga.FailureReason ?? saga.ValidationError ?? "Order failed";
+
+    private static List<SalesOrderItemSnapshot> DeserializeItems(PlaceSalesOrderSagaState saga)
+    {
+        if (string.IsNullOrEmpty(saga.ItemsJson))
+            return [];
+
+        return JsonSerializer.Deserialize<List<SalesOrderItemSnapshot>>(saga.ItemsJson)
+            ?? throw new InvalidOperationException($"Saga {saga.OrderId} has invalid ItemsJson.");
+    }
+
+    // ── Business validation ───────────────────────────────────────────────────
+
+    private static Result ValidateBusinessRules(
+        IReadOnlyList<CatalogVariantInfo> variants,
+        IReadOnlyList<SalesOrderItemSnapshot> items)
+    {
+        var variantMap = variants.ToDictionary(v => v.VariantId);
+
+        foreach (var item in items)
+        {
+            if (!variantMap.TryGetValue(item.VariantId, out var variant))
+                return Result.Failure(OrderErrors.VariantNotFound(item.VariantId));
+
+            if (!variant.VariantIsActive)
+                return Result.Failure(OrderErrors.VariantInactive(item.VariantId));
+
+            if (!variant.ProductIsActive)
+                return Result.Failure(OrderErrors.ProductInactive(variant.ProductId));
+
+            if (!variant.SellerIsActive)
+                return Result.Failure(OrderErrors.SellerInactive(variant.SellerId));
+        }
+
+        return Result.Success();
+    }
+
+    // ── Message factories ─────────────────────────────────────────────────────
+
+    private static ReserveInventoryRequestedV1 BuildInventoryRequest(PlaceSalesOrderSagaState saga)
+    {
+        var items = DeserializeItems(saga)
             .Select(i => new InventoryReserveItem(i.ProductId, i.VariantId, i.Quantity))
             .ToList();
 
-        return new
+        return new ReserveInventoryRequestedV1
         {
             CorrelationId       = saga.OrderId.ToString("D"),
-            saga.OrderId,
+            OrderId             = saga.OrderId,
             OrderIdempotencyKey = $"{saga.IdempotencyKey}:inv",
-            Items               = (IReadOnlyList<InventoryReserveItem>)items
+            Items               = items
         };
     }
 
-    private static object BuildPaymentRequest(PlaceSalesOrderSagaState saga) => new
+    private static CreatePaymentSessionV1 BuildPaymentSessionRequest(PlaceSalesOrderSagaState saga) => new()
     {
-        CorrelationId       = saga.OrderId.ToString("D"),
-        saga.OrderId,
-        saga.UserId,
-        OrderIdempotencyKey = $"{saga.IdempotencyKey}:pay",
-        FinalAmount         = saga.Subtotal - saga.PromotionDiscount - saga.CouponDiscount + saga.ShippingFee,
-        saga.CampaignId,
-        ReservationId       = saga.ReservationId!.Value,
-        ClaimId             = saga.CouponClaimId
+        CorrelationId  = saga.OrderId.ToString("D"),
+        OrderId        = saga.OrderId,
+        IdempotencyKey = $"{saga.IdempotencyKey}:pay",
+        Amount         = saga.FinalTotal,
+        Currency       = "VND"
     };
 
-    private static object BuildConfirmedEvent(PlaceSalesOrderSagaState saga) => new
+    private static InventoryReleaseRequestedV1 BuildInventoryRelease(PlaceSalesOrderSagaState saga) => new()
     {
         CorrelationId = saga.OrderId.ToString("D"),
-        saga.OrderId,
-        saga.UserId,
-        saga.CampaignId,
         ReservationId = saga.ReservationId!.Value,
-        ClaimId       = saga.CouponClaimId,
-        PaymentId     = saga.PaymentId!.Value,
-        FinalAmount   = saga.Subtotal - saga.PromotionDiscount - saga.CouponDiscount + saga.ShippingFee,
-        ConfirmedAt   = DateTimeOffset.UtcNow
+        Reason        = FailureReasonOf(saga)
     };
 
-    private static object BuildQuotaRelease(PlaceSalesOrderSagaState saga) => new
+    private static ConfirmInventoryRequestedV1 BuildConfirmInventoryRequest(PlaceSalesOrderSagaState saga) => new()
     {
-        CorrelationId = saga.OrderId.ToString("D"),
-        saga.CampaignId,
-        UserId        = Guid.Parse(saga.UserId),
-        saga.QuotaQuantity,
-        QuotaKey      = $"campaign:{saga.CampaignId}"
+        CorrelationId  = saga.OrderId.ToString("D"),
+        OrderId        = saga.OrderId,
+        ReservationId  = saga.ReservationId!.Value,
+        IdempotencyKey = $"{saga.IdempotencyKey}:confirm-inv"
     };
-
-    // ── Snapshot helper ──────────────────────────────────────────────────────
-
-    private static void SnapshotRequest(
-        BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
-    {
-        var msg  = ctx.Message;
-        var saga = ctx.Saga;
-
-        saga.OrderId        = msg.OrderId;
-        saga.UserId         = msg.UserId;
-        saga.CampaignId     = msg.CampaignId;
-        saga.IdempotencyKey = msg.IdempotencyKey;
-        saga.Subtotal       = msg.Subtotal;
-        saga.ExpectedTotal  = msg.ExpectedTotal;
-        saga.ShippingFee    = msg.ShippingFee;
-        saga.CouponCode     = msg.CouponCode;
-        saga.ItemsJson      = JsonSerializer.Serialize(msg.Items);
-        saga.QuotaQuantity  = msg.Items.Sum(i => i.Quantity);
-    }
-}
-
-/// <summary>Timeout message correlated by OrderId; fires after each step's 30 s window.</summary>
-public record SagaStepTimeoutV1
-{
-    public Guid OrderId { get; init; }
 }
