@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Cache.Abstractions;
+using Shared.Contract.Dtos.Order;
 using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
 using Shared.Outbox.Abstractions;
@@ -90,14 +91,16 @@ public sealed class PlaceSalesOrderCommandHandler(
             IdempotencyKey = request.IdempotencyKey,
             Subtotal       = order.Subtotal,
             ShippingFee    = order.ShippingFee,
-            ShippingAddress = new ShippingAddressSnapshot(
-                RecipientName: order.ShippingAddress.RecipientName,
-                PhoneNumber:   order.ShippingAddress.RecipientPhone,
-                AddressLine:   order.ShippingAddress.Street,
-                Ward:          order.ShippingAddress.Ward ?? string.Empty,
-                District:      order.ShippingAddress.District,
-                Province:      order.ShippingAddress.Province ?? string.Empty,
-                CountryCode:   order.ShippingAddress.Country),
+            ShippingAddress = new OrderDtos.ShippingAddressSnapshot(
+                FullName: order.ShippingAddress.RecipientName,
+                Phone:    order.ShippingAddress.RecipientPhone,
+                Address:  order.ShippingAddress.Street,
+                Ward:     order.ShippingAddress.Ward ?? string.Empty,
+                District: order.ShippingAddress.District,
+                City:     order.ShippingAddress.City,
+                Province: order.ShippingAddress.Province ?? string.Empty,
+                Country:  order.ShippingAddress.Country,
+                ZipCode:  order.ShippingAddress.ZipCode),
             CouponCode     = request.CouponCode,
             Items          = order.Items
                 .Select(i => new OrderItemSnapshot(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice))

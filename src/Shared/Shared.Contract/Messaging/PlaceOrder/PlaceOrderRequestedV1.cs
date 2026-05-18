@@ -1,4 +1,5 @@
 using Shared.Contract.Abstractions;
+using Shared.Contract.Dtos.Order;
 
 namespace Shared.Contract.Messaging.PlaceOrder;
 
@@ -13,6 +14,13 @@ public record PlaceOrderRequestedV1 : IntegrationEventBase
     public required decimal Subtotal { get; init; }
     public required decimal ShippingFee { get; init; }
     public required IReadOnlyList<NormalOrderItemSnapshot> Items { get; init; }
+
+    public OrderDtos.ShippingAddressSnapshot? ShippingAddress { get; init; }
+    public string PricingSnapshotJson { get; init; } = "{}";
+    public string CustomerEmail { get; init; } = "";
+    public string CustomerName { get; init; } = "";
+    public string? CustomerPhone { get; init; }
+    public string? CustomerNote { get; init; }
 }
 
 public record NormalOrderItemSnapshot(

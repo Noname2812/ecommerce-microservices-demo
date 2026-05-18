@@ -27,6 +27,26 @@ public static class OrderIntegrationEvents
     }
 }
 
+public record OrderConfirmedV1(
+    Guid OrderId,
+    string OrderNumber,
+    Guid CustomerId,
+    string CustomerEmail,
+    decimal FinalAmount,
+    DateTimeOffset ConfirmedAt,
+    IReadOnlyList<OrderItemSummary> Items
+) : IntegrationEventBase
+{
+    public override string Source => "order-service";
+}
+
+public record OrderItemSummary(
+    Guid ProductId,
+    Guid VariantId,
+    string Sku,
+    int Quantity,
+    decimal UnitPrice);
+
 public record OrderItemSnapshot(
     Guid ProductId,
     string ProductName,

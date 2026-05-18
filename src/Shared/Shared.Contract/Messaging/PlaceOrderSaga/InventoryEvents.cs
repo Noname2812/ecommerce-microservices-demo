@@ -34,3 +34,12 @@ public record InventoryReserveFailedV1 : IntegrationEventBase
 public record InventoryReserveItem(Guid ProductId, Guid VariantId, int Quantity);
 
 public record OutOfStockProduct(Guid ProductId, int Available);
+
+public record ConfirmInventoryRequestedV1 : IntegrationEventBase
+{
+    public override string Source => "order-service";
+
+    public required Guid OrderId { get; init; }
+    public required Guid ReservationId { get; init; }
+    public required string IdempotencyKey { get; init; }
+}
