@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Options;
 using Moq;
 using Shared.Application.Authorization;
+using Shared.Cache.Abstractions;
 using UrbanX.Order.Application.Abstractions;
+using UrbanX.Order.Application.DependencyInjection.Options;
 using UrbanX.Order.Application.Usecases.V1.Query.GetOrderByTicket;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
@@ -15,12 +18,178 @@ public sealed class GetOrderByTicketQueryHandlerTests
     private readonly Mock<IOrderRepository> _orderRepository = new();
     private readonly Mock<IOrderTicketStatusQuery> _ticketStatusQuery = new();
     private readonly Mock<IUserContext> _userContext = new();
+    private readonly Mock<ICacheService> _cache = new();
+    private readonly OrderTicketCacheOptions _cacheOptions = new();
 
     private readonly Guid _ownerId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private readonly Guid _otherUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
+    public GetOrderByTicketQueryHandlerTests()
+    {
+        _cache
+            .Setup(c => c.GetAsync<OrderTicketStatusDto>(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((OrderTicketStatusDto?)null);
+        _cache
+            .Setup(c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<OrderTicketStatusDto>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+    }
+
     private GetOrderByTicketQueryHandler CreateSut() =>
-        new(_orderRepository.Object, _ticketStatusQuery.Object, _userContext.Object);
+        new(
+            _orderRepository.Object,
+            _ticketStatusQuery.Object,
+            _userContext.Object,
+            _cache.Object,
+            Options.Create(_cacheOptions));
+
+    [Fact]
+    public async Task Handle_WhenCacheHit_DoesNotQueryDatabase()
+    {
+        // Arrange
+        var ticketId = Guid.NewGuid();
+        var cached = new OrderTicketStatusDto(
+            ticketId,
+            OrderStatus.Confirmed,
+            ticketId,
+            null,
+            null,
+            PaymentStatus.Paid,
+            null,
+            null);
+
+        _cache
+            .Setup(c => c.GetAsync<OrderTicketStatusDto>(
+                CacheKey(ticketId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cached);
+
+        // Act
+        var result = await CreateSut().Handle(new GetOrderByTicketQuery(ticketId), CancellationToken.None);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(cached, result.Value);
+        _orderRepository.Verify(
+            r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _ticketStatusQuery.Verify(
+            q => q.GetSagaByTicketIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _cache.Verify(
+            c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<OrderTicketStatusDto>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCacheMissAndPendingPayment_SetsNonTerminalTtl()
+    {
+        // Arrange
+        var ticketId = Guid.NewGuid();
+        var order = CreateOrder(ticketId, _ownerId);
+        order.MarkReadyForPayment(
+            Guid.NewGuid(), null,
+            "https://pay.example/checkout",
+            "https://pay.example/qr",
+            _ownerId, "Owner");
+
+        _userContext.Setup(x => x.UserId).Returns(_ownerId);
+        _userContext.Setup(x => x.HasRole(Roles.Admin)).Returns(false);
+        _orderRepository
+            .Setup(r => r.GetByIdAsync(ticketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(order);
+        _ticketStatusQuery
+            .Setup(q => q.GetSagaByTicketIdAsync(ticketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((OrderTicketSagaSnapshot?)null);
+
+        TimeSpan? capturedTtl = null;
+        _cache
+            .Setup(c => c.SetAsync(
+                CacheKey(ticketId),
+                It.IsAny<OrderTicketStatusDto>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, OrderTicketStatusDto, TimeSpan?, CancellationToken>((_, _, ttl, _) =>
+                capturedTtl = ttl)
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await CreateSut().Handle(new GetOrderByTicketQuery(ticketId), CancellationToken.None);
+
+        // Assert
+        Assert.Equal(TimeSpan.FromSeconds(_cacheOptions.NonTerminalTtlSeconds), capturedTtl);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCacheMissAndConfirmed_SetsTerminalTtl()
+    {
+        // Arrange
+        var ticketId = Guid.NewGuid();
+        var order = CreateOrder(ticketId, _ownerId);
+        order.MarkReadyForPayment(
+            Guid.NewGuid(), null,
+            "https://pay.example/checkout",
+            "https://pay.example/qr",
+            _ownerId, "Owner");
+        order.MarkPaid("pay-session-1", _ownerId, "Owner");
+
+        _userContext.Setup(x => x.UserId).Returns(_ownerId);
+        _userContext.Setup(x => x.HasRole(Roles.Admin)).Returns(false);
+        _orderRepository
+            .Setup(r => r.GetByIdAsync(ticketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(order);
+        _ticketStatusQuery
+            .Setup(q => q.GetSagaByTicketIdAsync(ticketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((OrderTicketSagaSnapshot?)null);
+
+        TimeSpan? capturedTtl = null;
+        _cache
+            .Setup(c => c.SetAsync(
+                CacheKey(ticketId),
+                It.IsAny<OrderTicketStatusDto>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, OrderTicketStatusDto, TimeSpan?, CancellationToken>((_, _, ttl, _) =>
+                capturedTtl = ttl)
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await CreateSut().Handle(new GetOrderByTicketQuery(ticketId), CancellationToken.None);
+
+        // Assert
+        Assert.Equal(TimeSpan.FromSeconds(_cacheOptions.TerminalTtlSeconds), capturedTtl);
+    }
+
+    [Fact]
+    public async Task Handle_WhenTicketNotFound_DoesNotWriteCache()
+    {
+        // Arrange
+        var ticketId = Guid.NewGuid();
+        _orderRepository
+            .Setup(r => r.GetByIdAsync(ticketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((OrderEntity?)null);
+        _ticketStatusQuery
+            .Setup(q => q.GetSagaByTicketIdAsync(ticketId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((OrderTicketSagaSnapshot?)null);
+
+        // Act
+        await CreateSut().Handle(new GetOrderByTicketQuery(ticketId), CancellationToken.None);
+
+        // Assert
+        _cache.Verify(
+            c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<OrderTicketStatusDto>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
 
     [Fact]
     public async Task Handle_WhenOrderExists_ReturnsOrderStatusAndPaymentUrl()
@@ -218,4 +387,6 @@ public sealed class GetOrderByTicketQueryHandlerTests
             idempotencyKey: "idem-key-1",
             items: items);
     }
+
+    private static string CacheKey(Guid ticketId) => $"order:ticket:{ticketId}";
 }

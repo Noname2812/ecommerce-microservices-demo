@@ -15,7 +15,10 @@ public record PlaceOrderCommand(
     PlaceOrderPricingSnapshotDto PricingSnapshot,
     IReadOnlyList<PlaceOrderLineDto> Items,
     string? CustomerEmail = null
-) : ICommand<Guid>, IPlaceOrderRequest;
+) : ICommand<Guid>, IPlaceOrderRequest, IIdempotentCommand
+{
+    public TimeSpan? IdempotencyTtl => TimeSpan.FromMinutes(60);
+}
 
 public record PlaceOrderShippingAddressDto(
     string FullName,

@@ -1,8 +1,12 @@
+using Microsoft.Extensions.Options;
 using Shared.Application;
 using Shared.Application.Authorization;
+using Shared.Cache.Abstractions;
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Abstractions;
+using UrbanX.Order.Application.DependencyInjection.Options;
 using UrbanX.Order.Domain.Errors;
+using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 
 namespace UrbanX.Order.Application.Usecases.V1.Query.GetOrderByTicket;
@@ -10,10 +14,35 @@ namespace UrbanX.Order.Application.Usecases.V1.Query.GetOrderByTicket;
 public sealed class GetOrderByTicketQueryHandler(
     IOrderRepository orderRepository,
     IOrderTicketStatusQuery ticketStatusQuery,
-    IUserContext userContext)
+    IUserContext userContext,
+    ICacheService cache,
+    IOptions<OrderTicketCacheOptions> cacheOptions)
     : IQueryHandler<GetOrderByTicketQuery, OrderTicketStatusDto>
 {
+    private readonly OrderTicketCacheOptions _opts = cacheOptions.Value;
+
     public async Task<Result<OrderTicketStatusDto>> Handle(
+        GetOrderByTicketQuery query, CancellationToken ct)
+    {
+        var cacheKey = CacheKey(query.TicketId);
+        var cached = await cache.GetAsync<OrderTicketStatusDto>(cacheKey, ct);
+        if (cached is not null)
+            return Result.Success(cached);
+
+        var result = await LoadTicketStatusAsync(query, ct);
+
+        if (result.IsSuccess && result.Value is { } dto)
+        {
+            var ttl = IsTerminal(dto.Status)
+                ? TimeSpan.FromSeconds(_opts.TerminalTtlSeconds)
+                : TimeSpan.FromSeconds(_opts.NonTerminalTtlSeconds);
+            await cache.SetAsync(cacheKey, dto, ttl, ct);
+        }
+
+        return result;
+    }
+
+    private async Task<Result<OrderTicketStatusDto>> LoadTicketStatusAsync(
         GetOrderByTicketQuery query, CancellationToken ct)
     {
         var order = await orderRepository.GetByIdAsync(query.TicketId, ct);
@@ -64,4 +93,9 @@ public sealed class GetOrderByTicketQueryHandler(
             CancelledReason:  reason,
             PaymentExpiresAt: null));
     }
+
+    private static string CacheKey(Guid ticketId) => $"order:ticket:{ticketId}";
+
+    private static bool IsTerminal(string status) =>
+        status == OrderStatus.Confirmed || status == OrderStatus.Cancelled;
 }

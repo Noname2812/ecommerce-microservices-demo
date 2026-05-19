@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Options;
 using Shared.Kernel.Primitives;
-using UrbanX.Order.Application.Options;
+using UrbanX.Order.Application.DependencyInjection.Options;
 using UrbanX.Order.Domain.Errors;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;

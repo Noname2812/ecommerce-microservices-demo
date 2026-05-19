@@ -6,6 +6,7 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Messaging.Idempotency;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
+using UrbanX.Order.Application.Messaging;
 using UrbanX.Order.Application.Sagas;
 using UrbanX.Order.API.Middleware;
 using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
@@ -48,6 +49,9 @@ builder.Services
                 r.ConcurrencyMode = ConcurrencyMode.Optimistic;
                 r.ExistingDbContext<OrderDbContext>();
             });
+
+        bus.AddConsumer<OrderConfirmedCacheConsumer>();
+        bus.AddConsumer<OrderCancelledCacheConsumer>();
     });
 
 // Health checks

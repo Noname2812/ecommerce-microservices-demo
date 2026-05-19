@@ -1,5 +1,5 @@
+using MassTransit;
 using Moq;
-using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
@@ -7,17 +7,33 @@ using UrbanX.Order.Application.Services;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
+using UrbanX.Order.Domain.Repositories;
+using OrderEntity = UrbanX.Order.Domain.Models.Order;
 
 namespace UrbanX.Services.Order.UnitTests.Application.Command;
 
 public sealed class PlaceOrderCommandHandlerTests
 {
-    private readonly Mock<IEventPublisher> _publisher = new();
+    private readonly Mock<IOrderRepository> _orderRepository = new();
+    private readonly Mock<IPublishEndpoint> _publishEndpoint = new();
     private readonly Mock<IPendingOrderSlotService> _pendingSlots = new();
     private readonly Mock<IUserContext> _userContext = new();
 
+    public PlaceOrderCommandHandlerTests()
+    {
+        _orderRepository
+            .Setup(r => r.GetByIdempotencyKeyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((OrderEntity?)null);
+        _publishEndpoint
+            .Setup(x => x.Publish(
+                It.IsAny<PlaceOrderRequestedV1>(),
+                It.IsAny<IPipe<PublishContext<PlaceOrderRequestedV1>>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+    }
+
     private PlaceOrderCommandHandler CreateSut() =>
-        new(_publisher.Object, _pendingSlots.Object, _userContext.Object);
+        new(_orderRepository.Object, _publishEndpoint.Object, _pendingSlots.Object, _userContext.Object);
 
     private static PlaceOrderCommand ValidCommand() => new(
         ShippingAddress: new("Nguyen Van A", "0912345678",
@@ -50,13 +66,15 @@ public sealed class PlaceOrderCommandHandlerTests
         _pendingSlots.Verify(
             x => x.TryAcquireAsync(userId, OrderType.Normal, It.IsAny<CancellationToken>()),
             Times.Once);
-        _publisher.Verify(
-            x => x.PublishAsync(
+        _orderRepository.Verify(r => r.Add(It.IsAny<OrderEntity>()), Times.Once);
+        _publishEndpoint.Verify(
+            x => x.Publish(
                 It.Is<PlaceOrderRequestedV1>(e =>
                     e.OrderId == result.Value
                     && e.UserId == userId.ToString("D")
                     && e.IdempotencyKey == cmd.IdempotencyKey
                     && e.Items.Count == 1),
+                It.IsAny<IPipe<PublishContext<PlaceOrderRequestedV1>>>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -74,8 +92,11 @@ public sealed class PlaceOrderCommandHandlerTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(OrderErrors.TooManyPendingOrders.Code, result.Error.Code);
-        _publisher.Verify(
-            x => x.PublishAsync(It.IsAny<PlaceOrderRequestedV1>(), It.IsAny<CancellationToken>()),
+        _publishEndpoint.Verify(
+            x => x.Publish(
+                It.IsAny<PlaceOrderRequestedV1>(),
+                It.IsAny<IPipe<PublishContext<PlaceOrderRequestedV1>>>(),
+                It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -87,8 +108,11 @@ public sealed class PlaceOrderCommandHandlerTests
         _pendingSlots
             .Setup(x => x.TryAcquireAsync(userId, OrderType.Normal, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success());
-        _publisher
-            .Setup(x => x.PublishAsync(It.IsAny<PlaceOrderRequestedV1>(), It.IsAny<CancellationToken>()))
+        _publishEndpoint
+            .Setup(x => x.Publish(
+                It.IsAny<PlaceOrderRequestedV1>(),
+                It.IsAny<IPipe<PublishContext<PlaceOrderRequestedV1>>>(),
+                It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("bus down"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(

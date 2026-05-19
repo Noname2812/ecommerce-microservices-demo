@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shared.Messaging.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Options;
-using UrbanX.Order.Application.Options;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 namespace UrbanX.Order.Application.DependencyInjection.Extensions;
@@ -29,6 +28,11 @@ public static class ServiceCollectionExtensions
                 (place, payment) =>
                     place.CouponLockTtlSeconds >= payment.Value.SalesOrderExpiryMinutes * 60 + 60,
                 "PlaceOrder:CouponLockTtlSeconds must be >= Order:Payment:SalesOrderExpiryMinutes*60 + 60s buffer.")
+            .ValidateOnStart();
+
+        services.AddOptions<OrderTicketCacheOptions>()
+            .BindConfiguration(OrderTicketCacheOptions.SectionName)
+            .ValidateDataAnnotations()
             .ValidateOnStart();
 
         services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
