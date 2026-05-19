@@ -44,7 +44,9 @@ public sealed class PlaceOrderNormalSagaStateMachine
     public Event<PaymentSessionCompletedV1> PaymentCompleted       { get; private set; } = default!;
 
     // ── Schedules ─────────────────────────────────────────────────────────────
-    public Schedule<PlaceOrderNormalSagaState, SagaStepTimeoutV1>      StepTimeout   { get; private set; } = default!;
+    public Schedule<PlaceOrderNormalSagaState, SagaStepTimeoutV1> InventoryTimeout { get; private set; } = default!;
+    public Schedule<PlaceOrderNormalSagaState, SagaStepTimeoutV1> CouponTimeout { get; private set; } = default!;
+    public Schedule<PlaceOrderNormalSagaState, SagaStepTimeoutV1> PaymentSessionTimeout { get; private set; } = default!;
     public Schedule<PlaceOrderNormalSagaState, PaymentExpiryTimeoutV1> PaymentExpiry { get; private set; } = default!;
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -77,7 +79,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
                         .ThenAsync(ctx => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken))
                         .TransitionTo(Faulted),
                     ok => ok
-                        .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .Schedule(InventoryTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
                         .PublishAsync(ctx => ctx.Init<ReserveInventoryRequestedV1>(BuildInventoryRequest(ctx.Saga)))
                         .TransitionTo(InventoryReserving)));
 
@@ -85,14 +87,16 @@ public sealed class PlaceOrderNormalSagaStateMachine
         During(InventoryReserving,
             When(InventoryReserved)
                 .Then(ctx => { ctx.Saga.ReservationId = ctx.Message.ReservationId; StampInstance(ctx.Saga); })
-                .Unschedule(StepTimeout)
+                .Unschedule(InventoryTimeout)
                 .IfElse(
                     ctx => ctx.Saga.CouponCode != null,
                     hasCoupon => hasCoupon
-                        .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .Schedule(CouponTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
                         .PublishAsync(ctx => ctx.Init<ClaimCouponRequestedV1>(BuildCouponRequest(ctx.Saga)))
                         .TransitionTo(CouponClaiming),
                     noCoupon => noCoupon
+                        .Schedule(PaymentSessionTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(BuildPaymentSessionRequest(ctx.Saga)))
                         .TransitionTo(PaymentSessionCreating)),
 
             When(InventoryReserveFailed)
@@ -102,10 +106,10 @@ public sealed class PlaceOrderNormalSagaStateMachine
                     ctx.Saga.FailureReason = ctx.Message.ErrorMessage;
                     StampInstance(ctx.Saga);
                 })
-                .Unschedule(StepTimeout)
+                .Unschedule(InventoryTimeout)
                 .TransitionTo(Compensating),
 
-            When(StepTimeout.Received)
+            When(InventoryTimeout.Received)
                 .Then(ctx =>
                 {
                     ctx.Saga.FailureStep   = "InventoryTimeout";
@@ -123,7 +127,9 @@ public sealed class PlaceOrderNormalSagaStateMachine
                     ctx.Saga.CouponDiscount = ctx.Message.DiscountAmount;
                     StampInstance(ctx.Saga);
                 })
-                .Unschedule(StepTimeout)
+                .Unschedule(CouponTimeout)
+                .Schedule(PaymentSessionTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(BuildPaymentSessionRequest(ctx.Saga)))
                 .TransitionTo(PaymentSessionCreating),
 
             When(CouponClaimFailed)
@@ -133,11 +139,11 @@ public sealed class PlaceOrderNormalSagaStateMachine
                     ctx.Saga.FailureReason = ctx.Message.ErrorMessage;
                     StampInstance(ctx.Saga);
                 })
-                .Unschedule(StepTimeout)
+                .Unschedule(CouponTimeout)
                 .PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(BuildInventoryRelease(ctx.Saga)))
                 .TransitionTo(Compensating),
 
-            When(StepTimeout.Received)
+            When(CouponTimeout.Received)
                 .Then(ctx =>
                 {
                     ctx.Saga.FailureStep   = "CouponTimeout";
@@ -154,7 +160,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
 
         During(PaymentSessionCreating,
             When(PaymentSessionCreated)
-                .Unschedule(StepTimeout)
+                .Unschedule(PaymentSessionTimeout)
                 .ThenAsync(ctx => MarkReadyForPaymentAsync(ctx))
                 .IfElse(
                     // MarkReadyForPaymentAsync sets FailureStep when order not found or UserId invalid
@@ -177,7 +183,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
                         .Schedule(PaymentExpiry, ctx => new PaymentExpiryTimeoutV1 { OrderId = ctx.Saga.OrderId })
                         .TransitionTo(PaymentPending)),
 
-            When(StepTimeout.Received)
+            When(PaymentSessionTimeout.Received)
                 .Then(ctx =>
                 {
                     ctx.Saga.FailureStep   = "PaymentSessionTimeout";
@@ -247,15 +253,33 @@ public sealed class PlaceOrderNormalSagaStateMachine
 
     private void ConfigureSchedules()
     {
-        Schedule(() => StepTimeout, x => x.StepTimeoutTokenId, cfg =>
+        // Inventory reserve — internal service
+        // Happy path ~200-500ms
+        Schedule(() => InventoryTimeout, x => x.InventoryExpiryTokenId, cfg =>
         {
-            cfg.Delay    = TimeSpan.FromSeconds(30);
+            cfg.Delay = TimeSpan.FromSeconds(5);
             cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
         });
 
+        // Coupon claim — internal service, check + lock coupon DB
+        Schedule(() => CouponTimeout, x => x.CouponExpiryTokenId, cfg =>
+        {
+            cfg.Delay = TimeSpan.FromSeconds(5);
+            cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
+        });
+
+        // Payment session — call external gateway (VNPay/Momo...)
+        // Network round-trip + gateway processing
+        Schedule(() => PaymentSessionTimeout, x => x.PaymentSessionExpiryTokenId, cfg =>
+        {
+            cfg.Delay = TimeSpan.FromSeconds(10);
+            cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
+        });
+
+        // Payment expiry
         Schedule(() => PaymentExpiry, x => x.PaymentExpiryTokenId, cfg =>
         {
-            cfg.Delay    = TimeSpan.FromMinutes(_paymentOptions.NormalOrderExpiryMinutes);
+            cfg.Delay = TimeSpan.FromMinutes(_paymentOptions.NormalOrderExpiryMinutes); // 15
             cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
         });
     }

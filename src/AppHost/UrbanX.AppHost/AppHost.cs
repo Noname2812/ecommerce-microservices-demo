@@ -2,7 +2,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // Add PostgreSQL
 var postgres = builder.AddPostgres("postgres")
-    .WithPgWeb();
+    .WithHostPort(5432)
+    .WithPgWeb(pgWeb => pgWeb.WithHostPort(5433));
 
 var identityDb = postgres.AddDatabase("identitydb", "urbanx_identity");
 var catalogDb = postgres.AddDatabase("catalogdb", "urbanx_catalog");
@@ -107,10 +108,13 @@ var paymentService = builder.AddProject<Projects.UrbanX_Payment_API>("payment")
 //    .WaitFor(identityService)
 //    .WaitFor(promotionService);
 
+//var frontend = builder.AddViteApp("frontend", "../../front-end")
+////    .WithReference(gateway)
+////    .WaitFor(gateway)
+//   .WithExternalHttpEndpoints();
 var frontend = builder.AddViteApp("frontend", "../../front-end")
-//    .WithReference(gateway)
-//    .WaitFor(gateway)
-   .WithExternalHttpEndpoints();
+    .WithEndpoint("http", e => e.Port = 5173)
+    .WithExternalHttpEndpoints();
 
 
 builder.Build().Run();

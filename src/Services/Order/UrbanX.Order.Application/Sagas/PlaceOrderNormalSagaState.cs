@@ -39,8 +39,11 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     public DateTimeOffset? PaymentExpiresAt { get; set; }
 
     // Scheduled timeout tokens
-    public Guid? StepTimeoutTokenId { get; set; }
+    public Guid? ValidationExpiryTokenId { get; set; }
     public Guid? PaymentExpiryTokenId { get; set; }
+    public Guid? InventoryExpiryTokenId { get; set; }
+    public Guid? CouponExpiryTokenId { get; set; }
+    public Guid? PaymentSessionExpiryTokenId { get; set; }
 
     // Failure info
     public string? FailureStep { get; set; }
