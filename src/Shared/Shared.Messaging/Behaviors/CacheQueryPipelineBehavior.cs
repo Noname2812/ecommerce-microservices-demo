@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Cache.Abstractions;
 using Shared.Cache.Attributes;
+using Shared.Cache.Resilience;
 using Shared.Kernel.Primitives;
 using System.Collections.Concurrent;
 using System.Diagnostics;

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Shared.Cache;
 using Shared.Cache.Abstractions;
 using Shared.Cache.Attributes;
+using Shared.Cache.Resilience;
 using Shared.Kernel.Primitives;
 using System.Reflection;
 

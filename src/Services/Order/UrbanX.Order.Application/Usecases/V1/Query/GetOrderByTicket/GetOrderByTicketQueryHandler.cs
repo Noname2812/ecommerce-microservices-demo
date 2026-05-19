@@ -25,24 +25,34 @@ public sealed class GetOrderByTicketQueryHandler(
         GetOrderByTicketQuery query, CancellationToken ct)
     {
         var cacheKey = CacheKey(query.TicketId);
-        var cached = await cache.GetAsync<OrderTicketStatusDto>(cacheKey, ct);
-        if (cached is not null)
-            return Result.Success(cached);
 
-        var result = await LoadTicketStatusAsync(query, ct);
-
-        if (result.IsSuccess && result.Value is { } dto)
+        var options = new GetOrSetOptions<Result<OrderTicketStatusDto>>
         {
-            var ttl = IsTerminal(dto.Status)
-                ? TimeSpan.FromSeconds(_opts.TerminalTtlSeconds)
-                : TimeSpan.FromSeconds(_opts.NonTerminalTtlSeconds);
-            await cache.SetAsync(cacheKey, dto, ttl, ct);
-        }
+            UseSingleFlight = true,
+            // Polling TTL is short (2s default for non-terminal) — distributed lock
+            // overhead exceeds the benefit of cross-process deduplication.
+            UseDistributedLock = false,
+            ExpirySelector = ResolveTtl,
+        };
 
-        return result;
+        var result = await cache.GetOrSetAsync(
+            cacheKey,
+            innerCt => LoadTicketStatusAsync(query, innerCt),
+            options,
+            ct);
+
+        return result ?? Result.Failure<OrderTicketStatusDto>(OrderErrors.TicketNotFound);
     }
 
-    private async Task<Result<OrderTicketStatusDto>> LoadTicketStatusAsync(
+    private TimeSpan ResolveTtl(Result<OrderTicketStatusDto> result)
+    {
+        if (result.IsSuccess && result.Value is { } dto && IsTerminal(dto.Status))
+            return TimeSpan.FromSeconds(_opts.TerminalTtlSeconds);
+
+        return TimeSpan.FromSeconds(_opts.NonTerminalTtlSeconds);
+    }
+
+    private async Task<Result<OrderTicketStatusDto>?> LoadTicketStatusAsync(
         GetOrderByTicketQuery query, CancellationToken ct)
     {
         var order = await orderRepository.GetByIdAsync(query.TicketId, ct);

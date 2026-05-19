@@ -131,7 +131,7 @@ namespace Shared.Messaging.DependencyInjection.Extensions
             Assembly assembly)
         {
             services.AddMemoryCache();
-            services.AddSingleton<RedisCircuitBreaker>();
+            // RedisCircuitBreaker is registered by Shared.Cache (AddSharedCache).
 
             services.AddHttpContextAccessor();
             services.AddScoped<IUserContext, UserHttpContext>();

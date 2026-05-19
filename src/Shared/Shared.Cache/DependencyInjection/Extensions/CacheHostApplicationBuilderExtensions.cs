@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Shared.Cache.Abstractions;
 using Shared.Cache.DependencyInjection.Options;
 using Shared.Cache.Implementations;
+using Shared.Cache.Resilience;
 using StackExchange.Redis;
 
 namespace Shared.Cache.DependencyInjection.Extensions;
@@ -48,6 +49,10 @@ public static class CacheHostApplicationBuilderExtensions
                 var name = cfg[$"{CacheOptions.SectionName}:InstanceName"];
                 opt.InstanceName = string.IsNullOrWhiteSpace(name) ? "urbanx:" : $"{name}:";
             });
+
+        // Circuit breaker is shared across cache, lock, and pipeline behaviors —
+        // a single failure in any path opens the circuit for all of them.
+        builder.Services.AddSingleton<RedisCircuitBreaker>();
 
         builder.Services.AddSingleton<ICacheService, RedisCacheService>();
         builder.Services.AddSingleton<IDistributedLockService, RedisDistributedLockService>();

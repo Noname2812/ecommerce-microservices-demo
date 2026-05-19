@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace Shared.Messaging.Behaviors;
+namespace Shared.Cache.Resilience;
 
 /// <summary>
 /// In-process circuit breaker for Redis health tracking.
@@ -41,7 +41,6 @@ public sealed class RedisCircuitBreaker
 
             if (DateTimeOffset.UtcNow - _openedAt >= TimeSpan.FromSeconds(CooldownSeconds))
             {
-                // Cooldown expired — enter probe period; let requests through.
                 _probePeriod = true;
                 return false;
             }
@@ -72,7 +71,6 @@ public sealed class RedisCircuitBreaker
         {
             if (_probePeriod)
             {
-                // Probe failed — re-open immediately with a fresh cooldown.
                 _open = true;
                 _probePeriod = false;
                 _openedAt = DateTimeOffset.UtcNow;
