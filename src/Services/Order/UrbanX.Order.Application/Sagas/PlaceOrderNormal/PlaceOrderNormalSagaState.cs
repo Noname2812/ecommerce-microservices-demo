@@ -1,12 +1,13 @@
 using Shared.Messaging.Saga;
 
-namespace UrbanX.Order.Application.Sagas;
+namespace UrbanX.Order.Application.Sagas.PlaceOrderNormal;
 
 public sealed class PlaceOrderNormalSagaState : SagaStateBase
 {
     // Inherited: CorrelationId (= OrderId), CurrentState, CreatedAt, UpdatedAt, Version
 
     public Guid OrderId { get; set; }
+    public required string OrderNumber { get; set; }
     public string UserId { get; set; } = default!;
     public string IdempotencyKey { get; set; } = default!;
     public string? CouponCode { get; set; }
@@ -39,7 +40,6 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     public DateTimeOffset? PaymentExpiresAt { get; set; }
 
     // Scheduled timeout tokens
-    public Guid? ValidationExpiryTokenId { get; set; }
     public Guid? PaymentExpiryTokenId { get; set; }
     public Guid? InventoryExpiryTokenId { get; set; }
     public Guid? CouponExpiryTokenId { get; set; }

@@ -17,7 +17,7 @@ using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 
-namespace UrbanX.Order.Application.Sagas;
+namespace UrbanX.Order.Application.Sagas.PlaceOrderNormal;
 
 /// <summary>
 /// Orchestrates the place-normal-order flow:
@@ -44,9 +44,9 @@ public sealed class PlaceOrderNormalSagaStateMachine
     public Event<PaymentSessionCompletedV1> PaymentCompleted       { get; private set; } = default!;
 
     // ── Schedules ─────────────────────────────────────────────────────────────
-    public Schedule<PlaceOrderNormalSagaState, SagaStepTimeoutV1> InventoryTimeout { get; private set; } = default!;
-    public Schedule<PlaceOrderNormalSagaState, SagaStepTimeoutV1> CouponTimeout { get; private set; } = default!;
-    public Schedule<PlaceOrderNormalSagaState, SagaStepTimeoutV1> PaymentSessionTimeout { get; private set; } = default!;
+    public Schedule<PlaceOrderNormalSagaState, InventoryStepTimeoutV1> InventoryTimeout { get; private set; } = default!;
+    public Schedule<PlaceOrderNormalSagaState, CouponStepTimeoutV1> CouponTimeout { get; private set; } = default!;
+    public Schedule<PlaceOrderNormalSagaState, PaymentSessionStepTimeoutV1> PaymentSessionTimeout { get; private set; } = default!;
     public Schedule<PlaceOrderNormalSagaState, PaymentExpiryTimeoutV1> PaymentExpiry { get; private set; } = default!;
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -79,7 +79,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
                         .ThenAsync(ctx => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken))
                         .TransitionTo(Faulted),
                     ok => ok
-                        .Schedule(InventoryTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .Schedule(InventoryTimeout, ctx => new InventoryStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
                         .PublishAsync(ctx => ctx.Init<ReserveInventoryRequestedV1>(BuildInventoryRequest(ctx.Saga)))
                         .TransitionTo(InventoryReserving)));
 
@@ -91,11 +91,11 @@ public sealed class PlaceOrderNormalSagaStateMachine
                 .IfElse(
                     ctx => ctx.Saga.CouponCode != null,
                     hasCoupon => hasCoupon
-                        .Schedule(CouponTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .Schedule(CouponTimeout, ctx => new CouponStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
                         .PublishAsync(ctx => ctx.Init<ClaimCouponRequestedV1>(BuildCouponRequest(ctx.Saga)))
                         .TransitionTo(CouponClaiming),
                     noCoupon => noCoupon
-                        .Schedule(PaymentSessionTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                        .Schedule(PaymentSessionTimeout, ctx => new PaymentSessionStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
                         .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(BuildPaymentSessionRequest(ctx.Saga)))
                         .TransitionTo(PaymentSessionCreating)),
 
@@ -128,7 +128,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
                     StampInstance(ctx.Saga);
                 })
                 .Unschedule(CouponTimeout)
-                .Schedule(PaymentSessionTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
+                .Schedule(PaymentSessionTimeout, ctx => new PaymentSessionStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
                 .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(BuildPaymentSessionRequest(ctx.Saga)))
                 .TransitionTo(PaymentSessionCreating),
 
@@ -152,11 +152,6 @@ public sealed class PlaceOrderNormalSagaStateMachine
                 })
                 .PublishAsync(ctx => ctx.Init<InventoryReleaseRequestedV1>(BuildInventoryRelease(ctx.Saga)))
                 .TransitionTo(Compensating));
-
-        // ── PaymentSessionCreating ─────────────────────────────────────────────
-        WhenEnter(PaymentSessionCreating, b => b
-            .Schedule(StepTimeout, ctx => new SagaStepTimeoutV1 { OrderId = ctx.Saga.OrderId })
-            .PublishAsync(ctx => ctx.Init<CreatePaymentSessionV1>(BuildPaymentSessionRequest(ctx.Saga))));
 
         During(PaymentSessionCreating,
             When(PaymentSessionCreated)
@@ -430,14 +425,10 @@ public sealed class PlaceOrderNormalSagaStateMachine
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var publisher = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
-        var repo      = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
-
-        var order       = await repo.GetByIdAsync(saga.OrderId, ct);
-        var orderNumber = order?.OrderNumber ?? string.Empty;
 
         await publisher.Publish(new OrderIntegrationEvents.OrderCancelledV1(
             saga.OrderId,
-            orderNumber,
+            saga.OrderNumber,
             reason
         ), msgCtx =>
         {
@@ -451,6 +442,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
     {
         saga.CorrelationId       = msg.OrderId;
         saga.OrderId             = msg.OrderId;
+        saga.OrderNumber         = msg.OrderNumber;
         saga.UserId              = msg.UserId;
         saga.IdempotencyKey      = msg.IdempotencyKey;
         saga.CouponCode          = msg.CouponCode;

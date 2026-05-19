@@ -60,7 +60,7 @@ namespace Shared.Messaging.DependencyInjection.Extensions
 
                 bus.UsingRabbitMq((ctx, cfg) =>
                 {
-                    cfg.UsePublishMessageScheduler();
+                    cfg.UseDelayedMessageScheduler();
                     // Exclude base types
                     cfg.PublishTopology.GetMessageTopology<IIntegrationEvent>().Exclude = true;
                     cfg.PublishTopology.GetMessageTopology<IntegrationEventBase>().Exclude = true;

@@ -10,12 +10,12 @@ using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.DependencyInjection.Options;
-using UrbanX.Order.Application.Sagas;
 using UrbanX.Order.Application.Services;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
 using OrderDtos = Shared.Contract.Dtos.Order.OrderDtos;
+using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
 
 namespace UrbanX.Services.Order.UnitTests.Application.Sagas;
 

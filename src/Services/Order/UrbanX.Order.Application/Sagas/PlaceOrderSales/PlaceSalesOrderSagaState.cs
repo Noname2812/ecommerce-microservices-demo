@@ -1,6 +1,6 @@
 using Shared.Messaging.Saga;
 
-namespace UrbanX.Order.Application.Sagas;
+namespace UrbanX.Order.Application.Sagas.PlaceOrderSales;
 
 // Placed in Application (not Domain) because SagaStateBase depends on Shared.Messaging/MassTransit.
 public sealed class PlaceSalesOrderSagaState : SagaStateBase
@@ -62,6 +62,8 @@ public sealed class PlaceSalesOrderSagaState : SagaStateBase
     public string? FailureReason { get; set; }
 
     // ── Scheduled timeout tokens ──────────────────────────────────────────────
-    public Guid? StepTimeoutTokenId { get; set; }
+    public Guid? InventoryStepTimeoutTokenId { get; set; }
+    public Guid? CouponStepTimeoutTokenId { get; set; }
+    public Guid? PaymentSessionStepTimeoutTokenId { get; set; }
     public Guid? PaymentExpiryTokenId { get; set; }
 }

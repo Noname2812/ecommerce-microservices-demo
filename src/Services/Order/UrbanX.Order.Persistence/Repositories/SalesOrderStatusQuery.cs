@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using UrbanX.Order.Application.Abstractions;
-using UrbanX.Order.Application.Sagas;
 
 namespace UrbanX.Order.Persistence.Repositories;
 

@@ -11,7 +11,7 @@ using SalesOrderItemSnapshot = Shared.Contract.Messaging.PlaceOrderSaga.OrderIte
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.DependencyInjection.Options;
-using UrbanX.Order.Application.Sagas;
+using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.Application.Services;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;

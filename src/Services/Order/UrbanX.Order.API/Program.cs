@@ -7,11 +7,12 @@ using Shared.Messaging.Idempotency;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
 using UrbanX.Order.Application.Messaging;
-using UrbanX.Order.Application.Sagas;
 using UrbanX.Order.API.Middleware;
 using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Order.Persistence;
 using UrbanX.Order.Persistence.DependencyInjection.Extensions;
+using UrbanX.Order.Application.Sagas.PlaceOrderSales;
+using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
 
 var builder = WebApplication.CreateBuilder(args);
 

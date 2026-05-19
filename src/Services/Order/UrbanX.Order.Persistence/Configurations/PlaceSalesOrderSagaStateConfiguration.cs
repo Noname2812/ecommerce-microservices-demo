@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shared.Messaging.Saga;
-using UrbanX.Order.Application.Sagas;
+using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.Persistence.Constants;
 
 namespace UrbanX.Order.Persistence.Configurations;

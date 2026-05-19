@@ -34,14 +34,14 @@ public sealed class PlaceOrderCommandHandler(
             return Result.Failure<Guid>(slot.Error);
 
         var orderId = Guid.NewGuid();
-
+        var orderNumber = OrderNumberGenerator.Generate("ORD");
         try
         {
             var order = OrderFactory.Build(
                 cmd,
                 userId,
                 orderId,
-                OrderNumberGenerator.Generate("ORD"));
+                orderNumber);
 
             orderRepository.Add(order);
 
@@ -49,6 +49,7 @@ public sealed class PlaceOrderCommandHandler(
                 new PlaceOrderRequestedV1
                 {
                     OrderId = orderId,
+                    OrderNumber = orderNumber,
                     CorrelationId = orderId.ToString("D"),
                     UserId = userId.ToString("D"),
                     IdempotencyKey = cmd.IdempotencyKey,

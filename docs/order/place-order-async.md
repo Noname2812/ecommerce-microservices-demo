@@ -312,7 +312,7 @@ public record OrderConfirmedV1 : IntegrationEventBase {
 
 ## Phase 4 — Saga refactor
 
-### File: `Order.Application/Sagas/PlaceOrderNormalSagaStateMachine.cs`
+### File: `Order.Application/Sagas/PlaceOrderNormal/PlaceOrderNormalSagaStateMachine.cs`
 
 **States mới (thêm vào đầu):**
 - `Validating`
@@ -742,8 +742,8 @@ return redis.call('DECR', KEYS[1])
 - `Order.Application/Usecases/V1/Command/PlaceOrder/PlaceOrderCommandHandler.cs` (Phase 2)
 - `Order.Application/Usecases/V1/Command/PlaceSalesOrder/PlaceSalesOrderCommandHandler.cs` (Phase 2)
 - `Order.Application/Usecases/V1/Command/CancelOrder/CancelOrderCommandHandler.cs` (Phase 7.2)
-- `Order.Application/Sagas/PlaceOrderNormalSagaStateMachine.cs` + state (Phase 4)
-- `Order.Application/Sagas/PlaceSalesOrderSagaStateMachine.cs` + state (Phase 4)
+- `Order.Application/Sagas/PlaceOrderNormal/PlaceOrderNormalSagaStateMachine.cs` + state (Phase 4)
+- `Order.Application/Sagas/PlaceOrderSales/PlaceSalesOrderSagaStateMachine.cs` + state (Phase 4)
 - `Order.Application/Usecases/V1/Command/Common/OrderFactory.cs` (Phase 4)
 - `Order.API/Program.cs` (Phase 3.4, 7.3)
 - `Order.API/Apis/OrderApis.cs` (Phase 2, 6)

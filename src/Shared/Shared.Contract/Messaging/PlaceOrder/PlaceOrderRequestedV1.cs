@@ -8,6 +8,7 @@ public record PlaceOrderRequestedV1 : IntegrationEventBase
     public override string Source => "order-service";
 
     public required Guid OrderId { get; init; }
+    public required string OrderNumber { get; init; }
     public required string UserId { get; init; }
     public required string IdempotencyKey { get; init; }
     public string? CouponCode { get; init; }

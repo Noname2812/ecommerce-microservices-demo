@@ -195,9 +195,10 @@ until Promotion ships.
 Application/Services/
   ISaleEligibilityService.cs                 (new)
   ICouponLockService.cs                      (new)
-Application/Sagas/
+Application/Sagas/PlaceOrderSales/
   PlaceSalesOrderSagaState.cs                (rewrite)
   PlaceSalesOrderSagaStateMachine.cs         (rewrite)
+  SagaTimeouts.cs                            (new)
 Application/Usecases/V1/Command/Common/
   OrderFactory.cs                            (add BuildSalesFromSaga, SalesPricingSnapshot)
 

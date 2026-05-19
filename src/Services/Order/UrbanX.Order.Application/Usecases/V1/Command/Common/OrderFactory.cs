@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Shared.Contract.Dtos.Order;
 using Shared.Contract.Messaging.PlaceOrder;
-using Shared.Contract.Messaging.PlaceOrderSaga;
 using UrbanX.Order.Application.Clients;
-using UrbanX.Order.Application.Sagas;
+using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
+using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.ValueObjects;

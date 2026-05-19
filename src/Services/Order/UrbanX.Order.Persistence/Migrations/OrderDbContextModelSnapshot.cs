@@ -240,7 +240,7 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.ToTable("outbox_state", (string)null);
                 });
 
-            modelBuilder.Entity("UrbanX.Order.Application.Sagas.PlaceOrderNormalSagaState", b =>
+            modelBuilder.Entity("UrbanX.Order.Application.Sagas.PlaceOrderNormal.PlaceOrderNormalSagaState", b =>
                 {
                     b.Property<Guid>("CorrelationId")
                         .HasColumnType("uuid")
@@ -259,6 +259,10 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("coupon_discount");
+
+                    b.Property<Guid?>("CouponExpiryTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coupon_expiry_token_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -308,6 +312,10 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("idempotency_key");
 
+                    b.Property<Guid?>("InventoryExpiryTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inventory_expiry_token_id");
+
                     b.Property<string>("ItemsJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("items_json");
@@ -316,6 +324,11 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("order_number");
+
                     b.Property<DateTimeOffset?>("PaymentExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("payment_expires_at");
@@ -323,6 +336,10 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.Property<Guid?>("PaymentExpiryTokenId")
                         .HasColumnType("uuid")
                         .HasColumnName("payment_expiry_token_id");
+
+                    b.Property<Guid?>("PaymentSessionExpiryTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_session_expiry_token_id");
 
                     b.Property<string>("PaymentSessionId")
                         .HasMaxLength(255)
@@ -356,10 +373,6 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("shipping_fee");
-
-                    b.Property<Guid?>("StepTimeoutTokenId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("step_timeout_token_id");
 
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
@@ -403,7 +416,7 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.ToTable("place_order_normal_saga_states", (string)null);
                 });
 
-            modelBuilder.Entity("UrbanX.Order.Application.Sagas.PlaceSalesOrderSagaState", b =>
+            modelBuilder.Entity("UrbanX.Order.Application.Sagas.PlaceOrderSales.PlaceSalesOrderSagaState", b =>
                 {
                     b.Property<Guid>("CorrelationId")
                         .HasColumnType("uuid")
@@ -426,6 +439,10 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.Property<bool>("CouponLocked")
                         .HasColumnType("boolean")
                         .HasColumnName("coupon_locked");
+
+                    b.Property<Guid?>("CouponStepTimeoutTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coupon_step_timeout_token_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -485,6 +502,10 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("idempotency_key");
 
+                    b.Property<Guid?>("InventoryStepTimeoutTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inventory_step_timeout_token_id");
+
                     b.Property<string>("ItemsJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("items_json");
@@ -514,6 +535,10 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("payment_session_id");
+
+                    b.Property<Guid?>("PaymentSessionStepTimeoutTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_session_step_timeout_token_id");
 
                     b.Property<string>("PaymentUrl")
                         .HasMaxLength(2048)
@@ -550,10 +575,6 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("shipping_fee");
-
-                    b.Property<Guid?>("StepTimeoutTokenId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("step_timeout_token_id");
 
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)

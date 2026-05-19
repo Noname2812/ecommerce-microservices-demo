@@ -1,6 +1,7 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using UrbanX.Order.Application.Sagas;
+using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
+using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.Domain.Models;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
 

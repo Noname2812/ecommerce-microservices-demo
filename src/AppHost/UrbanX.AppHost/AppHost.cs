@@ -18,7 +18,8 @@ var redis = builder.AddRedis("redis").WithRedisCommander();
 
 // Add RabbitMQ
 var rabbitMq = builder.AddRabbitMQ("messaging")
-    .WithManagementPlugin();
+    .WithManagementPlugin()
+    .WithImage("masstransit/rabbitmq");
 
 // Add Services
 var identityService = builder.AddProject<Projects.UrbanX_Identity_API>("identity")
