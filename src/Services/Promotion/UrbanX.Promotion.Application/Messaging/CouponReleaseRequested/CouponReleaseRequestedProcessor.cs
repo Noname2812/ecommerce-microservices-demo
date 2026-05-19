@@ -2,7 +2,7 @@ using MediatR;
 using Shared.Contract.Messaging.PlaceOrder;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
 
-namespace UrbanX.Promotion.Application.Messaging;
+namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 public sealed class CouponReleaseRequestedProcessor(IMediator mediator)
 {

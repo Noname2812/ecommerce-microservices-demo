@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 
-namespace UrbanX.Promotion.Application.Messaging;
+namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 internal sealed class CouponReleaseRequestedConsumerOptionsValidator : IValidateOptions<CouponReleaseRequestedConsumerOptions>
 {

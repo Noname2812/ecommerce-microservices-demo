@@ -1,6 +1,6 @@
 using Shared.Kernel.Primitives;
 
-namespace UrbanX.Promotion.Application.Messaging;
+namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 /// <summary>
 /// Thrown when <see cref="Usecases.V1.Command.ReleaseCouponClaimCommand"/> returns failure inside the coupon compensation pipeline.

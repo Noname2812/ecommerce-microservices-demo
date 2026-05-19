@@ -21,12 +21,12 @@ Server-side discount authority for the UrbanX platform. Handles creation, lifecy
 
 ## Message Consumers (Saga)
 
-Hai consumer xử lý event từ `PlaceOrderSaga` qua RabbitMQ — tái sử dụng các MediatR command đã có:
+Consumer xử lý event từ `PlaceOrderSaga` qua RabbitMQ — tái sử dụng các MediatR command đã có:
 
 | Consumer | Event consumed | Response events |
 |---|---|---|
-| `RedeemSalePromotionRequestedConsumer` | `RedeemSalePromotionRequestedV1` | `PromotionRedeemedV1` / `PromotionRedeemFailedV1` |
 | `ClaimCouponRequestedConsumer` | `ClaimCouponRequestedV1` | `CouponClaimedV1` / `CouponClaimFailedV1` |
+| `CouponReleaseRequestedConsumer` | `CouponReleaseRequestedV1` (compensation) | — |
 
 Chi tiết: [promotion-saga-consumers.md](promotion-saga-consumers.md)
 

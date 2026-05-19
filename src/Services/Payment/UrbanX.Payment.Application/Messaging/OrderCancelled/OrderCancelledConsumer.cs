@@ -7,7 +7,7 @@ using UrbanX.Payment.Application.Usecases.V1.Command.CreateRefund;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.ValueObjects;
 
-namespace UrbanX.Payment.Application.Messaging;
+namespace UrbanX.Payment.Application.Messaging.OrderCancelled;
 
 public sealed class OrderCancelledConsumer
     : IntegrationEventConsumerBase<OrderIntegrationEvents.OrderCancelledV1, OrderCancelledConsumer>

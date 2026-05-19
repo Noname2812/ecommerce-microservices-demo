@@ -2,9 +2,9 @@ using MassTransit;
 using MassTransit.RabbitMqTransport;
 using Microsoft.Extensions.Options;
 using UrbanX.Promotion.Application.DependencyInjection.Options;
-using UrbanX.Promotion.Application.Messaging.Consumers;
+using UrbanX.Promotion.Application.Messaging.ClaimCouponRequested;
 
-namespace UrbanX.Promotion.API.Messaging;
+namespace UrbanX.Promotion.API.Messaging.ClaimCouponRequested;
 
 public sealed class ClaimCouponRequestedConsumerDefinition
     : ConsumerDefinition<ClaimCouponRequestedConsumer>

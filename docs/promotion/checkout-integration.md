@@ -47,19 +47,17 @@ POST /api/v1/promotions/redeem
 
 Dùng cho flash sale. Order API trả `202 Accepted` ngay, saga xử lý bất đồng bộ.
 
-1. Order saga vào state `PromotionRedeeming` → publish `RedeemSalePromotionRequestedV1`
-2. `RedeemSalePromotionRequestedConsumer` (Promotion) consume → gọi `RedeemPromotionCommand` qua MediatR
-3. Publish response:
-   - Thành công → `PromotionRedeemedV1` (saga chuyển `InventoryReserving`)
-   - Thất bại → `PromotionRedeemFailedV1` (saga chuyển `Compensating`)
+> **Cập nhật 2026-05:** Bước `PromotionRedeeming` qua `RedeemSalePromotionRequestedV1` đã được **gỡ** khỏi saga (consumer cũ `RedeemSalePromotionRequestedConsumer` không còn tồn tại). Saga hiện chỉ tương tác với Promotion qua bước `CouponClaiming` (nếu order có coupon). Nếu trong tương lai cần khôi phục bước redeem quota flash-sale qua saga, restore consumer từ git history.
 
 Nếu order có coupon, sau khi Inventory reserve xong:
 
-4. Saga vào state `CouponClaiming` → publish `ClaimCouponRequestedV1`
-5. `ClaimCouponRequestedConsumer` (Promotion) consume → gọi `ClaimCouponCommand` qua MediatR
-6. Publish response:
-   - Thành công → `CouponClaimedV1` (saga chuyển `PaymentProcessing`)
+1. Saga vào state `CouponClaiming` → publish `ClaimCouponRequestedV1`
+2. `ClaimCouponRequestedConsumer` (Promotion) consume → gọi `ClaimCouponCommand` qua MediatR
+3. Publish response:
+   - Thành công → `CouponClaimedV1` (saga chuyển `PaymentSessionCreating`)
    - Thất bại → `CouponClaimFailedV1` (saga chuyển `Compensating`)
+
+Khi saga fail sau khi đã claim coupon, Order saga publish `CouponReleaseRequestedV1` vào fanout `compensation.events` → `CouponReleaseRequestedConsumer` release claim qua `ReleaseCouponClaimCommand`.
 
 Chi tiết consumers: [promotion-saga-consumers.md](promotion-saga-consumers.md)
 

@@ -1,5 +1,5 @@
 using Shared.Kernel.Primitives;
-using UrbanX.Promotion.Application.Messaging;
+using UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 namespace UrbanX.Services.Promotion.UnitTests.Messaging;
 

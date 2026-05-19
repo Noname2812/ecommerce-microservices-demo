@@ -2,7 +2,7 @@ using MediatR;
 using Moq;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
-using UrbanX.Promotion.Application.Messaging;
+using UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
 
 namespace UrbanX.Services.Promotion.UnitTests.Messaging;

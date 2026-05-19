@@ -5,7 +5,7 @@ using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Messaging;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
 
-namespace UrbanX.Promotion.Application.Messaging.Consumers;
+namespace UrbanX.Promotion.Application.Messaging.ClaimCouponRequested;
 
 public sealed class ClaimCouponRequestedConsumer(
     ISender mediator,

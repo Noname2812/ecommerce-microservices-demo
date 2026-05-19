@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Promotion.Application.Messaging;
+namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 /// <summary>Maps to <c>UseMessageRetry(r =&gt; r.Interval(Intervals, TimeSpan.FromSeconds(IntervalSeconds)))</c>.</summary>
 public sealed class CouponReleaseRequestedRetryOptions

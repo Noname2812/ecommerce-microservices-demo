@@ -5,7 +5,8 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Payment.Application.DependencyInjection.Extensions;
-using UrbanX.Payment.Application.Messaging;
+using UrbanX.Payment.Application.Messaging.CreatePaymentSession;
+using UrbanX.Payment.Application.Messaging.OrderCancelled;
 using UrbanX.Payment.Persistence;
 using UrbanX.Payment.Persistence.DependencyInjection.Extensions;
 
@@ -30,8 +31,8 @@ builder.Services
         builder.Configuration,
         configureBus: bus =>
         {
-            bus.AddConsumer<OrderCreatedConsumer>();
             bus.AddConsumer<OrderCancelledConsumer>();
+            bus.AddConsumer<CreatePaymentSessionConsumer>();
         });
 
 // Health checks

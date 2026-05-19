@@ -10,11 +10,12 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Outbox.DependencyInjection.Extensions;
 using StackExchange.Redis;
 using UrbanX.Promotion.API.SeedData;
-using UrbanX.Promotion.API.Messaging;
+using UrbanX.Promotion.API.Messaging.ClaimCouponRequested;
+using UrbanX.Promotion.API.Messaging.CouponReleaseRequested;
 using UrbanX.Promotion.Application.DependencyInjection.Extensions;
 using UrbanX.Promotion.Application.Jobs;
-using UrbanX.Promotion.Application.Messaging;
-using UrbanX.Promotion.Application.Messaging.Consumers;
+using UrbanX.Promotion.Application.Messaging.ClaimCouponRequested;
+using UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 using UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Application.Telemetry;
@@ -50,7 +51,6 @@ builder.Services
         configureBus: bus =>
         {
             bus.AddConsumer<CouponReleaseRequestedConsumer>(typeof(CouponReleaseRequestedConsumerDefinition));
-            bus.AddConsumer<RedeemSalePromotionRequestedConsumer>(typeof(RedeemSalePromotionRequestedConsumerDefinition));
             bus.AddConsumer<ClaimCouponRequestedConsumer>(typeof(ClaimCouponRequestedConsumerDefinition));
         });
 

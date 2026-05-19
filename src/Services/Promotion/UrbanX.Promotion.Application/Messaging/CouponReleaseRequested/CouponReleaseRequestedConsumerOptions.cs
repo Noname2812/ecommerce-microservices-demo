@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Promotion.Application.Messaging;
+namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 /// <summary>
 /// Receive endpoint tuning for coupon release requested consumer endpoint:

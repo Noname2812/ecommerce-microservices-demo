@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Messaging;
 
-namespace UrbanX.Promotion.Application.Messaging;
+namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 /// <summary>
 /// Logger-only base ctor: work is delegated to <see cref="CouponReleaseRequestedProcessor"/>, which gets its own scoped <c>IMediator</c> from DI.

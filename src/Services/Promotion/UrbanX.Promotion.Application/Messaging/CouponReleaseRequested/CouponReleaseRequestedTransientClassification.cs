@@ -1,4 +1,4 @@
-namespace UrbanX.Promotion.Application.Messaging;
+namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
 
 /// <summary>
 /// Adds Promotion-specific transient classification while delegating default transient rules to the caller.
