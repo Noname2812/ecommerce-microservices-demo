@@ -21,7 +21,22 @@ builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 // Database
+// Bounded Npgsql pool keeps the sum across services below PostgreSQL max_connections (see AppHost).
+// Sized for ConcurrentMessageLimit of the 3 inventory consumers + API + outbox dispatcher headroom.
 builder.AddNpgsqlDbContext<InventoryDbContext>("inventorydb",
+    configureSettings: settings =>
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(settings.ConnectionString)
+        {
+            MaxPoolSize = 40,
+            MinPoolSize = 2,
+            ConnectionIdleLifetime = 60,
+            ConnectionPruningInterval = 10,
+            Timeout = 15,
+            CommandTimeout = 30
+        };
+        settings.ConnectionString = csb.ConnectionString;
+    },
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 
 // Application (options for ConsumerDefinition, MediatR, …) — register before MassTransit resolves definitions at startup

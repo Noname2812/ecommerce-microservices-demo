@@ -22,7 +22,22 @@ builder.Services.AddHttpIdempotency(o => o.ServiceId = "order");
 builder.Services.AddOpenApi();
 
 // Database
-builder.AddNpgsqlDbContext<OrderDbContext>("orderdb", 
+// Bounded Npgsql pool keeps the sum across services below PostgreSQL max_connections (see AppHost).
+// Idle connections release after 60s so background spikes don't permanently hold capacity.
+builder.AddNpgsqlDbContext<OrderDbContext>("orderdb",
+    configureSettings: settings =>
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(settings.ConnectionString)
+        {
+            MaxPoolSize = 40,
+            MinPoolSize = 2,
+            ConnectionIdleLifetime = 60,
+            ConnectionPruningInterval = 10,
+            Timeout = 15,
+            CommandTimeout = 30
+        };
+        settings.ConnectionString = csb.ConnectionString;
+    },
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 // Messaging
 builder.Services

@@ -115,6 +115,65 @@ internal sealed class RedisCacheService : ICacheService
         }
     }
 
+    public async Task<IReadOnlyList<T?>> GetManyAsync<T>(IReadOnlyList<string> keys, CancellationToken ct = default)
+    {
+        if (keys.Count == 0) return Array.Empty<T?>();
+
+        var results = new T?[keys.Count];
+        if (_circuit.ShouldSkipRedis()) return results;
+
+        try
+        {
+            var redisKeys = new RedisKey[keys.Count];
+            for (var i = 0; i < keys.Count; i++)
+                redisKeys[i] = Prefix(keys[i]);
+
+            var values = await Db.StringGetAsync(redisKeys);
+            _circuit.RecordSuccess();
+
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (values[i].HasValue)
+                    results[i] = JsonSerializer.Deserialize<T>((string)values[i]!, JsonOptions);
+            }
+            return results;
+        }
+        catch (Exception ex) when (IsRedisFailure(ex))
+        {
+            _logger.LogWarning(ex, "[Cache] Redis MGET failed for {Count} keys. Falling back to all-miss.", keys.Count);
+            _circuit.RecordFailure();
+            return results;
+        }
+    }
+
+    public async Task SetManyAsync<T>(IReadOnlyDictionary<string, T> items, TimeSpan? expiry = null, CancellationToken ct = default)
+    {
+        if (items.Count == 0) return;
+        if (_circuit.ShouldSkipRedis()) return;
+
+        try
+        {
+            var ttl = expiry ?? _options.DefaultExpiry;
+            // CreateBatch pipelines all commands in a single round-trip; each SET carries its own TTL
+            // (MSET doesn't support per-key expiry).
+            var batch = Db.CreateBatch();
+            var tasks = new List<Task>(items.Count);
+            foreach (var (key, value) in items)
+            {
+                var json = JsonSerializer.Serialize(value, JsonOptions);
+                tasks.Add(batch.StringSetAsync(Prefix(key), json, ttl));
+            }
+            batch.Execute();
+            await Task.WhenAll(tasks);
+            _circuit.RecordSuccess();
+        }
+        catch (Exception ex) when (IsRedisFailure(ex))
+        {
+            _logger.LogWarning(ex, "[Cache] Redis batch SET failed for {Count} keys. Cache writes skipped.", items.Count);
+            _circuit.RecordFailure();
+        }
+    }
+
     public async Task RemoveByPatternAsync(string pattern, CancellationToken ct = default)
     {
         if (_circuit.ShouldSkipRedis()) return;

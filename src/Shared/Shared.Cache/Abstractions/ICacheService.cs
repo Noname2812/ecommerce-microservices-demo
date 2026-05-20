@@ -9,6 +9,18 @@ public interface ICacheService
     Task RemoveAsync(string key, CancellationToken ct = default);
     Task<bool> ExistsAsync(string key, CancellationToken ct = default);
 
+    /// <summary>
+    /// Bulk GET via Redis MGET — single round-trip, returns one entry per key in input order.
+    /// Missing keys return <c>default(T)</c>. Falls back to all-misses if the circuit is open.
+    /// </summary>
+    Task<IReadOnlyList<T?>> GetManyAsync<T>(IReadOnlyList<string> keys, CancellationToken ct = default);
+
+    /// <summary>
+    /// Bulk SET via pipelined StringSet (each entry shares <paramref name="expiry"/>). No-op when the
+    /// circuit is open or the input is empty. Failures degrade silently — cache writes are best-effort.
+    /// </summary>
+    Task SetManyAsync<T>(IReadOnlyDictionary<string, T> items, TimeSpan? expiry = null, CancellationToken ct = default);
+
     /// <summary>Cache-aside: get from cache or invoke factory and store result.</summary>
     /// <remarks>
     /// Forwards to <see cref="GetOrSetAsync{T}(string, Func{CancellationToken, Task{T}}, GetOrSetOptions{T}, CancellationToken)"/>

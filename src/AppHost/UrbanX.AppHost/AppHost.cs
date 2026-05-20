@@ -1,7 +1,27 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Add PostgreSQL
+// Connection budget for 4c/8GB VPS:
+//   max_connections=300 → Npgsql pools (Order 40 + Inventory 40 + Catalog 30 + Identity 20 + Payment 20 + Promotion 20 = 170)
+//   leaves ~130 headroom for outbox dispatchers, TTL jobs, and admin tooling (pgWeb, migrations).
+//
+// Write-throughput tuning:
+//   synchronous_commit=off batches WAL fsyncs (≤200ms data loss on crash, acceptable for benchmarks).
+//   shared_buffers=2GB + effective_cache_size=5GB sized for the 8GB host minus app/runtime overhead.
 var postgres = builder.AddPostgres("postgres")
+    .WithArgs(
+        "-c", "max_connections=300",
+        "-c", "shared_buffers=2GB",
+        "-c", "effective_cache_size=5GB",
+        "-c", "work_mem=16MB",
+        "-c", "maintenance_work_mem=256MB",
+        "-c", "synchronous_commit=off",
+        "-c", "wal_buffers=16MB",
+        "-c", "wal_writer_delay=200ms",
+        "-c", "checkpoint_completion_target=0.9",
+        "-c", "max_wal_size=2GB",
+        "-c", "random_page_cost=1.1",
+        "-c", "effective_io_concurrency=200")
     .WithPgWeb();
 
 var identityDb = postgres.AddDatabase("identitydb", "urbanx_identity");

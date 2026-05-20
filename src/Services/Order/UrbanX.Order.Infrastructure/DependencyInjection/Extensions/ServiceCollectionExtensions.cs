@@ -26,6 +26,11 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<CatalogClientCacheOptions>()
+            .BindConfiguration(CatalogClientCacheOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         services.AddOptions<PromotionClientOptions>()
             .BindConfiguration(PromotionClientOptions.SectionName)
             .ValidateDataAnnotations()
@@ -36,9 +41,14 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddResilientHttpClient<ICatalogServiceClient, CatalogServiceClient, CatalogClientOptions, CatalogClientResilienceOptions>(
+        // Register the raw HTTP client as a concrete typed client (no interface mapping) so the
+        // Redis caching decorator below can wrap it. The decorator implements ICatalogServiceClient
+        // and is what application code resolves.
+        services.AddResilientHttpClient<CatalogServiceClient, CatalogClientOptions, CatalogClientResilienceOptions>(
             o => o.BaseAddress,
             aspireServiceName: "catalog");
+
+        services.AddScoped<ICatalogServiceClient, CachingCatalogServiceClient>();
 
         services.AddResilientHttpClient<ISaleEligibilityService, PromotionSaleEligibilityClient, PromotionClientOptions, PromotionClientResilienceOptions>(
             o => o.BaseAddress,
@@ -49,6 +59,40 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICouponLockService, RedisCouponLockService>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Overload that registers a concrete typed <see cref="HttpClient"/> without an interface mapping.
+    /// Use when a decorator will wrap the concrete client and provide the interface registration.
+    /// </summary>
+    private static void AddResilientHttpClient<TImpl, TClientOptions, TResilience>(
+        this IServiceCollection services,
+        Func<TClientOptions, string> baseAddressSelector,
+        string aspireServiceName)
+        where TImpl : class
+        where TClientOptions : class
+        where TResilience : class, IHttpClientResilienceOptions
+    {
+        services.AddHttpClient<TImpl>()
+            .ConfigureHttpClient((sp, client) =>
+            {
+                var config  = sp.GetRequiredService<IConfiguration>();
+                var options = sp.GetRequiredService<IOptions<TClientOptions>>().Value;
+                var baseUrl = ServiceEndpointResolver.Resolve(
+                    config,
+                    aspireServiceName,
+                    baseAddressSelector(options));
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout     = Timeout.InfiniteTimeSpan;
+            })
+            .AddStandardResilienceHandler()
+            .Configure((options, serviceProvider) =>
+            {
+                var resilience    = serviceProvider.GetRequiredService<IOptions<TResilience>>().Value;
+                var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+                var logger        = loggerFactory.CreateLogger($"HttpResilience.{typeof(TImpl).Name}");
+                ApplyResilience(options, resilience, logger);
+            });
     }
 
     /// <summary>
