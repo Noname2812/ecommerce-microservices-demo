@@ -5,6 +5,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { TicketStatusPoller } from "@/features/test-order/components/TicketStatusPoller";
+import { PlaceOrderBenchmarkPanel } from "@/features/test-order/components/PlaceOrderBenchmarkPanel";
 
 const SEED_PRODUCT_ID = "00000001-0000-4000-8000-000000000001";
 const SEED_VARIANT_ID = "00000001-0000-4000-8000-000000000002";
@@ -177,7 +178,7 @@ export function TestPlaceOrderPage() {
 
   return (
     <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto max-w-5xl space-y-4">
         <div>
           <h1 className="text-2xl font-bold">Test — Place Order (async)</h1>
           <p className="text-sm text-muted-foreground">
@@ -240,6 +241,8 @@ export function TestPlaceOrderPage() {
             </p>
           </CardContent>
         </Card>
+
+        <PlaceOrderBenchmarkPanel scope={scope} />
 
         <Card>
           <CardHeader>

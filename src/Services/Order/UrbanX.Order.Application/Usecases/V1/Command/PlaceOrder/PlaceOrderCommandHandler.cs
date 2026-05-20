@@ -28,10 +28,6 @@ public sealed class PlaceOrderCommandHandler(
         var slot = await pendingSlots.TryAcquireAsync(userId, OrderType.Normal, ct);
         if (slot.IsFailure)
             return Result.Failure<Guid>(slot.Error);
-            
-        var existing = await orderRepository.GetByIdempotencyKeyAsync(cmd.IdempotencyKey, ct);
-        if (existing is not null)
-            return Result.Success(existing.Id);
 
         var orderId = Guid.NewGuid();
         var orderNumber = OrderNumberGenerator.Generate("ORD");
