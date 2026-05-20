@@ -1,7 +1,6 @@
 using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Payment.Domain.Errors;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.ValueObjects;
@@ -10,7 +9,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.CompleteRefund;
 
 public sealed class CompleteRefundCommandHandler(
     IRefundRepository refundRepository,
-    IOutboxWriter outboxWriter) : ICommandHandler<CompleteRefundCommand>
+    IEventPublisher eventPublisher) : ICommandHandler<CompleteRefundCommand>
 {
     public async Task<Result> Handle(CompleteRefundCommand request, CancellationToken cancellationToken)
     {
@@ -32,7 +31,7 @@ public sealed class CompleteRefundCommandHandler(
             refund.ProviderRefundId,
             refund.ProcessedAt!.Value);
 
-        await outboxWriter.WriteAsync(integrationEvent, cancellationToken);
+        await eventPublisher.PublishAsync(integrationEvent, cancellationToken);
 
         return Result.Success();
     }

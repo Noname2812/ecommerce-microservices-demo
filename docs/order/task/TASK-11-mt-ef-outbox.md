@@ -1,13 +1,13 @@
 # TASK-11 — Replace Shared.Outbox với MassTransit EF Outbox
 
+> **Status:** ✅ DONE (extended scope — đã rollout MT EF Outbox cho TẤT CẢ services: Order, Catalog, Identity, Inventory, Payment, Promotion). `Shared.Outbox` library đã bị xóa hoàn toàn khỏi codebase. Doc này giữ lại để tham khảo lịch sử.
+
 **Team:** Order · **Effort:** M (1.5d) · **Depends:** TASK-03
 **Branch:** `feature/order-refactor/TASK-11-mt-ef-outbox`
 
 ## Mục đích
 
-Bỏ custom `Shared.Outbox` ở **Order service only**. Dùng MassTransit built-in `AddEntityFrameworkOutbox<TDbContext>()` thay 1-1: atomic-with-SaveChanges, at-least-once, MT tự register `BusOutboxDeliveryService` IHostedService.
-
-⚠ **CHỈ Order service**. Catalog/Identity/Payment giữ `Shared.Outbox` không touch.
+Bỏ custom `Shared.Outbox` (đã xóa). Dùng MassTransit built-in `AddEntityFrameworkOutbox<TDbContext>()` thay 1-1: atomic-with-SaveChanges, at-least-once, MT tự register `BusOutboxDeliveryService` IHostedService.
 
 ## Files MODIFY
 

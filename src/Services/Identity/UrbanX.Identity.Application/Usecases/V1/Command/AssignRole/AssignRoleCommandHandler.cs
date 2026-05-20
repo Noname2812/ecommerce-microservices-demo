@@ -3,7 +3,6 @@ using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Identity;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Identity.Application.Usecases.V1.Errors;
 using UrbanX.Identity.Domain.Models;
 using UrbanX.Identity.Domain.ValueObjects;
@@ -17,20 +16,20 @@ public sealed class AssignRoleCommandHandler : ICommandHandler<AssignRoleCommand
     private readonly RoleManager<ApplicationRole> _roleManager;
     private readonly IUserContext _userContext;
     private readonly IIdentityAuditWriter _audit;
-    private readonly IOutboxWriter _outbox;
+    private readonly IEventPublisher _eventPublisher;
 
     public AssignRoleCommandHandler(
         UserManager<ApplicationUser> userManager,
         RoleManager<ApplicationRole> roleManager,
         IUserContext userContext,
         IIdentityAuditWriter audit,
-        IOutboxWriter outbox)
+        IEventPublisher eventPublisher)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _userContext = userContext;
         _audit = audit;
-        _outbox = outbox;
+        _eventPublisher = eventPublisher;
     }
 
     public async Task<Result> Handle(AssignRoleCommand request, CancellationToken cancellationToken)
@@ -59,7 +58,7 @@ public sealed class AssignRoleCommandHandler : ICommandHandler<AssignRoleCommand
             new { role = request.Role, by = _userContext.UserId },
             cancellationToken);
 
-        await _outbox.WriteAsync(new UserIntegrationEvents.UserRoleAssignedV1(
+        await _eventPublisher.PublishAsync(new UserIntegrationEvents.UserRoleAssignedV1(
             user.Id, user.Email!, request.Role, _userContext.UserId
         ), cancellationToken);
 

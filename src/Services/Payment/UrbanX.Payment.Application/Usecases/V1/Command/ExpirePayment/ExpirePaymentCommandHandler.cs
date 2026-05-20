@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.Models;
 using UrbanX.Payment.Domain.ValueObjects;
@@ -13,7 +12,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.ExpirePayment;
 internal sealed class ExpirePaymentCommandHandler(
     IPaymentRepository paymentRepository,
     IPaymentEventRepository paymentEventRepository,
-    IOutboxWriter outboxWriter,
+    IEventPublisher eventPublisher,
     ILogger<ExpirePaymentCommandHandler> logger) : ICommandHandler<ExpirePaymentCommand>
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -62,7 +61,7 @@ internal sealed class ExpirePaymentCommandHandler(
             payment.Amount - payment.PaidAmount,
             DateTimeOffset.UtcNow);
 
-        await outboxWriter.WriteAsync(expiredEvent, cancellationToken);
+        await eventPublisher.PublishAsync(expiredEvent, cancellationToken);
 
         logger.LogInformation("Payment {PaymentId} expired (SePay / bank transfer window).", payment.Id);
 

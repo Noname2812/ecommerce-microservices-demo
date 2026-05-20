@@ -72,14 +72,13 @@ Each service is split into layers:
 | `Shared.Application` | CQRS abstractions: `ICommand`, `IQuery`, handler interfaces, `IDomainEvent`, `IEventPublisher`, `ISagaState`; authorization (`IUserContext`, `Permissions`/`Roles` constants, `[RequirePermission]`/`[RequireRole]`/`[AllowAnonymous]` attributes, `PermissionScope`) |
 | `Shared.Messaging` | MassTransit + RabbitMQ config (no bus-wide `UseMessageRetry` / prefetch / concurrent limit — opt in per consumer/endpoint), MediatR pipeline behaviors (`Validation`, `Logging`, `Idempotency`, `DistributedLock`, `Authorization`, `Transaction`), saga infrastructure, `EventPublisher` impl, `UserHttpContext` + `UserContextMiddleware` (Trust-Gateway) |
 | `Shared.Cache` | Redis cache: `ICacheService` (get/set/getOrSet/Lua), `IDistributedLockService` (SET NX, cluster-safe), `[DistributedLock]` attribute; `IDistributedCache` backend (fixes `IdempotencyPipelineBehavior`); DI entry point: `builder.AddSharedCache("redis")` |
-| `Shared.Outbox` | Transactional outbox: `OutboxMessage`, `OutboxRelayWorker`, `IOutboxWriter` |
 | `Shared.Observability` | OpenTelemetry configuration: metrics, activity sources, OTLP exporter |
 
 **Dependency order (lower = fewer deps):** Shared.Kernel → Shared.Cache → Shared.Contract → Shared.Application → Shared.Messaging → services
 
 ### Key patterns
 
-**Transactional Outbox:** Commands save business data + an outbox event in one EF Core transaction. `OutboxRelayService` reads the outbox table and publishes to RabbitMQ, guaranteeing at-least-once delivery. Catalog and Payment use this.
+**Transactional Outbox (MassTransit EF Outbox):** Each service's `DbContext` registers MT outbox entities via `builder.AddInboxStateEntity(); builder.AddOutboxMessageEntity(); builder.AddOutboxStateEntity();` in `OnModelCreating`. Service `Program.cs` wires up `bus.AddEntityFrameworkOutbox<TDbContext>(o => { o.UsePostgres(); o.UseBusOutbox(); ... })` inside `AddMessaging(configureBus: ...)`. Handlers publish via `IEventPublisher.PublishAsync(evt, ct)` (which wraps `IPublishEndpoint`); MT bus outbox intercepts publishes within the EF transaction so the message is staged into `outbox_message` rows alongside business data. The MT-managed `BusOutboxDeliveryService` then relays to RabbitMQ for at-least-once delivery, with MessageId-based duplicate detection inside `DuplicateDetectionWindow`.
 
 **CQRS (Catalog):** Writes go to the `public` schema (EF Core). Integration events flow via Outbox → RabbitMQ → Catalog's own projection consumers, which rebuild `read.product_list_view` and `read.product_detail_view`. Read queries hit these read-schema tables directly via Dapper.
 

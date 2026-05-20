@@ -3,7 +3,6 @@ using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Identity;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Identity.Application.Usecases.V1.Errors;
 using UrbanX.Identity.Domain.Models;
 using UrbanX.Identity.Domain.ValueObjects;
@@ -16,18 +15,18 @@ public sealed class DeactivateUserCommandHandler : ICommandHandler<DeactivateUse
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IUserContext _userContext;
     private readonly IIdentityAuditWriter _audit;
-    private readonly IOutboxWriter _outbox;
+    private readonly IEventPublisher _eventPublisher;
 
     public DeactivateUserCommandHandler(
         UserManager<ApplicationUser> userManager,
         IUserContext userContext,
         IIdentityAuditWriter audit,
-        IOutboxWriter outbox)
+        IEventPublisher eventPublisher)
     {
         _userManager = userManager;
         _userContext = userContext;
         _audit = audit;
-        _outbox = outbox;
+        _eventPublisher = eventPublisher;
     }
 
     public async Task<Result> Handle(DeactivateUserCommand request, CancellationToken cancellationToken)
@@ -52,7 +51,7 @@ public sealed class DeactivateUserCommandHandler : ICommandHandler<DeactivateUse
             new { reason = request.Reason, by = _userContext.UserId },
             cancellationToken);
 
-        await _outbox.WriteAsync(new UserIntegrationEvents.UserDeactivatedV1(
+        await _eventPublisher.PublishAsync(new UserIntegrationEvents.UserDeactivatedV1(
             user.Id, user.Email!, _userContext.UserId, request.Reason
         ), cancellationToken);
 

@@ -3,7 +3,6 @@ using Shared.Application.Authorization;
 using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
 using UrbanX.Catalog.Application.Helpers;
@@ -18,7 +17,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
         private readonly ICategoryRepository _categoryRepository;
         private readonly IBrandRepository _brandRepository;
         private readonly IAttributeDefinitionRepository _attributeDefinitionRepository;
-        private readonly IOutboxWriter _outboxWriter;
+        private readonly IEventPublisher _eventPublisher;
         private readonly IUserContext _userContext;
 
         public CreateProductCommandHandler(
@@ -26,14 +25,14 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             ICategoryRepository categoryRepository,
             IBrandRepository brandRepository,
             IAttributeDefinitionRepository attributeDefinitionRepository,
-            IOutboxWriter outboxWriter,
+            IEventPublisher eventPublisher,
             IUserContext userContext)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
             _brandRepository = brandRepository;
             _attributeDefinitionRepository = attributeDefinitionRepository;
-            _outboxWriter = outboxWriter;
+            _eventPublisher = eventPublisher;
             _userContext = userContext;
         }
 
@@ -155,7 +154,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             await _productRepository.AddAsync(product, cancellationToken);
 
             var integrationEvent = MapToCreatedEvent(product, attributeNameById);
-            await _outboxWriter.WriteAsync(integrationEvent, cancellationToken);
+            await _eventPublisher.PublishAsync(integrationEvent, cancellationToken);
 
             return Result.Success(product.Id);
         }

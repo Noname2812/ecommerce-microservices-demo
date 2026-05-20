@@ -3,7 +3,6 @@ using Shared.Application.Authorization;
 using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
 using UrbanX.Catalog.Application.Helpers;
@@ -17,20 +16,20 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
         private readonly IProductRepository _productRepository;
         private readonly ICategoryRepository _categoryRepository;
         private readonly IBrandRepository _brandRepository;
-        private readonly IOutboxWriter _outboxWriter;
+        private readonly IEventPublisher _eventPublisher;
         private readonly IUserContext _userContext;
 
         public UpdateProductBasicInfoCommandHandler(
             IProductRepository productRepository,
             ICategoryRepository categoryRepository,
             IBrandRepository brandRepository,
-            IOutboxWriter outboxWriter,
+            IEventPublisher eventPublisher,
             IUserContext userContext)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
             _brandRepository = brandRepository;
-            _outboxWriter = outboxWriter;
+            _eventPublisher = eventPublisher;
             _userContext = userContext;
         }
 
@@ -110,7 +109,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
                 .Select(i => i.Url)
                 .FirstOrDefault();
 
-            await _outboxWriter.WriteAsync(new ProductUpdateIntegrationEvents.ProductInfoUpdatedV1(
+            await _eventPublisher.PublishAsync(new ProductUpdateIntegrationEvents.ProductInfoUpdatedV1(
                 product.Id,
                 product.SellerId,
                 new ProductDtos.ProductUpdateSnapshot(
@@ -143,7 +142,7 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
 
             if (product.Status != oldStatus)
             {
-                await _outboxWriter.WriteAsync(new ProductUpdateIntegrationEvents.ProductStatusChangedV1(
+                await _eventPublisher.PublishAsync(new ProductUpdateIntegrationEvents.ProductStatusChangedV1(
                     product.Id,
                     oldStatus,
                     product.Status,

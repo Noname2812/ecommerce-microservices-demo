@@ -1,12 +1,12 @@
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Shared.Outbox.EfCore;
 using UrbanX.Catalog.Domain.Models;
 using UrbanX.Catalog.Domain.ReadModels;
 
 namespace UrbanX.Catalog.Persistence
 {
     public sealed class CatalogDbContext(
-        DbContextOptions<CatalogDbContext> options) : OutboxDbContext(options)
+        DbContextOptions<CatalogDbContext> options) : DbContext(options)
     {
         // Write schema (public)
         public DbSet<Category> Categories => Set<Category>();
@@ -26,6 +26,11 @@ namespace UrbanX.Catalog.Persistence
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            builder.AddInboxStateEntity();
+            builder.AddOutboxMessageEntity();
+            builder.AddOutboxStateEntity();
+
             builder.HasPostgresExtension("unaccent");
             builder.HasPostgresExtension("pg_trgm");
             builder.ApplyConfigurationsFromAssembly(AssemblyReference.Assembly);

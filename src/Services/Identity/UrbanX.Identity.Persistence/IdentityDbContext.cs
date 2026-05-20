@@ -1,11 +1,11 @@
+using MassTransit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Shared.Outbox.EfCore;
 using UrbanX.Identity.Domain.Models;
 
 namespace UrbanX.Identity.Persistence;
 
-public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : OutboxDbContext(options)
+public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
 {
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
     public DbSet<ApplicationRole> Roles => Set<ApplicationRole>();
@@ -21,6 +21,11 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.AddInboxStateEntity();
+        builder.AddOutboxMessageEntity();
+        builder.AddOutboxStateEntity();
+
         builder.ApplyConfigurationsFromAssembly(AssemblyReference.Assembly);
     }
 }

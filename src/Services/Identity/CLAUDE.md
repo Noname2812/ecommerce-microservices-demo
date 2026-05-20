@@ -1,6 +1,6 @@
 # Identity Service
 
-.NET 10 — Clean Architecture, Carter, MediatR (CQRS), EF Core + PostgreSQL, Transactional Outbox, **Duende IdentityServer 7.4.6 + ASP.NET Core Identity 10.0.5**.
+.NET 10 — Clean Architecture, Carter, MediatR (CQRS), EF Core + PostgreSQL, MassTransit EF Outbox, **Duende IdentityServer 7.4.6 + ASP.NET Core Identity 10.0.5**.
 
 Port: **5005** | DB: `urbanx_identity` | Connection string: `identitydb` | Status: **Active**
 
@@ -14,7 +14,7 @@ Issuer JWT cho toàn hệ thống. Service KHÁC tin tưởng JWT do service nà
 |---|---|
 | `UrbanX.Identity.Domain` | Entities (`ApplicationUser`, `ApplicationRole`, `UserProfile`, `AuthAuditLog`), `AuthEventType` constants, `IAuthAuditLogRepository` |
 | `UrbanX.Identity.Infrastructure` | `IEmailSender` + `LogEmailSender`, `IIdentityAuditWriter` + `IdentityAuditWriter` (capture IP/UA via `IHttpContextAccessor`) |
-| `UrbanX.Identity.Persistence` | `IdentityDbContext` (extends `OutboxDbContext`), EF configurations cho Identity tables + outbox + custom tables, `AuthAuditLogRepository` |
+| `UrbanX.Identity.Persistence` | `IdentityDbContext` (extends `DbContext`, registers MT outbox entities), EF configurations cho Identity tables + custom tables, `AuthAuditLogRepository` |
 | `UrbanX.Identity.Application` | Commands, queries, validators, `AuthErrors` |
 | `UrbanX.Identity.API` | Carter modules, `IdentityServer` config, `IdentitySeeder`, Program.cs |
 
@@ -58,7 +58,7 @@ User/Role CRUD đi qua ASP.NET Identity `UserManager<ApplicationUser>` / `RoleMa
 
 ### MediatR Behavior
 
-`TransactionPipelineBehavior` (từ `Shared.Messaging`) — wraps mọi command trong DB transaction qua `IUnitOfWork` (impl: `EfUnitOfWork` trong Persistence, đảm bảo Outbox + business write atomic). Behaviors registered mặc định bởi `AddMediatorWithPielineDefault`: Authorization → Idempotency → Validation → DistributedLock → Transaction.
+`TransactionPipelineBehavior` (từ `Shared.Messaging`) — wraps mọi command trong DB transaction qua `IUnitOfWork` (impl: `EfUnitOfWork` trong Persistence). MT bus outbox tự intercept `IEventPublisher.PublishAsync` trong scope của EF transaction → atomic. Behaviors registered mặc định bởi `AddMediatorWithPielineDefault`: Authorization → Idempotency → Validation → DistributedLock → Transaction.
 
 ### Commands (Usecases/V1/Command/)
 
@@ -102,7 +102,7 @@ AuthErrors.CannotChangeOwnRole
 
 ### `IdentityDbContext`
 
-**Quan trọng:** Kế thừa `OutboxDbContext` (KHÔNG phải `IdentityDbContext<TUser, TRole, TKey>` của EF). Lý do: cần share outbox infrastructure với pattern còn lại của UrbanX. Identity tables được wire-up thủ công qua DbSets + EF Configurations:
+**Quan trọng:** Kế thừa `DbContext` (KHÔNG phải `IdentityDbContext<TUser, TRole, TKey>` của EF). Register MT outbox entities (`AddInboxStateEntity`/`AddOutboxMessageEntity`/`AddOutboxStateEntity`) trong `OnModelCreating`. Identity tables được wire-up thủ công qua DbSets + EF Configurations:
 
 ```csharp
 public DbSet<ApplicationUser> Users
@@ -114,7 +114,7 @@ public DbSet<IdentityUserToken<Guid>> UserTokens
 public DbSet<IdentityRoleClaim<Guid>> RoleClaims
 public DbSet<UserProfile> UserProfiles
 public DbSet<AuthAuditLog> AuthAuditLogs
-// + OutboxMessages (inherited from OutboxDbContext)
+// + MT outbox tables: inbox_state, outbox_message, outbox_state
 ```
 
 `AddEntityFrameworkStores<IdentityDbContext>()` của ASP.NET Identity tìm các DbSet này qua reflection — không cần inherit `IdentityDbContext` của EF.
@@ -132,7 +132,9 @@ public DbSet<AuthAuditLog> AuthAuditLogs
 | IdentityRoleClaim | `role_claims` |
 | UserProfile | `user_profiles` |
 | AuthAuditLog | `auth_audit_logs` |
-| OutboxMessage | `outbox_messages` (inherited) |
+| MT inbox state | `inbox_state` |
+| MT outbox message | `outbox_message` |
+| MT outbox state | `outbox_state` |
 
 ### Notable EF Config
 
@@ -210,7 +212,10 @@ Production hardening (chưa làm v1):
 
 ```
 AddServiceDefaults() → AddOpenApi() → AddNpgsqlDbContext<IdentityDbContext>("identitydb")
-→ AddOutbox<IdentityDbContext>() → AddConfigMessaging() → AddMessaging()
+→ AddConfigMessaging()
+→ AddMessaging(configureBus: bus => {
+    bus.AddEntityFrameworkOutbox<IdentityDbContext>(o => { o.UsePostgres(); o.UseBusOutbox(); ... });
+  })
 → AddIdentity<ApplicationUser, ApplicationRole>().AddEntityFrameworkStores().AddDefaultTokenProviders()
 → ConfigureApplicationCookie() → AddIdentityServer().AddInMemory*().AddAspNetIdentity()
 → AddDeveloperSigningCredential() (dev)
@@ -279,7 +284,7 @@ Defined trong `src/Shared/Shared.Contract/Messaging/Identity/UserIntegrationEven
 - `UserDeactivatedV1(UserId, Email, DeactivatedBy?, Reason?)`
 - `UserActivatedV1(UserId, Email, ActivatedBy?)`
 
-Tất cả phát qua `IOutboxWriter` trong handler → `OutboxRelayWorker` publish lên RabbitMQ. Consumer ở các service khác (Catalog, Inventory) cần kế thừa `IntegrationEventConsumerBase<TEvent, TConsumer>`.
+Tất cả phát qua `IEventPublisher.PublishAsync` trong handler. MT EF outbox stage vào `outbox_message` cùng SaveChanges → `BusOutboxDeliveryService` publish lên RabbitMQ. Consumer ở các service khác (Catalog, Inventory) cần kế thừa `IntegrationEventConsumerBase<TEvent, TConsumer>`.
 
 ---
 
@@ -313,7 +318,7 @@ Nếu một trong 2 giá trị rỗng, Google handler **không được register
 
 **Trust-the-Gateway** — Identity là special case: tự xác thực user qua password/Google ở `/connect/*`, nhưng các management endpoints `/api/v1/identity/**` vẫn đọc identity từ `X-User-*` headers (qua Gateway).
 
-**Transactional Outbox** — Mọi command commit business data + integration event trong cùng 1 transaction. `TransactionPipelineBehavior` (qua `IUnitOfWork`) wrap, `IOutboxWriter` ghi outbox, `OutboxRelayWorker` publish.
+**Transactional Outbox (MassTransit EF)** — Mọi command commit business data + integration event trong cùng 1 transaction. `TransactionPipelineBehavior` (qua `IUnitOfWork`) wrap; handler call `IEventPublisher.PublishAsync` → MT bus outbox intercept và stage vào `outbox_message`; `BusOutboxDeliveryService` poll + publish lên RabbitMQ.
 
 **Permission Claims** — Permissions là role claims (claim type `permission`). `IdentitySeeder` populate; `GetCurrentUserQueryHandler` aggregate lên `UserProfileDto.Permissions`. Gateway RBAC tự đọc qua `PermissionClaimReader`.
 

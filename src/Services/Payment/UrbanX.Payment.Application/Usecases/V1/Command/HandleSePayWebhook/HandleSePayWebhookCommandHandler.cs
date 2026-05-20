@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.Models;
 using UrbanX.Payment.Application.Integrations.SePay;
@@ -17,7 +16,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.HandleSePayWebhook;
 internal sealed class HandleSePayWebhookCommandHandler(
     IPaymentRepository paymentRepository,
     IPaymentEventRepository paymentEventRepository,
-    IOutboxWriter outboxWriter,
+    IEventPublisher eventPublisher,
     ILogger<HandleSePayWebhookCommandHandler> logger) : ICommandHandler<HandleSePayWebhookCommand, SePayWebhookResult>
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -144,7 +143,7 @@ internal sealed class HandleSePayWebhookCommandHandler(
             payment.ProviderTransactionId,
             payment.PaidAt!.Value);
 
-        await outboxWriter.WriteAsync(integrationEvent, cancellationToken);
+        await eventPublisher.PublishAsync(integrationEvent, cancellationToken);
 
         return Result.Success(new SePayWebhookResult(true));
     }

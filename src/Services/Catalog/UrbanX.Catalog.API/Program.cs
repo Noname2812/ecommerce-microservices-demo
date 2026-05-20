@@ -1,11 +1,11 @@
 using Carter;
+using MassTransit;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
-using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Catalog.API.Exceptions;
 using UrbanX.Catalog.Application.DependencyInjection.Extensions;
 using UrbanX.Catalog.Application.Messaging;
@@ -58,16 +58,19 @@ builder.Services.AddKeyedSingleton<NpgsqlDataSource>("catalog-read", (_, _) =>
         ApplicationName = "catalog-read",
     }.ConnectionString));
 
-builder.Services.AddOutbox<CatalogDbContext>(
-    configureDb: null,
-    builder.Configuration
-);
-
-// Add Message queue
+// Add Message queue (with MassTransit EF Outbox + BusOutbox for transactional publish)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(builder.Configuration, configureBus: bus =>
     {
+        bus.AddEntityFrameworkOutbox<CatalogDbContext>(o =>
+        {
+            o.UsePostgres();
+            o.UseBusOutbox();
+            o.QueryDelay = TimeSpan.FromSeconds(1);
+            o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
+        });
+
         bus.AddConsumer<ProductCreatedProjectionConsumer>();
         bus.AddConsumer<ProductInfoUpdatedProjectionConsumer>();
         bus.AddConsumer<ProductStatusChangedProjectionConsumer>();

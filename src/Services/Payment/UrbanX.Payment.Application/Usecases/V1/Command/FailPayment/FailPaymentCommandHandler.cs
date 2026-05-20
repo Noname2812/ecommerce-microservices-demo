@@ -1,7 +1,6 @@
 using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Payment.Domain.Errors;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.ValueObjects;
@@ -10,7 +9,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.FailPayment;
 
 public sealed class FailPaymentCommandHandler(
     IPaymentRepository paymentRepository,
-    IOutboxWriter outboxWriter) : ICommandHandler<FailPaymentCommand>
+    IEventPublisher eventPublisher) : ICommandHandler<FailPaymentCommand>
 {
     public async Task<Result> Handle(FailPaymentCommand request, CancellationToken cancellationToken)
     {
@@ -30,7 +29,7 @@ public sealed class FailPaymentCommandHandler(
             payment.CustomerId,
             request.FailureReason);
 
-        await outboxWriter.WriteAsync(integrationEvent, cancellationToken);
+        await eventPublisher.PublishAsync(integrationEvent, cancellationToken);
 
         return Result.Success();
     }

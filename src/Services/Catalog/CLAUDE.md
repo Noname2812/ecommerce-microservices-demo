@@ -1,6 +1,6 @@
 # Catalog Service
 
-.NET 10 — Clean Architecture, Carter, MediatR (CQRS), EF Core + PostgreSQL, Transactional Outbox.
+.NET 10 — Clean Architecture, Carter, MediatR (CQRS), EF Core + PostgreSQL, MassTransit EF Outbox.
 
 Port: **5290** | DB: `urbanx_catalog` | Status: **Active**
 
@@ -134,7 +134,7 @@ Nested: `CreateProductVariantItem` (Sku, Name?, Price, CompareAtPrice?, ImageUrl
 9. Resolve `SellerId` từ `IUserContext.UserId` (behavior đã đảm bảo authenticated)
 10. `Product.Create(...)` builds full graph
 11. `IProductRepository.AddAsync(product)`
-12. `IOutboxWriter` writes `ProductCreatedV1` to outbox
+12. `IEventPublisher.PublishAsync(ProductCreatedV1)` — MT bus outbox stage cùng EF transaction
 13. Returns `Result<Guid>(product.Id)`
 
 **Validator:** `CreateProductCommandValidator` (FluentValidation)
@@ -225,9 +225,9 @@ Returns: `CanDelete, HasActiveReservations, HasInventoryStock, InventoryQuantity
 
 ### `CatalogDbContext`
 
-Extends `OutboxDbContext` (from `Shared.Outbox`). DbSets:
+Extends `DbContext`. Registers MT outbox entities (`AddInboxStateEntity`/`AddOutboxMessageEntity`/`AddOutboxStateEntity`) trong `OnModelCreating`. DbSets:
 
-`Categories`, `Brands`, `AttributeDefinitions`, `Products`, `ProductVariants`, `VariantAttributeValues`, `ProductImages`, `VariantPriceHistories`, `VariantSkuHistories` + `OutboxMessages` (inherited)
+`Categories`, `Brands`, `AttributeDefinitions`, `Products`, `ProductVariants`, `VariantAttributeValues`, `ProductImages`, `VariantPriceHistories`, `VariantSkuHistories` + MT outbox tables (`inbox_state`, `outbox_message`, `outbox_state`)
 
 ### Table Names
 
@@ -316,7 +316,11 @@ URL-based: `/v1/`, `/v2/`. Group name format: `'v'VVV`. Substitutes version in U
 
 ```
 AddServiceDefaults() → AddOpenApi() → AddNpgsqlDbContext<CatalogDbContext>("catalogdb")
-→ AddOutbox<CatalogDbContext>() → AddConfigMessaging() → AddMessaging()
+→ AddConfigMessaging()
+→ AddMessaging(configureBus: bus => {
+    bus.AddEntityFrameworkOutbox<CatalogDbContext>(o => { o.UsePostgres(); o.UseBusOutbox(); ... });
+    bus.AddConsumer<ProductCreatedProjectionConsumer>(); ...
+  })
 → AddApplication() → Carter(formUploadLimit: 50 MB)
 
 app.UseExceptionHandler() → app.UseUserContext() → app.MapCarter()
@@ -328,7 +332,7 @@ Auto-runs EF migrations on startup.
 
 ## Integration Events
 
-### Produced (via Outbox)
+### Produced (via MT EF Outbox + `IEventPublisher`)
 
 | Event | Fired by | Condition |
 |---|---|---|

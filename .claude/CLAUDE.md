@@ -8,13 +8,13 @@
 
 | Service | Port | Status | DB | Notes |
 |---|---|---|---|---|
-| **Catalog** | 5025 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + Outbox; read schema (`read.*`) via Dapper |
+| **Catalog** | 5025 | Active | PostgreSQL (`urbanx_catalog`) | CQRS + MT EF Outbox; read schema (`read.*`) via Dapper |
 | **Gateway** | 5000 | Active | — | YARP + Duende.BFF (cookie session) + Rate limiting |
-| **Identity** | 5005 | Active | PostgreSQL (`urbanx_identity`) | Duende IdentityServer + ASP.NET Identity + Outbox |
-| **Order** | 5010 | Disabled | PostgreSQL | Saga choreography |
-| **Payment** | 5015 | Disabled | PostgreSQL | Stripe + Outbox |
+| **Identity** | 5005 | Active | PostgreSQL (`urbanx_identity`) | Duende IdentityServer + ASP.NET Identity + MT EF Outbox |
+| **Order** | 5010 | Disabled | PostgreSQL | Saga choreography (MT EF Outbox) |
+| **Payment** | 5015 | Disabled | PostgreSQL | Stripe + MT EF Outbox |
 | **Merchant** | 5030 | Disabled | PostgreSQL | — |
-| **Inventory** | 5020 | Active | PostgreSQL (`urbanx_inventory`) | CQRS + Outbox; 4 entities: Warehouse, InventoryItem, Reservation, StockMovement |
+| **Inventory** | 5020 | Active | PostgreSQL (`urbanx_inventory`) | CQRS + MT EF Outbox; 4 entities: Warehouse, InventoryItem, Reservation, StockMovement |
 | **Frontend** | 5173 | Disabled | — | React 19 + Vite |
 
 Infrastructure (Aspire tự quản lý): PostgreSQL, RabbitMQ, Redis.
@@ -45,7 +45,7 @@ src/
 │       ├── UrbanX.Identity.Application/      # CQRS: Register/ConfirmEmail/ForgotPassword/ResetPassword/ChangePassword/UpdateProfile/AssignRole/RevokeRole/Deactivate/Activate
 │       ├── UrbanX.Identity.Domain/           # ApplicationUser/Role, UserProfile, AuthAuditLog, AuthEventType
 │       ├── UrbanX.Identity.Infrastructure/   # IEmailSender (LogEmailSender), IIdentityAuditWriter
-│       └── UrbanX.Identity.Persistence/      # IdentityDbContext (extends OutboxDbContext), Configurations, AuthAuditLogRepository
+│       └── UrbanX.Identity.Persistence/      # IdentityDbContext (registers MT inbox/outbox entities), Configurations, AuthAuditLogRepository
 ├── Gateway/
 │   ├── UrbanX.Gateway/                     # Program.cs, appsettings (routes, rate limits)
 │   ├── UrbanX.Gateway.Application/         # Abstractions, config options
@@ -56,7 +56,6 @@ src/
     ├── Shared.Application/     # CQRS abstractions: ICommand, IQuery, handlers, IDomainEvent, IEventPublisher, ISagaState
     ├── Shared.Messaging/       # MassTransit + RabbitMQ (retry/throughput opt-in per consumer), MediatR pipeline behaviors, saga base, EventPublisher impl
     ├── Shared.Cache/           # Redis cache (ICacheService, IDistributedLockService, [DistributedLock], IDistributedCache); DI: builder.AddSharedCache("redis")
-    ├── Shared.Outbox/          # OutboxMessage, OutboxRelayWorker, IOutboxWriter
     └── Shared.Observability/   # OpenTelemetry wiring
 
 docs/                           # Docs tổng quan (migrations, security, deployment)
@@ -90,9 +89,11 @@ tests/
 - DI: `builder.AddSharedCache("redis")`; AppHost: `.WithReference(redis).WaitFor(redis)`
 - Doc: `docs/shared/shared-cache.md`
 
-### Transactional Outbox
-- Inject `IOutboxWriter` trong command handler → ghi event cùng transaction với data
-- `OutboxRelayWorker` publish lên RabbitMQ; dùng khi cần at-least-once guarantee
+### Transactional Outbox (MassTransit EF Outbox)
+- DbContext register MT entities: `builder.AddInboxStateEntity(); builder.AddOutboxMessageEntity(); builder.AddOutboxStateEntity();` trong `OnModelCreating`
+- Program.cs: `bus.AddEntityFrameworkOutbox<TDbContext>(o => { o.UsePostgres(); o.UseBusOutbox(); o.QueryDelay = TimeSpan.FromSeconds(1); o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10); });` trong `AddMessaging(configureBus: ...)`
+- Handler inject `IEventPublisher` (từ `Shared.Application`) → `await _eventPublisher.PublishAsync(evt, ct);`. MT bus outbox intercept publish trong EF transaction, stage vào `outbox_message` rows cùng SaveChanges
+- `BusOutboxDeliveryService` (MT auto-register) poll outbox và publish lên RabbitMQ; at-least-once guarantee + MessageId dedup trong `DuplicateDetectionWindow`
 
 ### Saga Choreography (Order flow — planned)
 Order → Inventory → Payment → Merchant. Base classes: `SagaStateMachineBase`, `CompensatableActivityBase` trong `Shared.Messaging/Saga/`.

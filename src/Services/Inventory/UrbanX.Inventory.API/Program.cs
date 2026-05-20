@@ -1,11 +1,11 @@
 using Carter;
 using Hangfire;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
-using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Options;
 using UrbanX.Inventory.Application.Jobs;
@@ -23,21 +23,25 @@ builder.Services.AddOpenApi();
 // Database
 builder.AddNpgsqlDbContext<InventoryDbContext>("inventorydb",
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
-builder.Services.AddOutbox<InventoryDbContext>(
-    configureDb: null,
-    builder.Configuration
-);
 
 // Application (options for ConsumerDefinition, MediatR, …) — register before MassTransit resolves definitions at startup
 builder.Services.AddApplication();
 
-// Messaging — compensation.events fanout (see Shared.Outbox CompensationOutboxRelayWorker)
+// Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(
         builder.Configuration,
         configureBus: bus =>
         {
+            bus.AddEntityFrameworkOutbox<InventoryDbContext>(o =>
+            {
+                o.UsePostgres();
+                o.UseBusOutbox();
+                o.QueryDelay = TimeSpan.FromSeconds(1);
+                o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
+            });
+
             bus.AddConsumer<InventoryReleaseRequestedConsumer>(typeof(InventoryReleaseRequestedConsumerDefinition));
             bus.AddConsumer<ReserveInventoryRequestedConsumer>(typeof(ReserveInventoryRequestedConsumerDefinition));
             bus.AddConsumer<ConfirmInventoryRequestedConsumer>(typeof(ConfirmInventoryRequestedConsumerDefinition));

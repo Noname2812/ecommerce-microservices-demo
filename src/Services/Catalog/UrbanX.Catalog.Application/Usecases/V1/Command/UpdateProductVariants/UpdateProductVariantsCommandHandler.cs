@@ -3,7 +3,6 @@ using Shared.Application.Authorization;
 using Shared.Contract.Dtos.Catalog;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Abstractions;
 using UrbanX.Catalog.Domain.Errors;
 using UrbanX.Catalog.Domain;
@@ -15,18 +14,18 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
     public sealed class UpdateProductVariantsCommandHandler : ICommandHandler<UpdateProductVariantsCommand>
     {
         private readonly IProductRepository _productRepository;
-        private readonly IOutboxWriter _outboxWriter;
+        private readonly IEventPublisher _eventPublisher;
         private readonly IInventoryServiceClient _inventoryServiceClient;
         private readonly IUserContext _userContext;
 
         public UpdateProductVariantsCommandHandler(
             IProductRepository productRepository,
-            IOutboxWriter outboxWriter,
+            IEventPublisher eventPublisher,
             IInventoryServiceClient inventoryServiceClient,
             IUserContext userContext)
         {
             _productRepository = productRepository;
-            _outboxWriter = outboxWriter;
+            _eventPublisher = eventPublisher;
             _inventoryServiceClient = inventoryServiceClient;
             _userContext = userContext;
         }
@@ -190,11 +189,11 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
             }
 
             foreach (var e in deletedEvents)
-                await _outboxWriter.WriteAsync(e, cancellationToken);
+                await _eventPublisher.PublishAsync(e, cancellationToken);
             foreach (var e in updatedEvents)
-                await _outboxWriter.WriteAsync(e, cancellationToken);
+                await _eventPublisher.PublishAsync(e, cancellationToken);
             foreach (var e in addedEvents)
-                await _outboxWriter.WriteAsync(e, cancellationToken);
+                await _eventPublisher.PublishAsync(e, cancellationToken);
 
             return Result.Success();
         }

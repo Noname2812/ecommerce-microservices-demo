@@ -1,13 +1,13 @@
 using Carter;
 using Hangfire;
 using Hangfire.InMemory;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Metrics;
 using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
-using Shared.Outbox.DependencyInjection.Extensions;
 using StackExchange.Redis;
 using UrbanX.Promotion.API.SeedData;
 using UrbanX.Promotion.API.Messaging.ClaimCouponRequested;
@@ -31,10 +31,6 @@ builder.Services.AddOpenApi();
 
 builder.AddNpgsqlDbContext<PromotionDbContext>("promotiondb",
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
-builder.Services.AddOutbox<PromotionDbContext>(
-    configureDb: null,
-    builder.Configuration
-);
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PromotionDbContext>(name: "promotiondb", tags: ["ready", "db"]);
@@ -45,11 +41,20 @@ builder.Services.AddPersistence();
 builder.Services.AddPromotionInfrastructure();
 builder.Services.AddApplication(builder.Configuration);
 
+// Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(builder.Configuration,
         configureBus: bus =>
         {
+            bus.AddEntityFrameworkOutbox<PromotionDbContext>(o =>
+            {
+                o.UsePostgres();
+                o.UseBusOutbox();
+                o.QueryDelay = TimeSpan.FromSeconds(1);
+                o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
+            });
+
             bus.AddConsumer<CouponReleaseRequestedConsumer>(typeof(CouponReleaseRequestedConsumerDefinition));
             bus.AddConsumer<ClaimCouponRequestedConsumer>(typeof(ClaimCouponRequestedConsumerDefinition));
         });

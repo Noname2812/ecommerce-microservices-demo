@@ -1,10 +1,10 @@
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using Shared.Outbox.EfCore;
 using UrbanX.Promotion.Domain.Models;
 
 namespace UrbanX.Promotion.Persistence;
 
-public sealed class PromotionDbContext(DbContextOptions<PromotionDbContext> options) : OutboxDbContext(options)
+public sealed class PromotionDbContext(DbContextOptions<PromotionDbContext> options) : DbContext(options)
 {
     public DbSet<Domain.Models.Promotion> Promotions => Set<Domain.Models.Promotion>();
     public DbSet<VoucherCode> VoucherCodes => Set<VoucherCode>();
@@ -17,6 +17,11 @@ public sealed class PromotionDbContext(DbContextOptions<PromotionDbContext> opti
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.AddInboxStateEntity();
+        builder.AddOutboxMessageEntity();
+        builder.AddOutboxStateEntity();
+
         builder.ApplyConfigurationsFromAssembly(AssemblyReference.Assembly);
     }
 }

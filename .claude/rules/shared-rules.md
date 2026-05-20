@@ -8,9 +8,10 @@ Shared.Kernel  (no deps)
   └── Shared.Contract  (no deps — standalone cross-service contracts)
         └── Shared.Application  (→ Shared.Kernel + Shared.Contract)
               └── Shared.Messaging  (→ Shared.Kernel + Shared.Application + Shared.Cache)
-Shared.Outbox  (→ Shared.Contract)
 Shared.Observability  (standalone)
 ```
+
+> **Transactional outbox** dùng MassTransit EF Outbox (`MassTransit.EntityFrameworkCore`) thay vì custom library. DbContext register MT entities + `bus.AddEntityFrameworkOutbox<TDbContext>(o => { o.UsePostgres(); o.UseBusOutbox(); ... })`. Handler publish qua `IEventPublisher.PublishAsync(evt, ct)` — MT bus outbox stage vào `outbox_message` rows trong cùng EF transaction.
 
 ---
 
@@ -158,23 +159,70 @@ Shared.Observability  (standalone)
 
 ---
 
-## Shared.Outbox
+## Transactional Outbox — MassTransit EF Outbox
 
-**Namespace:** `Shared.Outbox` / `Shared.Outbox.Abstractions`  
-**Chứa:** Transactional outbox pattern — EF Core + background relay worker.
+UrbanX không có Shared.Outbox riêng. Outbox infrastructure đến từ package `MassTransit.EntityFrameworkCore` (đã transitively reference qua `Shared.Messaging`).
 
-| Type | Mục đích |
-|---|---|
-| `IOutboxWriter` | Inject vào command handlers để ghi event |
-| `IOutboxRepository` | EF Core CRUD cho outbox table |
-| `OutboxMessage` | Entity ánh xạ bảng `outbox_messages` |
-| `OutboxRelayWorker` | `IHostedService` poll + publish lên RabbitMQ |
+**Wiring per service:**
 
-**DI:** `AddOutbox<TDbContext>()` — đăng ký tất cả services + hosted worker.
+**1) `*DbContext.cs` — register MT entities trong `OnModelCreating`:**
+```csharp
+using MassTransit;
+
+protected override void OnModelCreating(ModelBuilder builder)
+{
+    base.OnModelCreating(builder);
+
+    builder.AddInboxStateEntity();    // inbox_state — consumer dedup
+    builder.AddOutboxMessageEntity(); // outbox_message — staged publishes
+    builder.AddOutboxStateEntity();   // outbox_state — delivery state
+
+    builder.ApplyConfigurationsFromAssembly(AssemblyReference.Assembly);
+}
+```
+
+**2) `Program.cs` — register EF Outbox + Bus Outbox trong `AddMessaging`:**
+```csharp
+builder.Services
+    .AddConfigMessaging(builder.Configuration)
+    .AddMessaging(builder.Configuration, configureBus: bus =>
+    {
+        bus.AddEntityFrameworkOutbox<TDbContext>(o =>
+        {
+            o.UsePostgres();
+            o.UseBusOutbox();                            // intercept IPublishEndpoint publishes
+            o.QueryDelay              = TimeSpan.FromSeconds(1);
+            o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
+        });
+
+        // consumers, sagas, etc.
+    });
+```
+
+**3) Handler — publish qua `IEventPublisher`:**
+```csharp
+public sealed class MyCommandHandler(IRepo repo, IEventPublisher eventPublisher)
+    : ICommandHandler<MyCommand>
+{
+    public async Task<Result> Handle(MyCommand cmd, CancellationToken ct)
+    {
+        var entity = new Entity(...);
+        await repo.AddAsync(entity, ct);
+
+        await eventPublisher.PublishAsync(new MyEventV1(entity.Id, ...), ct);
+
+        return Result.Success();
+    }
+}
+```
 
 **Rules:**
-- Service dùng outbox: DbContext phải kế thừa hoặc include `OutboxMessage` entity
-- Chỉ dùng `IOutboxWriter` trong command handlers — không publish trực tiếp qua `IEventPublisher` khi cần at-least-once guarantee
+- DbContext **bắt buộc** call 3 `Add*Entity()` của MT trong `OnModelCreating` (nếu không sẽ thiếu tables khi migration scaffolding)
+- Persistence csproj cần `<PackageReference Include="EFCore.NamingConventions" />` (cho snake_case) và reference `Shared.Messaging` (cho MassTransit namespace)
+- Handler **không** inject `IPublishEndpoint` trực tiếp — dùng `IEventPublisher` (impl wrap publish endpoint + thêm logging/MessageId/correlation headers)
+- `TransactionPipelineBehavior` (Shared.Messaging) đã wrap handler trong EF transaction qua `IUnitOfWork.ExecuteInTransactionAsync` — MT bus outbox tự enlist vào transaction đó nhờ SaveChanges interceptor
+- `BusOutboxDeliveryService` (MT auto-register IHostedService) poll `outbox_message` rồi publish lên RabbitMQ; at-least-once guarantee + MessageId dedup trong `DuplicateDetectionWindow`
+- Order service đã có sẵn cấu hình tham chiếu: [OrderDbContext.cs](src/Services/Order/UrbanX.Order.Persistence/OrderDbContext.cs) · [Program.cs](src/Services/Order/UrbanX.Order.API/Program.cs)
 
 ---
 

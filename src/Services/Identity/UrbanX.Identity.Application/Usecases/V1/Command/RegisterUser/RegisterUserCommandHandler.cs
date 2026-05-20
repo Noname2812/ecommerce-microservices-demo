@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Identity;
 using Shared.Application;
 using Shared.Contract.Messaging.Identity;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Identity.Application.Usecases.V1.Errors;
 using UrbanX.Identity.Domain.Models;
 using UrbanX.Identity.Domain.ValueObjects;
@@ -16,18 +15,18 @@ public sealed class RegisterUserCommandHandler : ICommandHandler<RegisterUserCom
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEmailSender _emailSender;
     private readonly IIdentityAuditWriter _audit;
-    private readonly IOutboxWriter _outbox;
+    private readonly IEventPublisher _eventPublisher;
 
     public RegisterUserCommandHandler(
         UserManager<ApplicationUser> userManager,
         IEmailSender emailSender,
         IIdentityAuditWriter audit,
-        IOutboxWriter outbox)
+        IEventPublisher eventPublisher)
     {
         _userManager = userManager;
         _emailSender = emailSender;
         _audit = audit;
-        _outbox = outbox;
+        _eventPublisher = eventPublisher;
     }
 
     public async Task<Result<RegisterUserResponse>> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
@@ -63,7 +62,7 @@ public sealed class RegisterUserCommandHandler : ICommandHandler<RegisterUserCom
 
         await _audit.WriteAsync(user.Id, user.Email, AuthEventType.Registered, new { method = "password" }, cancellationToken);
 
-        await _outbox.WriteAsync(new UserIntegrationEvents.UserRegisteredV1(
+        await _eventPublisher.PublishAsync(new UserIntegrationEvents.UserRegisteredV1(
             user.Id,
             user.Email!,
             user.DisplayName,

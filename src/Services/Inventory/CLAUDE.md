@@ -1,6 +1,6 @@
 # Inventory Service
 
-.NET 10 — Clean Architecture, Carter, MediatR (CQRS), EF Core + PostgreSQL, Transactional Outbox.
+.NET 10 — Clean Architecture, Carter, MediatR (CQRS), EF Core + PostgreSQL, MassTransit EF Outbox.
 
 Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `inventorydb` | Status: **Active**
 
@@ -86,9 +86,9 @@ public static Error NotFound(Guid id) =>
 
 ### `InventoryDbContext`
 
-Kế thừa `OutboxDbContext` (từ `Shared.Outbox`). DbSets:
+Kế thừa `DbContext`. Register MT outbox entities trong `OnModelCreating`. DbSets:
 
-`Warehouses`, `InventoryItems`, `InventoryReservations`, `StockMovements` + `OutboxMessages` (inherited)
+`Warehouses`, `InventoryItems`, `InventoryReservations`, `StockMovements`, `ProcessedEvents` + MT outbox tables (`inbox_state`, `outbox_message`, `outbox_state`)
 
 ### Table Names
 
@@ -158,8 +158,13 @@ Chưa có endpoint. Thêm bằng skill `add-command` / `add-query`.
 
 ```
 AddServiceDefaults() → AddOpenApi() → AddNpgsqlDbContext<InventoryDbContext>("inventorydb")
-→ AddOutbox<InventoryDbContext>() → AddApplication()  // options cho ConsumerDefinition, MediatR, …
-→ AddConfigMessaging() → AddMessaging() → AddPersistence() → Carter
+→ AddApplication()  // options cho ConsumerDefinition, MediatR, …
+→ AddConfigMessaging()
+→ AddMessaging(configureBus: bus => {
+    bus.AddEntityFrameworkOutbox<InventoryDbContext>(o => { o.UsePostgres(); o.UseBusOutbox(); ... });
+    bus.AddConsumer<...>(); ...
+  })
+→ AddPersistence() → Carter
 
 app.UseExceptionHandler() → app.UseUserContext() → app.MapCarter()
 ```
@@ -209,6 +214,6 @@ gateway
 
 ## Key Patterns
 
-**Transactional Outbox** — Inject `IOutboxWriter` trong command handlers. `OutboxRelayWorker` publish lên RabbitMQ.
+**Transactional Outbox (MassTransit EF)** — Handler dùng `IEventPublisher.PublishAsync(evt, ct)`. MT bus outbox stage vào `outbox_message` cùng EF transaction; `BusOutboxDeliveryService` publish lên RabbitMQ.
 
 **Saga Choreography (planned)** — Inventory tham gia order saga: nhận `OrderCreated`, kiểm tra/reserve stock, emit `StockReserved` hoặc `StockReservationFailed`.

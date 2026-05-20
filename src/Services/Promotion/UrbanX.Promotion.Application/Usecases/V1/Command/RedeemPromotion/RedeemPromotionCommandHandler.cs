@@ -2,7 +2,6 @@ using Shared.Application;
 using Shared.Cache.Abstractions;
 using Shared.Contract.Messaging.Promotion;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using StackExchange.Redis;
 using UrbanX.Promotion.Domain.Errors;
 using UrbanX.Promotion.Domain.Models;
@@ -15,7 +14,7 @@ internal sealed class RedeemPromotionCommandHandler(
     IPromotionRepository promotionRepository,
     IPromotionUsageRepository usageRepository,
     ICacheService cacheService,
-    IOutboxWriter outboxWriter)
+    IEventPublisher eventPublisher)
     : ICommandHandler<RedeemPromotionCommand, RedeemPromotionResult>
 {
     // Atomic slot claim: return 1=claimed, 0=sold out, -1=key not initialized
@@ -74,7 +73,7 @@ internal sealed class RedeemPromotionCommandHandler(
             var usage = PromotionUsage.Record(promotion.Id, appliedVoucherCodeId, cmd.OrderId, cmd.CustomerId, orderLevelDiscount);
             await usageRepository.AddAsync(usage, ct);
 
-            await outboxWriter.WriteAsync(new PromotionIntegrationEvents.PromotionRedeemedV1(
+            await eventPublisher.PublishAsync(new PromotionIntegrationEvents.PromotionRedeemedV1(
                 promotion.Id, cmd.OrderId, cmd.CustomerId, orderLevelDiscount,
                 promotion.Type, cmd.CouponCode, now), ct);
         }
@@ -121,7 +120,7 @@ internal sealed class RedeemPromotionCommandHandler(
                         flashPromotion.Id, null, cmd.OrderId, cmd.CustomerId, discountPerUnit * orderItem.Quantity);
                     await usageRepository.AddAsync(flashUsage, ct);
 
-                    await outboxWriter.WriteAsync(new PromotionIntegrationEvents.PromotionRedeemedV1(
+                    await eventPublisher.PublishAsync(new PromotionIntegrationEvents.PromotionRedeemedV1(
                         flashPromotion.Id, cmd.OrderId, cmd.CustomerId, discountPerUnit * orderItem.Quantity,
                         flashPromotion.Type, null, now), ct);
                 }

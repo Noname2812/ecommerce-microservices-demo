@@ -1,12 +1,12 @@
 using Carter;
 using Duende.IdentityServer;
+using MassTransit;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
-using Shared.Outbox.DependencyInjection.Extensions;
 using UrbanX.Identity.API.Configuration;
 using UrbanX.Identity.Application.DependencyInjection.Extensions;
 using UrbanX.Identity.Domain.Models;
@@ -20,17 +20,23 @@ builder.AddServiceDefaults();
 builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
-// Database + Outbox
+// Database
 builder.AddNpgsqlDbContext<IdentityDbContext>("identitydb",
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
-builder.Services.AddOutbox<IdentityDbContext>(
-    configureDb: null,
-    builder.Configuration);
 
-// Messaging
+// Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(builder.Configuration);
+    .AddMessaging(builder.Configuration, configureBus: bus =>
+    {
+        bus.AddEntityFrameworkOutbox<IdentityDbContext>(o =>
+        {
+            o.UsePostgres();
+            o.UseBusOutbox();
+            o.QueryDelay = TimeSpan.FromSeconds(1);
+            o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
+        });
+    });
 
 // Health checks
 builder.Services.AddHealthChecks()

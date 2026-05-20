@@ -1,8 +1,8 @@
 using Carter;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
-using Shared.Outbox.DependencyInjection.Extensions;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Payment.Application.DependencyInjection.Extensions;
 using UrbanX.Payment.Application.Messaging.CreatePaymentSession;
@@ -19,18 +19,22 @@ builder.Services.AddOpenApi();
 // Database
 builder.AddNpgsqlDbContext<PaymentDbContext>("paymentdb",
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
-builder.Services.AddOutbox<PaymentDbContext>(
-    configureDb: null,
-    builder.Configuration
-);
 
-// Messaging
+// Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(
         builder.Configuration,
         configureBus: bus =>
         {
+            bus.AddEntityFrameworkOutbox<PaymentDbContext>(o =>
+            {
+                o.UsePostgres();
+                o.UseBusOutbox();
+                o.QueryDelay = TimeSpan.FromSeconds(1);
+                o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
+            });
+
             bus.AddConsumer<OrderCancelledConsumer>();
             bus.AddConsumer<CreatePaymentSessionConsumer>();
         });
