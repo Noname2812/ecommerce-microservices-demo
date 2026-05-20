@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using UrbanX.Inventory.Application.Usecases.V1.Command.ConfirmReservation;
 using UrbanX.Inventory.Domain;
-using UrbanX.Inventory.Domain.Errors;
 using UrbanX.Inventory.Domain.Models;
 using UrbanX.Inventory.Domain.ValueObjects;
 
@@ -11,44 +10,37 @@ namespace UrbanX.Services.Inventory.UnitTests.Usecases.V1.Command.ConfirmReserva
 public class ConfirmReservationCommandHandlerTests
 {
     private readonly Mock<IInventoryReservationRepository> _reservations = new();
+    private readonly Mock<IInventoryItemRepository> _inventoryItems = new();
     private readonly Mock<IStockMovementRepository> _stockMovements = new();
     private readonly Mock<IProcessedEventRepository> _processedEvents = new();
 
     private ConfirmReservationCommandHandler CreateHandler() =>
         new(
             _reservations.Object,
+            _inventoryItems.Object,
             _stockMovements.Object,
             _processedEvents.Object,
             NullLogger<ConfirmReservationCommandHandler>.Instance);
 
     [Fact]
-    public async Task Handle_HappyPath_ConfirmsReservationDeductsStockAndAddsMovement()
+    public async Task Handle_HappyPath_AtomicConfirmsAndDeductsAndAddsMovement()
     {
         var reservationId = Guid.Parse("50000000-0000-4000-8000-000000000001");
         var orderId = Guid.Parse("60000000-0000-4000-8000-000000000001");
+        var itemId = Guid.Parse("70000000-0000-4000-8000-000000000001");
         var eventId = Guid.Parse("80000000-0000-4000-8000-000000000001");
-        var item = new InventoryItem
-        {
-            Id = Guid.Parse("70000000-0000-4000-8000-000000000001"),
-            QuantityOnHand = 50,
-            QuantityReserved = 5
-        };
-        var reservation = new InventoryReservation
-        {
-            Id = reservationId,
-            OrderId = orderId,
-            Quantity = 5,
-            Status = ReservationStatus.Pending,
-            InventoryItem = item
-        };
 
         _processedEvents
             .Setup(r => r.ExistsAsync(eventId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         _reservations
-            .Setup(r => r.GetTrackedByIdWithInventoryItemForUpdateAsync(reservationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(reservation);
+            .Setup(r => r.TryMarkConfirmedAtomicAsync(reservationId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReservationConfirmResult(itemId, 5, orderId));
+
+        _inventoryItems
+            .Setup(r => r.ConfirmDeductAtomicAsync(itemId, 5, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(50);
 
         StockMovement? movement = null;
         _stockMovements
@@ -67,10 +59,6 @@ public class ConfirmReservationCommandHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(ReservationStatus.Confirmed, reservation.Status);
-        Assert.NotNull(reservation.ConfirmedAt);
-        Assert.Equal(0, item.QuantityReserved);
-        Assert.Equal(45, item.QuantityOnHand);
         Assert.NotNull(movement);
         Assert.Equal(MovementType.Sale, movement!.MovementType);
         Assert.Equal(-5, movement.QuantityChange);
@@ -91,22 +79,18 @@ public class ConfirmReservationCommandHandlerTests
     {
         var reservationId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
-        var reservation = new InventoryReservation
-        {
-            Id = reservationId,
-            Status = ReservationStatus.Pending,
-            Quantity = 2,
-            InventoryItem = new InventoryItem { QuantityOnHand = 10, QuantityReserved = 2 }
-        };
-        reservation.Confirm(DateTimeOffset.UtcNow);
 
         _processedEvents
             .Setup(r => r.ExistsAsync(eventId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         _reservations
-            .Setup(r => r.GetTrackedByIdWithInventoryItemForUpdateAsync(reservationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(reservation);
+            .Setup(r => r.TryMarkConfirmedAtomicAsync(reservationId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ReservationConfirmResult?)null);
+
+        _reservations
+            .Setup(r => r.GetStatusAsync(reservationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReservationStatus.Confirmed);
 
         var handler = CreateHandler();
         var result = await handler.Handle(
@@ -114,6 +98,9 @@ public class ConfirmReservationCommandHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
+        _inventoryItems.Verify(
+            r => r.ConfirmDeductAtomicAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
+            Times.Never);
         _stockMovements.Verify(
             r => r.AddAsync(It.IsAny<StockMovement>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -121,7 +108,7 @@ public class ConfirmReservationCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenEventAlreadyProcessed_ReturnsSuccessWithoutLoadingReservation()
+    public async Task Handle_WhenEventAlreadyProcessed_ReturnsSuccessWithoutAtomicCalls()
     {
         var eventId = Guid.NewGuid();
 
@@ -136,9 +123,7 @@ public class ConfirmReservationCommandHandlerTests
 
         Assert.True(result.IsSuccess);
         _reservations.Verify(
-            r => r.GetTrackedByIdWithInventoryItemForUpdateAsync(
-                It.IsAny<Guid>(),
-                It.IsAny<CancellationToken>()),
+            r => r.TryMarkConfirmedAtomicAsync(It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -148,8 +133,12 @@ public class ConfirmReservationCommandHandlerTests
         var reservationId = Guid.NewGuid();
 
         _reservations
-            .Setup(r => r.GetTrackedByIdWithInventoryItemForUpdateAsync(reservationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((InventoryReservation?)null);
+            .Setup(r => r.TryMarkConfirmedAtomicAsync(reservationId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ReservationConfirmResult?)null);
+
+        _reservations
+            .Setup(r => r.GetStatusAsync(reservationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
 
         var handler = CreateHandler();
         var result = await handler.Handle(
@@ -166,21 +155,18 @@ public class ConfirmReservationCommandHandlerTests
     {
         var reservationId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
-        var reservation = new InventoryReservation
-        {
-            Id = reservationId,
-            Status = ReservationStatus.Released,
-            Quantity = 3,
-            InventoryItem = new InventoryItem { QuantityOnHand = 10, QuantityReserved = 0 }
-        };
 
         _processedEvents
             .Setup(r => r.ExistsAsync(eventId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         _reservations
-            .Setup(r => r.GetTrackedByIdWithInventoryItemForUpdateAsync(reservationId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(reservation);
+            .Setup(r => r.TryMarkConfirmedAtomicAsync(reservationId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ReservationConfirmResult?)null);
+
+        _reservations
+            .Setup(r => r.GetStatusAsync(reservationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReservationStatus.Released);
 
         var handler = CreateHandler();
         var result = await handler.Handle(
@@ -195,7 +181,7 @@ public class ConfirmReservationCommandHandlerTests
         _processedEvents.Verify(r => r.StageInsert(It.IsAny<ProcessedEvent>()), Times.Never);
     }
 
-    [Fact(Skip = "P2: PostgreSQL + xmin — two parallel confirms for same reservation must deduct once (see TC_INV_004).")]
+    [Fact(Skip = "P2: PostgreSQL — two parallel atomic confirms for same reservation must deduct once (idempotency via atomic CAS).")]
     public void Handle_ConcurrentConfirm_IntegrationOnly()
     {
     }

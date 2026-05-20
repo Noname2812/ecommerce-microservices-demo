@@ -1,9 +1,8 @@
-﻿using Shared.Application;
+using Shared.Application;
 using Shared.Kernel.Primitives;
 using UrbanX.Inventory.Domain;
 using UrbanX.Inventory.Domain.Errors;
 using UrbanX.Inventory.Domain.Models;
-using UrbanX.Inventory.Domain.ValueObjects;
 
 namespace UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 
@@ -32,42 +31,52 @@ public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInve
             return Result.Success(MapExisting(existing));
 
         var merged = MergeLines(request.Items);
-        var productIds = merged.Keys.ToList();
 
-        var lines = await _inventoryItems.GetTrackedPrimaryLinePerProductAsync(productIds, cancellationToken);
+        // Lookup primary item id per product (no lock — atomic UPDATE below does the locking).
+        var itemMap = await _inventoryItems.GetPrimaryItemIdsByProductAsync(
+            merged.Keys.ToArray(),
+            cancellationToken);
 
-        foreach (var pid in productIds)
+        foreach (var pid in merged.Keys)
         {
-            if (!lines.ContainsKey(pid))
+            if (!itemMap.ContainsKey(pid))
                 return Result.Failure<ReserveInventoryResponse>(
                     InventoryReservationErrors.ProductNotFoundForReservation(pid));
-        }
-
-        foreach (var (pid, qty) in merged)
-        {
-            var line = lines[pid];
-            var available = line.QuantityAvailable;
-            if (available < qty)
-                return Result.Failure<ReserveInventoryResponse>(
-                    InventoryReservationErrors.OutOfStock(pid, qty, available));
         }
 
         var utc = DateTimeOffset.UtcNow;
         var expiresAt = utc.AddMinutes(15);
         var newRows = new List<InventoryReservation>();
 
-        foreach (var (pid, qty) in merged)
+        // Sort by item id so concurrent multi-item reserves acquire locks in the same order →
+        // PostgreSQL deadlock-safe. Each UPDATE is an atomic CAS: increments quantity_reserved only
+        // when stock still available; PG row lock is held ~ms during the UPDATE, then released.
+        var orderedItems = merged
+            .Select(kv => new { ProductId = kv.Key, ItemId = itemMap[kv.Key], Qty = kv.Value })
+            .OrderBy(x => x.ItemId)
+            .ToList();
+
+        foreach (var item in orderedItems)
         {
-            var item = lines[pid];
-            item.QuantityReserved += qty;
-            item.UpdatedAt = utc;
+            var affected = await _inventoryItems.TryReserveAtomicAsync(
+                item.ItemId, item.Qty, utc, cancellationToken);
+
+            if (affected == 0)
+            {
+                // Failed CAS = stock exhausted at the moment of UPDATE. Read the current available
+                // for a helpful error message; TransactionPipelineBehavior will roll back any earlier
+                // UPDATEs we did in this same transaction.
+                var available = await _inventoryItems.GetAvailableQuantityAsync(item.ItemId, cancellationToken);
+                return Result.Failure<ReserveInventoryResponse>(
+                    InventoryReservationErrors.OutOfStock(item.ProductId, item.Qty, available));
+            }
 
             newRows.Add(InventoryReservation.CreatePending(
                 id:                  Guid.NewGuid(),
-                inventoryItemId:     item.Id,
-                productId:           pid,
+                inventoryItemId:     item.ItemId,
+                productId:           item.ProductId,
                 orderIdempotencyKey: request.IdempotencyKey,
-                quantity:            qty,
+                quantity:            item.Qty,
                 expiresAt:           expiresAt,
                 utcNow:              utc));
         }

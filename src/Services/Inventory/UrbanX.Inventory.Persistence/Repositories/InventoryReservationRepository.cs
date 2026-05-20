@@ -24,33 +24,6 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
     public void AddRange(IEnumerable<InventoryReservation> reservations) =>
         dbContext.InventoryReservations.AddRange(reservations);
 
-    public async Task<InventoryReservation?> GetTrackedByIdWithInventoryItemAsync(
-        Guid id,
-        CancellationToken cancellationToken)
-    {
-        return await dbContext.InventoryReservations
-            .Include(r => r.InventoryItem)
-            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
-    }
-
-    public async Task<InventoryReservation?> GetTrackedByIdWithInventoryItemForUpdateAsync(
-        Guid id,
-        CancellationToken cancellationToken)
-    {
-        // Single query: FOR UPDATE inside the FromSql subquery locks the reservation row;
-        // EF joins inventory_items into the same SELECT (item lock is xmin optimistic, not row-level).
-        // Note: SELECT * maps by column name; new reservation columns require a migration before deploy.
-        return await dbContext.InventoryReservations
-            .FromSqlInterpolated(
-                $"""
-                 SELECT * FROM inventory_reservations
-                 WHERE id = {id}
-                 FOR UPDATE
-                 """)
-            .Include(r => r.InventoryItem)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
     public async Task<IReadOnlyList<InventoryReservation>> GetExpiredPendingBatchAsync(
         int batchSize,
         DateTimeOffset expiredBefore,
@@ -62,5 +35,52 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
             .OrderBy(r => r.ExpiresAt)
             .Take(batchSize)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<ReservationStateChangeResult?> TryMarkReleasedAtomicAsync(
+        Guid reservationId,
+        DateTimeOffset utcNow,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbContext.Database
+            .SqlQuery<ReservationStateChangeResult>(
+                $@"UPDATE inventory_reservations
+                   SET status = {ReservationStatus.Released},
+                       updated_at = {utcNow},
+                       released_at = {utcNow}
+                   WHERE id = {reservationId} AND status = {ReservationStatus.Pending}
+                   RETURNING inventory_item_id AS ""InventoryItemId"", quantity AS ""Quantity""")
+            .ToListAsync(cancellationToken);
+
+        return rows.Count == 0 ? null : rows[0];
+    }
+
+    public async Task<ReservationConfirmResult?> TryMarkConfirmedAtomicAsync(
+        Guid reservationId,
+        DateTimeOffset utcNow,
+        CancellationToken cancellationToken)
+    {
+        var rows = await dbContext.Database
+            .SqlQuery<ReservationConfirmResult>(
+                $@"UPDATE inventory_reservations
+                   SET status = {ReservationStatus.Confirmed},
+                       updated_at = {utcNow},
+                       confirmed_at = {utcNow}
+                   WHERE id = {reservationId} AND status = {ReservationStatus.Pending}
+                   RETURNING inventory_item_id AS ""InventoryItemId"",
+                             quantity AS ""Quantity"",
+                             order_id AS ""OrderId""")
+            .ToListAsync(cancellationToken);
+
+        return rows.Count == 0 ? null : rows[0];
+    }
+
+    public async Task<string?> GetStatusAsync(Guid reservationId, CancellationToken cancellationToken)
+    {
+        return await dbContext.InventoryReservations
+            .AsNoTracking()
+            .Where(r => r.Id == reservationId)
+            .Select(r => r.Status)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 }

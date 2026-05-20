@@ -8,6 +8,14 @@ namespace Shared.Messaging.Behaviors;
 
 /// <summary>
 /// Wraps command handlers in a DB transaction. Only applies to <see cref="ICommandBase"/> (not queries).
+///
+/// <para>
+/// Handlers that mutate the database before reaching a <see cref="Result.Failure(Error)"/> branch
+/// (e.g. atomic CAS UPDATEs that persist between validation steps) need the transaction to roll back
+/// rather than commit the partial writes. We translate <c>IResult.IsFailure</c> into an internal
+/// exception so the unit-of-work's existing exception path rolls back, then catch it here and return
+/// the original failure to the caller.
+/// </para>
 /// </summary>
 public sealed class TransactionPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
@@ -43,17 +51,25 @@ public sealed class TransactionPipelineBehavior<TRequest, TResponse>
             if (_isConcurrencyRetriable)
             {
                 await _uow.ExecuteInTransactionWithConcurrencyRetryAsync(
-                    async () => response = await next(cancellationToken),
+                    () => RunAndAbortOnFailureAsync(next, r => response = r, cancellationToken),
                     cancellationToken);
             }
             else
             {
                 await _uow.ExecuteInTransactionAsync(
-                    async () => response = await next(cancellationToken),
+                    () => RunAndAbortOnFailureAsync(next, r => response = r, cancellationToken),
                     cancellationToken);
             }
 
             _logger.LogInformation("Committed transaction for {RequestName}", _requestName);
+        }
+        catch (HandlerFailureAbortException)
+        {
+            // Handler returned IResult.IsFailure — the unit-of-work already rolled back any pending
+            // DB writes (including atomic UPDATEs applied earlier in the same transaction).
+            _logger.LogInformation(
+                "Rolled back transaction for {RequestName} because handler returned a failure result",
+                _requestName);
         }
         catch (OperationCanceledException)
         {
@@ -73,4 +89,21 @@ public sealed class TransactionPipelineBehavior<TRequest, TResponse>
 
         return response;
     }
+
+    private static async Task RunAndAbortOnFailureAsync(
+        RequestHandlerDelegate<TResponse> next,
+        Action<TResponse> capture,
+        CancellationToken cancellationToken)
+    {
+        var result = await next(cancellationToken);
+        capture(result);
+
+        // Triggers the unit-of-work's catch-all rollback path so any atomic UPDATEs already applied
+        // in this transaction are reverted. The pipeline catches this exception type specifically and
+        // returns the captured response to the caller — the failure surfaces as a Result, not an exception.
+        if (result is IResult { IsFailure: true })
+            throw new HandlerFailureAbortException();
+    }
+
+    private sealed class HandlerFailureAbortException : Exception;
 }
