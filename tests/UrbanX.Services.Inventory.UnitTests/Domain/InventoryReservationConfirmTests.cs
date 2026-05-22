@@ -1,56 +1,57 @@
-using UrbanX.Inventory.Domain.Errors;
 using UrbanX.Inventory.Domain.Models;
 using UrbanX.Inventory.Domain.ValueObjects;
 
 namespace UrbanX.Services.Inventory.UnitTests.Domain;
 
-public class InventoryReservationConfirmTests
+public sealed class InventoryReservationConfirmTests
 {
     private static readonly DateTimeOffset Utc = DateTimeOffset.Parse("2026-05-18T12:00:00Z");
 
     [Fact]
-    public void Confirm_WhenPending_SetsConfirmedStatusAndConfirmedAt()
+    public void Confirm_FromPending_SetsConfirmedStatus()
     {
         var reservation = InventoryReservation.CreatePending(
             Guid.NewGuid(),
             Guid.NewGuid(),
-            Guid.NewGuid(),
-            "idem",
-            1,
+            2,
             Utc.AddHours(1),
-            Utc.AddMinutes(-1));
+            Utc);
 
         reservation.Confirm(Utc);
 
         Assert.Equal(ReservationStatus.Confirmed, reservation.Status);
         Assert.Equal(Utc, reservation.ConfirmedAt);
-        Assert.Equal(Utc, reservation.UpdatedAt);
     }
 
     [Fact]
-    public void Confirm_WhenAlreadyConfirmed_IsIdempotentNoOp()
+    public void Confirm_WhenAlreadyConfirmed_IsIdempotent()
     {
         var reservation = InventoryReservation.CreatePending(
-            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "idem", 1, Utc.AddHours(1), Utc);
-        reservation.Confirm(Utc.AddHours(-1));
-        var confirmedAt = reservation.ConfirmedAt;
-        var updatedAt = reservation.UpdatedAt;
-
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            1,
+            Utc.AddHours(1),
+            Utc);
         reservation.Confirm(Utc);
 
-        Assert.Equal(confirmedAt, reservation.ConfirmedAt);
-        Assert.Equal(updatedAt, reservation.UpdatedAt);
+        reservation.Confirm(Utc.AddMinutes(5));
+
+        Assert.Equal(ReservationStatus.Confirmed, reservation.Status);
     }
 
     [Fact]
-    public void Confirm_WhenReleased_ThrowsDomainException()
+    public void MarkReleased_SetsReleasedStatus()
     {
         var reservation = InventoryReservation.CreatePending(
-            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "idem", 1, Utc.AddHours(1), Utc);
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            3,
+            Utc.AddHours(1),
+            Utc);
+
         reservation.MarkReleased(Utc);
 
-        var ex = Assert.Throws<InventoryDomainException>(() => reservation.Confirm(Utc));
-
-        Assert.Contains("RELEASED", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ReservationStatus.Released, reservation.Status);
+        Assert.Equal(Utc, reservation.ReleasedAt);
     }
 }

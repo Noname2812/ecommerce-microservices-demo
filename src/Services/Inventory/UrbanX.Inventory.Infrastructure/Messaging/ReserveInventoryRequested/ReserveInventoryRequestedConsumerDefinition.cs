@@ -1,8 +1,9 @@
 using MassTransit;
+using MassTransit.RabbitMqTransport;
 using Microsoft.Extensions.Options;
 using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Inventory.Infrastructure.Messaging;
+namespace UrbanX.Inventory.Infrastructure.Messaging.ReserveInventoryRequested;
 
 public sealed class ReserveInventoryRequestedConsumerDefinition
     : ConsumerDefinition<ReserveInventoryRequestedConsumer>

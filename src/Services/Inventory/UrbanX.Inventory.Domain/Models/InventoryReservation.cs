@@ -62,9 +62,7 @@ public class InventoryReservation : BaseEntity<Guid>
             return;
 
         if (Status != ReservationStatus.Pending)
-            // throw new InventoryDomainException(
-            //     "InventoryReservation.InvalidStatus",
-            //     $"Cannot confirm reservation in status {Status}");
+            return;
 
         Status = ReservationStatus.Confirmed;
         ConfirmedAt = utcNow;

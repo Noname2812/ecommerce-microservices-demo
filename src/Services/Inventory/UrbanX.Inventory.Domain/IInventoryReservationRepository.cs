@@ -5,12 +5,15 @@ namespace UrbanX.Inventory.Domain;
 public interface IInventoryReservationRepository
 {
     /// <summary>
-    /// Rows for this order idempotency key that still represent an active reservation outcome
-    /// (pending hold or already confirmed). Excludes released/cancelled so a later lifecycle does not
-    /// cause a duplicate reserve for the same key.
+    /// Active reservations for an order (pending or confirmed). Used for reserve idempotency replay.
     /// </summary>
-    Task<IReadOnlyList<InventoryReservation>> GetReservationsForIdempotentReplayAsync(
-        string orderIdempotencyKey,
+    Task<IReadOnlyList<InventoryReservation>> GetActiveReservationsByOrderIdAsync(
+        Guid orderId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Pending reservation ids for an order (compensation / release by order).</summary>
+    Task<IReadOnlyList<Guid>> GetPendingReservationIdsByOrderIdAsync(
+        Guid orderId,
         CancellationToken cancellationToken);
 
     void AddRange(IEnumerable<InventoryReservation> reservations);
@@ -36,20 +39,15 @@ public interface IInventoryReservationRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Atomic <c>UPDATE … WHERE status = 'PENDING' RETURNING inventory_item_id, quantity, order_id</c>.
-    /// Returns <c>null</c> when no row matches — caller falls back to <see cref="GetStatusAsync"/>
-    /// to distinguish NotFound vs already Confirmed/Released/Cancelled.
+    /// Atomic confirm for all pending rows on an order. Returns one entry per updated reservation.
     /// </summary>
-    Task<ReservationConfirmResult?> TryMarkConfirmedAtomicAsync(
-        Guid reservationId,
+    Task<IReadOnlyList<ReservationConfirmResult>> TryMarkConfirmedByOrderIdAsync(
+        Guid orderId,
         DateTimeOffset utcNow,
         CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Reads <c>status</c> column only; used to map <see cref="TryMarkReleasedAtomicAsync"/> /
-    /// <see cref="TryMarkConfirmedAtomicAsync"/> miss into the correct domain error.
-    /// </summary>
-    Task<string?> GetStatusAsync(Guid reservationId, CancellationToken cancellationToken);
+    /// <summary>Reads status of the first reservation row for the order, if any.</summary>
+    Task<string?> GetStatusByOrderIdAsync(Guid orderId, CancellationToken cancellationToken);
 }
 
 /// <summary>Projected result of an atomic release UPDATE … RETURNING.</summary>

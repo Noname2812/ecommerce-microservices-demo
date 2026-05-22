@@ -17,6 +17,11 @@ public interface IInventoryItemRepository
         IReadOnlyCollection<Guid> productIds,
         CancellationToken cancellationToken);
 
+    /// <summary>Maps catalog <paramref name="variantIds"/> to inventory item ids (one row per variant).</summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> GetItemIdsByVariantIdsAsync(
+        IReadOnlyCollection<Guid> variantIds,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Atomic CAS reserve: <c>UPDATE … SET quantity_reserved = quantity_reserved + qty WHERE quantity_on_hand - quantity_reserved &gt;= qty</c>.
     /// Returns 1 on success, 0 when stock insufficient at the moment of UPDATE.

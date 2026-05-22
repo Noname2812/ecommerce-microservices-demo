@@ -5,6 +5,24 @@ namespace UrbanX.Inventory.Persistence.Repositories;
 
 public sealed class InventoryItemRepository(InventoryDbContext dbContext) : IInventoryItemRepository
 {
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetItemIdsByVariantIdsAsync(
+        IReadOnlyCollection<Guid> variantIds,
+        CancellationToken cancellationToken)
+    {
+        if (variantIds.Count == 0)
+            return new Dictionary<Guid, Guid>();
+
+        var distinct = variantIds.Distinct().ToArray();
+
+        var rows = await dbContext.InventoryItems
+            .AsNoTracking()
+            .Where(i => distinct.Contains(i.VariantId))
+            .Select(i => new { i.VariantId, i.Id })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.VariantId, x => x.Id);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, Guid>> GetPrimaryItemIdsByProductAsync(
         IReadOnlyCollection<Guid> productIds,
         CancellationToken cancellationToken)

@@ -55,14 +55,10 @@ public class InventoryItem : BaseEntity<Guid>
     public Error? ConfirmDeduction(int quantity, DateTimeOffset utcNow)
     {
         if (quantity <= 0)
-            //throw new InventoryDomainException(
-            //    "InventoryItem.InvalidConfirmQuantity",
-            //    "Confirm quantity must be positive");
+            return InventoryStockErrors.InvalidConfirmQuantity;
 
         if (quantity > QuantityReserved)
-            //throw new InventoryDomainException(
-            //    "InventoryItem.InsufficientReservedForConfirm",
-            //    $"Cannot confirm {quantity}; only {QuantityReserved} reserved");
+            return InventoryStockErrors.InsufficientReservedForConfirm(Id, quantity, QuantityReserved);
 
         QuantityReserved -= quantity;
         QuantityOnHand -= quantity;

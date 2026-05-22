@@ -3,7 +3,7 @@ using MassTransit.RabbitMqTransport;
 using Microsoft.Extensions.Options;
 using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Inventory.Infrastructure.Messaging;
+namespace UrbanX.Inventory.Infrastructure.Messaging.ConfirmInventoryRequested;
 
 public sealed class ConfirmInventoryRequestedConsumerDefinition
     : ConsumerDefinition<ConfirmInventoryRequestedConsumer>

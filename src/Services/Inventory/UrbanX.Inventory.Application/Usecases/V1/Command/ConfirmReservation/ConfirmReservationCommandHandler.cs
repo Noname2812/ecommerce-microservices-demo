@@ -1,17 +1,33 @@
-using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Kernel.Primitives;
+using UrbanX.Inventory.Domain;
 
 namespace UrbanX.Inventory.Application.Usecases.V1.Command.ConfirmReservation;
 
 internal sealed class ConfirmReservationCommandHandler(
-    ILogger<ConfirmReservationCommandHandler> logger)
-    : ICommandHandler<ConfirmReservationCommand>
+    IInventoryReservationRepository reservationRepository,
+    IInventoryItemRepository inventoryItemRepository) : ICommandHandler<ConfirmReservationCommand>
 {
-    public Task<Result> Handle(ConfirmReservationCommand cmd, CancellationToken ct)
+    public async Task<Result> Handle(ConfirmReservationCommand request, CancellationToken cancellationToken)
     {
-        // Idempotency: MassTransit InboxState handles duplicate event delivery at the consumer level
-        // (DuplicateDetectionWindow + inbox_state table). Handler can focus on business logic.
-        return Task.FromResult(Result.Success());
+        var utcNow = DateTimeOffset.UtcNow;
+        var confirmed = await reservationRepository.TryMarkConfirmedByOrderIdAsync(
+            request.OrderId,
+            utcNow,
+            cancellationToken);
+
+        if (confirmed.Count == 0)
+            return Result.Success();
+
+        foreach (var row in confirmed)
+        {
+            await inventoryItemRepository.ConfirmDeductAtomicAsync(
+                row.InventoryItemId,
+                row.Quantity,
+                utcNow,
+                cancellationToken);
+        }
+
+        return Result.Success();
     }
 }

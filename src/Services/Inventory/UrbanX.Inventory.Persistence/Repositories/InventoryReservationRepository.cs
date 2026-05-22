@@ -7,16 +7,29 @@ namespace UrbanX.Inventory.Persistence.Repositories;
 
 public sealed class InventoryReservationRepository(InventoryDbContext dbContext) : IInventoryReservationRepository
 {
-    public async Task<IReadOnlyList<InventoryReservation>> GetReservationsForIdempotentReplayAsync(
-        string orderIdempotencyKey,
+    public async Task<IReadOnlyList<InventoryReservation>> GetActiveReservationsByOrderIdAsync(
+        Guid orderId,
         CancellationToken cancellationToken)
     {
         return await dbContext.InventoryReservations
             .AsNoTracking()
             .Where(r =>
-                r.Status == ReservationStatus.Pending || r.Status == ReservationStatus.Confirmed)
+                r.OrderId == orderId &&
+                (r.Status == ReservationStatus.Pending || r.Status == ReservationStatus.Confirmed))
             .OrderBy(r => r.CreatedAt)
             .ThenBy(r => r.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetPendingReservationIdsByOrderIdAsync(
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.InventoryReservations
+            .AsNoTracking()
+            .Where(r => r.OrderId == orderId && r.Status == ReservationStatus.Pending)
+            .OrderBy(r => r.Id)
+            .Select(r => r.Id)
             .ToListAsync(cancellationToken);
     }
 
@@ -54,31 +67,29 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
         return rows.Count == 0 ? null : rows[0];
     }
 
-    public async Task<ReservationConfirmResult?> TryMarkConfirmedAtomicAsync(
-        Guid OrderId,
+    public async Task<IReadOnlyList<ReservationConfirmResult>> TryMarkConfirmedByOrderIdAsync(
+        Guid orderId,
         DateTimeOffset utcNow,
         CancellationToken cancellationToken)
     {
-        var rows = await dbContext.Database
+        return await dbContext.Database
             .SqlQuery<ReservationConfirmResult>(
                 $@"UPDATE inventory_reservations
                    SET status = {ReservationStatus.Confirmed},
                        updated_at = {utcNow},
                        confirmed_at = {utcNow}
-                   WHERE order_id = {OrderId} AND status = {ReservationStatus.Pending}
+                   WHERE order_id = {orderId} AND status = {ReservationStatus.Pending}
                    RETURNING inventory_item_id AS ""InventoryItemId"",
                              quantity AS ""Quantity"",
                              order_id AS ""OrderId""")
             .ToListAsync(cancellationToken);
-
-        return rows.Count == 0 ? null : rows[0];
     }
 
-    public async Task<string?> GetStatusAsync(Guid OrderId, CancellationToken cancellationToken)
+    public async Task<string?> GetStatusByOrderIdAsync(Guid orderId, CancellationToken cancellationToken)
     {
         return await dbContext.InventoryReservations
             .AsNoTracking()
-            .Where(r => r.OrderId == OrderId)
+            .Where(r => r.OrderId == orderId)
             .Select(r => r.Status)
             .FirstOrDefaultAsync(cancellationToken);
     }

@@ -1,69 +1,97 @@
-using MassTransit;
 using Shared.Application;
+using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
 using UrbanX.Inventory.Domain;
 using UrbanX.Inventory.Domain.Models;
 
 namespace UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 
-public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInventoryCommand>
+public sealed class ReserveInventoryCommandHandler(
+    IInventoryItemRepository inventoryItems,
+    IInventoryReservationRepository reservations,
+    IEventPublisher eventPublisher) : ICommandHandler<ReserveInventoryCommand>
 {
-    private readonly IInventoryItemRepository _inventoryItems;
-    private readonly IInventoryReservationRepository _reservations;
-    private readonly IPublishEndpoint _publishEndpoint;
-
-    public ReserveInventoryCommandHandler(
-        IPublishEndpoint publishEndpoint,
-        IInventoryItemRepository inventoryItems,
-        IInventoryReservationRepository reservations)
+    public async Task<Result> Handle(ReserveInventoryCommand request, CancellationToken cancellationToken)
     {
-        _publishEndpoint = publishEndpoint;
-        _inventoryItems = inventoryItems;
-        _reservations = reservations;
-    }
+        var existing = await reservations.GetActiveReservationsByOrderIdAsync(request.OrderId, cancellationToken);
+        if (existing.Count > 0)
+            return Result.Success();
 
-    public async Task<Result> Handle(
-        ReserveInventoryCommand request,
-        CancellationToken cancellationToken)
-    {
-        // 1. Check VariantIds valid.
-            // If invalid => publish event InventoryReserveFailed
-        
-        // 2. Create reservations with status=PENDING and expires_at=utc+request.ExpiresInMinutes.
-        var utc = DateTimeOffset.UtcNow;
-        var expiresAt = utc.AddMinutes(request.ExpiresInMinutes);
-        var newRows = new List<InventoryReservation>();
-        var variantIdsOutOfStock = new List<Guid>();
+        var variantIds = request.Items.Select(i => i.VariantId).Distinct().ToArray();
+        var itemIdsByVariant = await inventoryItems.GetItemIdsByVariantIdsAsync(variantIds, cancellationToken);
 
-        foreach (var item in request.Items)
+        var unknownVariants = variantIds.Where(v => !itemIdsByVariant.ContainsKey(v)).ToList();
+        if (unknownVariants.Count > 0)
         {
-            var affected = await _inventoryItems.TryReserveAtomicAsync(
-                item.VariantId, item.Quantity, utc, cancellationToken);
+            await eventPublisher.PublishAsync(
+                new InventoryReserveFailedV1
+                {
+                    OrderId = request.OrderId,
+                    ErrorCode = "InventoryItem.NotFound",
+                    ErrorMessage = "One or more variants are not stocked.",
+                    VariantIdsOutOfStock = unknownVariants
+                },
+                cancellationToken);
+
+            return Result.Failure(new Error("InventoryItem.NotFound", "Variant not found in inventory."));
+        }
+
+        var utcNow = DateTimeOffset.UtcNow;
+        var expiresAt = utcNow.AddMinutes(request.ExpiresInMinutes);
+        var newRows = new List<InventoryReservation>();
+        var outOfStock = new List<Guid>();
+
+        foreach (var line in request.Items.OrderBy(i => itemIdsByVariant[i.VariantId]))
+        {
+            var itemId = itemIdsByVariant[line.VariantId];
+            var affected = await inventoryItems.TryReserveAtomicAsync(
+                itemId,
+                line.Quantity,
+                utcNow,
+                cancellationToken);
 
             if (affected == 0)
             {
-                // Add to out-of-stock list for error message, but keep trying to reserve other items to return a more complete result to client.
-                variantIdsOutOfStock.Add(item.VariantId);
-                continue;
+                outOfStock.Add(line.VariantId);
+                break;
             }
 
-            if (variantIdsOutOfStock.Count > 0)
-            {
-                continue; // Don't create reservations if any items are out of stock, but keep trying to reserve other items to return a more complete result to client.
-            }
-
-            // Create reservation rows for this item.
+            var reservation = InventoryReservation.CreatePending(
+                Guid.NewGuid(),
+                itemId,
+                line.Quantity,
+                expiresAt,
+                utcNow);
+            reservation.OrderId = request.OrderId;
+            newRows.Add(reservation);
         }
 
-        if (variantIdsOutOfStock.Count > 0)
+        if (outOfStock.Count > 0)
         {
-            // publish event Out of stock
-            // return Failure
+            await eventPublisher.PublishAsync(
+                new InventoryReserveFailedV1
+                {
+                    OrderId = request.OrderId,
+                    ErrorCode = "InventoryItem.OutOfStock",
+                    ErrorMessage = "Insufficient stock for one or more variants.",
+                    VariantIdsOutOfStock = outOfStock
+                },
+                cancellationToken);
+
+            return Result.Failure(new Error("InventoryItem.OutOfStock", "Insufficient stock."));
         }
 
-        _reservations.AddRange(newRows);
+        reservations.AddRange(newRows);
 
-        // publish event InventoryReserved
+        await eventPublisher.PublishAsync(
+            new InventoryReservedV1
+            {
+                OrderId = request.OrderId,
+                ReservationIds = newRows.Select(r => r.Id).ToList(),
+                ExpiresAt = expiresAt
+            },
+            cancellationToken);
+
         return Result.Success();
     }
 }

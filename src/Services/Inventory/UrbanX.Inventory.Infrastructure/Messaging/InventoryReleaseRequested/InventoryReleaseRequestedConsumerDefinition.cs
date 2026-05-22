@@ -3,13 +3,10 @@ using MassTransit.RabbitMqTransport;
 using Microsoft.Extensions.Options;
 using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Inventory.Infrastructure.Messaging;
+namespace UrbanX.Inventory.Infrastructure.Messaging.InventoryReleaseRequested;
 
 /// <summary>
 /// Binds the consumer queue to the fanout <c>compensation.events</c> exchange (see CompensationOutbox relay).
-/// Retry and optional throughput come from <see cref="InventoryReleaseRequestedConsumerOptions"/>.
-/// MassTransit 8: ctor <c>Endpoint(...)</c> only exposes endpoint definition (name, …), not
-/// <c>IReceiveEndpointConfigurator</c> middleware — retry must be applied in <see cref="ConfigureConsumer"/>.
 /// </summary>
 public sealed class InventoryReleaseRequestedConsumerDefinition
     : ConsumerDefinition<InventoryReleaseRequestedConsumer>

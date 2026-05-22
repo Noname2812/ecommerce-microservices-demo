@@ -10,7 +10,9 @@ using UrbanX.Inventory.Application.DependencyInjection.Extensions;
 using UrbanX.Inventory.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 using UrbanX.Inventory.Infrastructure.Jobs;
-using UrbanX.Inventory.Infrastructure.Messaging;
+using UrbanX.Inventory.Infrastructure.Messaging.ConfirmInventoryRequested;
+using UrbanX.Inventory.Infrastructure.Messaging.InventoryReleaseRequested;
+using UrbanX.Inventory.Infrastructure.Messaging.ReserveInventoryRequested;
 using UrbanX.Inventory.Persistence;
 using UrbanX.Inventory.Persistence.DependencyInjection.Extensions;
 using UrbanX.Inventory.Persistence.Seeding;
@@ -21,9 +23,6 @@ builder.AddServiceDefaults();
 builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
-// Database
-// Bounded Npgsql pool keeps the sum across services below PostgreSQL max_connections (see AppHost).
-// Sized for ConcurrentMessageLimit of the 3 inventory consumers + API + outbox dispatcher headroom.
 builder.AddNpgsqlDbContext<InventoryDbContext>("inventorydb",
     configureSettings: settings =>
     {
@@ -40,13 +39,9 @@ builder.AddNpgsqlDbContext<InventoryDbContext>("inventorydb",
     },
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 
-// Infrastructure (consumer options + jobs) — register before MassTransit resolves definitions at startup
 builder.Services.AddInfrastructure();
-
-// Application (MediatR + FluentValidation)
 builder.Services.AddApplication();
 
-// Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(
@@ -66,13 +61,10 @@ builder.Services
             bus.AddConsumer<ConfirmInventoryRequestedConsumer>(typeof(ConfirmInventoryRequestedConsumerDefinition));
         });
 
-// Health checks
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<InventoryDbContext>(name: "inventorydb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
-
-// Add Persistence
 builder.Services.AddPersistence();
 
 builder.Services
@@ -85,9 +77,7 @@ builder.Services
 
 builder.Services.AddCarter();
 
-// Hangfire — in-memory storage (swap to Hangfire.PostgreSql for production)
-builder.Services.AddHangfire(config =>
-    config.UseInMemoryStorage());
+builder.Services.AddHangfire(config => config.UseInMemoryStorage());
 builder.Services.AddHangfireServer();
 
 var app = builder.Build();
@@ -98,9 +88,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseExceptionHandler();
-
-// Trust-the-Gateway: read identity from X-User-* headers (set by Gateway).
-// Authorization is enforced via AuthorizationPipelineBehavior on each Command/Query.
 app.UseUserContext();
 
 using (var scope = app.Services.CreateScope())
@@ -121,13 +108,12 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Schedule TTL job using configured cron expression
 var jobOptions = app.Services.GetRequiredService<IOptions<ReleaseExpiredReservationsJobOptions>>().Value;
-var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
-recurringJobManager.AddOrUpdate<ReleaseExpiredReservationsJob>(
-    recurringJobId: "ttl-release-expired-reservations",
-    methodCall: job => job.ExecuteAsync(),
-    cronExpression: jobOptions.CronExpression);
+app.Services.GetRequiredService<IRecurringJobManager>()
+    .AddOrUpdate<ReleaseExpiredReservationsJob>(
+        recurringJobId: "ttl-release-expired-reservations",
+        methodCall: job => job.ExecuteAsync(),
+        cronExpression: jobOptions.CronExpression);
 
 app.MapCarter();
 app.Run();
