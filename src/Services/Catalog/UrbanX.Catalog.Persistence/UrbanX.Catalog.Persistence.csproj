@@ -15,6 +15,7 @@
     <PackageReference Include="Dapper" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" />
     <PackageReference Include="EFCore.NamingConventions" />
+    <PackageReference Include="MassTransit.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
@@ -25,7 +26,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\Shared.Kernel\Shared.Kernel.csproj" />
-    <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\UrbanX.Catalog.Domain\UrbanX.Catalog.Domain.csproj" />
   </ItemGroup>
 

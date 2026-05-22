@@ -26,7 +26,7 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     public string? CustomerNote { get; set; }
 
     // Side-effect tracking (compensation)
-    public Guid? ReservationId { get; set; }
+    public List<Guid> ReservationIds { get; set; } = new();
     public Guid? CouponClaimId { get; set; }
 
     // Catalog validation cache

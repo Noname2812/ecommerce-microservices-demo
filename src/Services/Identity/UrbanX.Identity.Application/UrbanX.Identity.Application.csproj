@@ -17,7 +17,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\Shared.Application\Shared.Application.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Contract\Shared.Contract.csproj" />
-    <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\UrbanX.Identity.Domain\UrbanX.Identity.Domain.csproj" />
     <ProjectReference Include="..\UrbanX.Identity.Infrastructure\UrbanX.Identity.Infrastructure.csproj" />
   </ItemGroup>

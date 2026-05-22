@@ -9,6 +9,8 @@
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" />
     <PackageReference Include="EFCore.NamingConventions" />
+    <PackageReference Include="MassTransit.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -18,7 +20,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\Shared.Kernel\Shared.Kernel.csproj" />
-    <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\UrbanX.Order.Domain\UrbanX.Order.Domain.csproj" />
     <ProjectReference Include="..\UrbanX.Order.Application\UrbanX.Order.Application.csproj" />
   </ItemGroup>

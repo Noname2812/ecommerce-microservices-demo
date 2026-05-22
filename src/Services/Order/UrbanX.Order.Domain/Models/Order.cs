@@ -9,7 +9,6 @@ public sealed class Order : BaseEntity<Guid>
 {
     public string OrderNumber { get; private set; } = null!;
     public Guid UserId { get; private set; }
-    public Guid? ReservationId { get; private set; }
     public Guid? CouponClaimId { get; private set; }
     public string CustomerEmail { get; private set; } = null!;
     public string CustomerName { get; private set; } = null!;
@@ -81,7 +80,6 @@ public sealed class Order : BaseEntity<Guid>
             Id = orderId,
             OrderNumber = orderNumber,
             UserId = userId,
-            ReservationId = null,
             CouponClaimId = null,
             CustomerEmail = customerEmail,
             CustomerName = customerName,
@@ -145,14 +143,13 @@ public sealed class Order : BaseEntity<Guid>
         && UserId == userId;
 
     public void MarkReadyForPayment(
-        Guid reservationId, Guid? claimId,
+        Guid? claimId,
         string paymentUrl, string? qrCodeUrl,
         Guid changedById, string changedByName)
     {
         if (Status != OrderStatus.Processing) return;
 
         var prev = Status;
-        ReservationId = reservationId;
         CouponClaimId = claimId;
         PaymentUrl = paymentUrl;
         QrCodeUrl = qrCodeUrl;

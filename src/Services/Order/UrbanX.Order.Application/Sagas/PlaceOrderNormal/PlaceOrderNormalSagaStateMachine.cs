@@ -86,7 +86,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
         // ── InventoryReserving ─────────────────────────────────────────────────
         During(InventoryReserving,
             When(InventoryReserved)
-                .Then(ctx => { ctx.Saga.ReservationId = ctx.Message.ReservationId; StampInstance(ctx.Saga); })
+                .Then(ctx => { ctx.Saga.ReservationIds = ctx.Message.ReservationIds; StampInstance(ctx.Saga); })
                 .Unschedule(InventoryTimeout)
                 .IfElse(
                     ctx => ctx.Saga.CouponCode != null,
@@ -219,7 +219,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
         // CouponClaim / CouponTimeout / PaymentSessionTimeout already published
         // InventoryReleaseRequestedV1 inline — skip here to avoid double-release.
         WhenEnter(Compensating, b => b
-            .If(ctx => ctx.Saga.ReservationId.HasValue
+            .If(ctx => ctx.Saga.ReservationIds.Any()
                        && ctx.Saga.FailureStep != "CouponClaim"
                        && ctx.Saga.FailureStep != "CouponTimeout"
                        && ctx.Saga.FailureStep != "PaymentSessionTimeout",
@@ -338,7 +338,6 @@ public sealed class PlaceOrderNormalSagaStateMachine
             }
 
             order.MarkReadyForPayment(
-                ctx.Saga.ReservationId!.Value,
                 ctx.Saga.CouponClaimId,
                 ctx.Message.PaymentUrl,
                 ctx.Message.QrCodeUrl,
@@ -501,14 +500,13 @@ public sealed class PlaceOrderNormalSagaStateMachine
     private static ReserveInventoryRequestedV1 BuildInventoryRequest(PlaceOrderNormalSagaState saga)
     {
         var items = JsonSerializer.Deserialize<List<NormalOrderItemSnapshot>>(saga.ItemsJson!)!
-            .Select(i => new InventoryReserveItem(i.ProductId, i.VariantId, i.Quantity))
+            .Select(i => new InventoryReserveItem(i.VariantId, i.Quantity))
             .ToList();
 
         return new ReserveInventoryRequestedV1
         {
             CorrelationId       = saga.OrderId.ToString("D"),
             OrderId             = saga.OrderId,
-            OrderIdempotencyKey = $"{saga.IdempotencyKey}:inv",
             Items               = items
         };
     }
@@ -534,9 +532,10 @@ public sealed class PlaceOrderNormalSagaStateMachine
 
     private static InventoryReleaseRequestedV1 BuildInventoryRelease(PlaceOrderNormalSagaState saga) => new()
     {
-        CorrelationId = saga.OrderId.ToString("D"),
-        ReservationId = saga.ReservationId!.Value,
-        Reason        = saga.FailureReason ?? "Order failed"
+        CausationId     = saga.OrderId.ToString("D"),
+        CorrelationId   = saga.OrderId.ToString("D"),
+        OrderId         = saga.OrderId,
+        Reason          = saga.FailureReason ?? "Order failed"
     };
 
     private static CouponReleaseRequestedV1 BuildCouponRelease(PlaceOrderNormalSagaState saga) => new()
@@ -550,7 +549,5 @@ public sealed class PlaceOrderNormalSagaStateMachine
     {
         CorrelationId  = saga.OrderId.ToString("D"),
         OrderId        = saga.OrderId,
-        ReservationId  = saga.ReservationId!.Value,
-        IdempotencyKey = $"{saga.IdempotencyKey}:confirm-inv"
     };
 }

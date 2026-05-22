@@ -1,28 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using UrbanX.Inventory.Domain.Models;
-using UrbanX.Inventory.Domain.ValueObjects;
 
 namespace UrbanX.Inventory.Persistence.Seeding;
 
 /// <summary>Dev/test seed: one warehouse and 10 stock lines with distinct available quantities.</summary>
 public static class InventoryDataSeeder
 {
-    private static readonly Guid SeedWarehouseId = Guid.Parse("AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA");
-
     public static async Task SeedIfEmptyAsync(InventoryDbContext context, CancellationToken cancellationToken = default)
     {
         if (await context.InventoryItems.AnyAsync(cancellationToken))
             return;
 
-        var warehouse = new Warehouse
-        {
-            Id = SeedWarehouseId,
-            Name = "Default DC",
-            Code = "DEFAULT",
-            Address = new WarehouseAddress("1 Seed St", null, null, "HCMC", null, "VN", "700000"),
-            IsActive = true
-        };
-        context.Warehouses.Add(warehouse);
 
         var utc = DateTimeOffset.UtcNow;
         for (var i = 0; i < 10; i++)
@@ -43,10 +31,9 @@ public static class InventoryDataSeeder
                 VariantId = variantId,
                 VariantSku = $"SEED-SKU-{n:D2}",
                 VariantName = $"Variant {n}",
-                WarehouseId = warehouse.Id,
+                IconUrl = $"https://example.com/seed-product-{n}.jpg",
                 QuantityOnHand = onHand,
                 QuantityReserved = reserved,
-                UpdatedAt = utc
             });
         }
 

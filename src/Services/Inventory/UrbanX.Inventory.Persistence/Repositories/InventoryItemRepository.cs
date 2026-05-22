@@ -37,8 +37,7 @@ public sealed class InventoryItemRepository(InventoryDbContext dbContext) : IInv
             .Where(i => i.Id == itemId
                         && i.QuantityOnHand - i.QuantityReserved >= quantity)
             .ExecuteUpdateAsync(s => s
-                .SetProperty(i => i.QuantityReserved, i => i.QuantityReserved + quantity)
-                .SetProperty(i => i.UpdatedAt, _ => utcNow),
+                .SetProperty(i => i.QuantityReserved, i => i.QuantityReserved + quantity),
                 cancellationToken);
     }
 
@@ -60,8 +59,7 @@ public sealed class InventoryItemRepository(InventoryDbContext dbContext) : IInv
         return dbContext.InventoryItems
             .Where(i => i.Id == itemId && i.QuantityReserved >= quantity)
             .ExecuteUpdateAsync(s => s
-                .SetProperty(i => i.QuantityReserved, i => i.QuantityReserved - quantity)
-                .SetProperty(i => i.UpdatedAt, _ => utcNow),
+                .SetProperty(i => i.QuantityReserved, i => i.QuantityReserved - quantity),
                 cancellationToken);
     }
 

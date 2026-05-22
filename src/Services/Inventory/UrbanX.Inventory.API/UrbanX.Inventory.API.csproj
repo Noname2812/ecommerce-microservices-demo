@@ -17,7 +17,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\ServiceDefaults\UrbanX.ServiceDefaults\UrbanX.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Cache\Shared.Cache.csproj" />
-    <ProjectReference Include="..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
     <ProjectReference Include="..\UrbanX.Inventory.Domain\UrbanX.Inventory.Domain.csproj" />
     <ProjectReference Include="..\UrbanX.Inventory.Application\UrbanX.Inventory.Application.csproj" />
     <ProjectReference Include="..\UrbanX.Inventory.Persistence\UrbanX.Inventory.Persistence.csproj" />

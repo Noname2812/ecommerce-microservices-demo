@@ -1,4 +1,4 @@
-namespace Shared.Application
+namespace Shared.Contract.Abstractions
 {
     /// <summary>
     /// Marks a command as idempotent. Supply a unique IdempotencyKey per request.

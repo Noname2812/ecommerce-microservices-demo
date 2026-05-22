@@ -1,4 +1,4 @@
-namespace Shared.Application
+namespace Shared.Contract.Abstractions
 {
     /// <summary>
     /// Abstraction for request/response messaging (MassTransit RequestClient).

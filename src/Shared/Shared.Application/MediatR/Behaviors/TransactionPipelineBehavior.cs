@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Shared.Application;
+using Shared.Contract.Abstractions;
 using Shared.Kernel.Exceptions;
 using Shared.Kernel.Primitives;
 

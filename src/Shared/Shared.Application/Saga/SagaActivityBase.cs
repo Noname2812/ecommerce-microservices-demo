@@ -19,7 +19,6 @@ namespace Shared.Messaging.Saga
         public void Accept(StateMachineVisitor visitor) =>
             visitor.Visit(this);
 
-        // ✅ Overload 1 — được gọi khi event có TData
         public async Task Execute(
             BehaviorContext<TInstance, TData> context,
             IBehavior<TInstance, TData> next)
@@ -40,12 +39,10 @@ namespace Shared.Messaging.Saga
             }
         }
 
-        // ✅ Overload 2 — bắt buộc, gọi khi không có TData context
         public Task Execute(
             BehaviorContext<TInstance> context,
             IBehavior<TInstance> next) => next.Execute(context);
 
-        // ✅ Overload 3 — bắt buộc, MassTransit gọi khi Faulted
         public Task Faulted<TException>(
             BehaviorExceptionContext<TInstance, TData, TException> context,
             IBehavior<TInstance, TData> next)

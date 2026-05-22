@@ -1,5 +1,3 @@
-﻿
-
 using MediatR;
 using Shared.Contract.Abstractions;
 

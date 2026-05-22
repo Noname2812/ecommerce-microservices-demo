@@ -5,11 +5,6 @@ using Shared.Contract.Abstractions;
 
 namespace Shared.Messaging
 {
-
-    /// <summary>
-    /// MassTransit-backed implementation of IEventPublisher.
-    /// Wraps IPublishEndpoint and adds structured logging + correlation propagation.
-    /// </summary>
     internal sealed class EventPublisher : IEventPublisher
     {
         private readonly IPublishEndpoint _publishEndpoint;
@@ -60,5 +55,4 @@ namespace Shared.Messaging
                 await PublishAsync(@event, cancellationToken);
         }
     }
-
 }

@@ -11,50 +11,40 @@ namespace UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 // just-committed row and returns Success — collapsing the duplicate into a single outcome.
 [AllowAnonymous]
 public record ReserveInventoryCommand(
-    string IdempotencyKey,
-    IReadOnlyList<ReserveInventoryLineItem> Items
-) : ICommand<ReserveInventoryResponse>, IConcurrencyRetriableCommand;
+    Guid OrderId,
+    double ExpiresInMinutes,
+    IReadOnlyList<ReserveInventoryLineItem> Items,
+    Guid? EventId = null
+) : ICommand<ReserveInventoryResponse>;
 
-public record ReserveInventoryLineItem(Guid ProductId, int Quantity);
+public record ReserveInventoryLineItem(Guid VariantId, int Quantity);
 
 public record ReserveInventoryResponse(
-    Guid ReservationId,
-    DateTimeOffset ExpiresAt,
-    IReadOnlyList<ReservedItemResponse> Items);
+    Guid OrderId,
+    IReadOnlyCollection<Guid> ReservationIds,
+    DateTimeOffset ExpiresAt
+);
 
-public record ReservedItemResponse(Guid ProductId, int Quantity);
 
 public sealed class ReserveInventoryCommandValidator : AbstractValidator<ReserveInventoryCommand>
 {
     public ReserveInventoryCommandValidator()
     {
-        RuleFor(x => x.IdempotencyKey)
-            .NotEmpty()
-            .MaximumLength(50)
-            .Must(BeValidIdempotencyKey)
-            .WithMessage("IdempotencyKey must be a UUID or '{uuid}:inv' (place-order inventory shard).");
+        RuleFor(x => x.OrderId)
+            .NotEmpty();
+        
         RuleFor(x => x.Items)
             .NotNull()
             .NotEmpty()
             .Must(i => i.Count <= 50)
-            .WithMessage("At most 50 items are allowed.");
+            .WithMessage("At most 50 items are allowed.")
+            .Must(items => items.Select(i => i.VariantId).Distinct().Count() == items.Count)
+            .WithMessage("Duplicate variant IDs are not allowed.");
+        
         RuleForEach(x => x.Items).ChildRules(line =>
         {
-            line.RuleFor(i => i.ProductId).NotEmpty();
+            line.RuleFor(i => i.VariantId).NotEmpty();
             line.RuleFor(i => i.Quantity).InclusiveBetween(1, 1000);
         });
-    }
-
-    private static bool BeValidIdempotencyKey(string key)
-    {
-        if (Guid.TryParse(key, out _))
-            return true;
-
-        const string suffix = ":inv";
-        if (key.Length <= suffix.Length || !key.EndsWith(suffix, StringComparison.Ordinal))
-            return false;
-
-        var prefix = key[..^suffix.Length];
-        return Guid.TryParse(prefix, out _);
     }
 }

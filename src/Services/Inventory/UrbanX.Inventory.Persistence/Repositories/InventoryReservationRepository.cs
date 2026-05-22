@@ -14,8 +14,7 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
         return await dbContext.InventoryReservations
             .AsNoTracking()
             .Where(r =>
-                r.OrderIdempotencyKey == orderIdempotencyKey &&
-                (r.Status == ReservationStatus.Pending || r.Status == ReservationStatus.Confirmed))
+                r.Status == ReservationStatus.Pending || r.Status == ReservationStatus.Confirmed)
             .OrderBy(r => r.CreatedAt)
             .ThenBy(r => r.Id)
             .ToListAsync(cancellationToken);
@@ -56,7 +55,7 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
     }
 
     public async Task<ReservationConfirmResult?> TryMarkConfirmedAtomicAsync(
-        Guid reservationId,
+        Guid OrderId,
         DateTimeOffset utcNow,
         CancellationToken cancellationToken)
     {
@@ -66,7 +65,7 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
                    SET status = {ReservationStatus.Confirmed},
                        updated_at = {utcNow},
                        confirmed_at = {utcNow}
-                   WHERE id = {reservationId} AND status = {ReservationStatus.Pending}
+                   WHERE order_id = {OrderId} AND status = {ReservationStatus.Pending}
                    RETURNING inventory_item_id AS ""InventoryItemId"",
                              quantity AS ""Quantity"",
                              order_id AS ""OrderId""")
@@ -75,11 +74,11 @@ public sealed class InventoryReservationRepository(InventoryDbContext dbContext)
         return rows.Count == 0 ? null : rows[0];
     }
 
-    public async Task<string?> GetStatusAsync(Guid reservationId, CancellationToken cancellationToken)
+    public async Task<string?> GetStatusAsync(Guid OrderId, CancellationToken cancellationToken)
     {
         return await dbContext.InventoryReservations
             .AsNoTracking()
-            .Where(r => r.Id == reservationId)
+            .Where(r => r.OrderId == OrderId)
             .Select(r => r.Status)
             .FirstOrDefaultAsync(cancellationToken);
     }

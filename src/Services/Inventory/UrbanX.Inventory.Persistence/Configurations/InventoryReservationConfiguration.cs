@@ -21,14 +21,8 @@ internal sealed class InventoryReservationConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.UpdatedAt).IsRequired();
         builder.Property(x => x.ReleasedAt);
         builder.Property(x => x.ConfirmedAt).IsRequired(false);
-        builder.Property(x => x.OrderIdempotencyKey).HasMaxLength(50).IsRequired();
-        builder.Property(x => x.ProductId).IsRequired();
 
         builder.HasIndex(x => x.OrderId);
-
-        builder.HasIndex(x => new { x.OrderIdempotencyKey, x.InventoryItemId })
-            .IsUnique()
-            .HasDatabaseName("ux_inventory_reservations_order_idempotency_inventory_item");
 
         builder.HasIndex(x => new { x.Status, x.ExpiresAt })
             .HasDatabaseName("ix_inventory_reservations_status_expires_at");

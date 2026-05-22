@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shared.Application;
 using Shared.Cache.Abstractions;
+using Shared.Contract.Abstractions;
 using Shared.Cache.DependencyInjection.Options;
 using Shared.Cache.Resilience;
 using Shared.Kernel.Primitives;

@@ -2,7 +2,6 @@ using MediatR;
 using MassTransit;
 using Shared.Contract.Messaging.PlaceOrderSaga;
 using UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
-using UrbanX.Inventory.Domain.Errors;
 
 namespace UrbanX.Inventory.Application.Messaging;
 
@@ -10,49 +9,44 @@ public sealed class ReserveInventoryRequestedProcessor(ISender sender, IPublishE
 {
     public async Task ProcessAsync(ReserveInventoryRequestedV1 evt, CancellationToken ct)
     {
-        var command = new ReserveInventoryCommand(
-            IdempotencyKey: evt.OrderIdempotencyKey,
-            Items: evt.Items
-                .Select(i => new ReserveInventoryLineItem(i.ProductId, i.Quantity))
-                .ToList());
-
-        var result = await sender.Send(command, ct);
-
-        if (result.IsSuccess)
+        try
         {
-            var value = result.Value!;
-            var variantById = evt.Items.ToDictionary(i => i.ProductId, i => i.VariantId);
+            var command = new ReserveInventoryCommand(
+                OrderId: evt.OrderId,
+                ExpiresInMinutes: evt.ExpiresInMinutes,
+                Items: evt.Items
+                    .Select(i => new ReserveInventoryLineItem(i.VariantId, i.Quantity))
+                    .ToList());
 
-            await publishEndpoint.Publish(new InventoryReservedV1
+            var result = await sender.Send(command, ct);
+
+            if (result.IsSuccess)
             {
-                OrderId = evt.OrderId,
-                CorrelationId = evt.OrderId.ToString("D"),
-                CausationId = evt.EventId.ToString("D"),
-                ReservationId = value.ReservationId,
-                ExpiresAt = value.ExpiresAt,
-                Items = value.Items
-                    .Select(i => new InventoryReserveItem(
-                        i.ProductId,
-                        variantById.GetValueOrDefault(i.ProductId),
-                        i.Quantity))
-                    .ToList()
-            }, ct);
+                // await publishEndpoint.Publish(new InventoryReservedV1
+                // {
+
+                // }, ct);
+            }
+            else
+            {
+
+                // await publishEndpoint.Publish(new InventoryReserveFailedV1
+                // {
+                //     OrderId = evt.OrderId,
+                //     CorrelationId = evt.OrderId.ToString("D"),
+                //     CausationId = evt.EventId.ToString("D"),
+                //     ErrorCode = result.Error.Code,
+                //     ErrorMessage = result.Error.Message,
+                // }, ct);
+            }
         }
-        else
+        // Catch OutOfStockException => publish InventoryReserveFailed
+        catch (Exception)
         {
-            var outOfStock = result.Error is OutOfStockError oos
-                ? (IReadOnlyList<OutOfStockProduct>)[new OutOfStockProduct(oos.ProductId, oos.Available)]
-                : [];
 
-            await publishEndpoint.Publish(new InventoryReserveFailedV1
-            {
-                OrderId = evt.OrderId,
-                CorrelationId = evt.OrderId.ToString("D"),
-                CausationId = evt.EventId.ToString("D"),
-                ErrorCode = result.Error.Code,
-                ErrorMessage = result.Error.Message,
-                OutOfStockProducts = outOfStock
-            }, ct);
+            throw;
         }
+
+
     }
 }

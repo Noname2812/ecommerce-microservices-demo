@@ -1,6 +1,7 @@
 using FluentValidation;
 using Shared.Application;
 using Shared.Application.Authorization;
+using Shared.Contract.Abstractions;
 using UrbanX.Order.Application.Usecases.V1.Command.Common;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;

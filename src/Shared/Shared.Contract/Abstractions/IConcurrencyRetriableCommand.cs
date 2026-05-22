@@ -1,4 +1,4 @@
-namespace Shared.Application;
+namespace Shared.Contract.Abstractions;
 
 /// <summary>
 /// Marker for commands whose handler updates concurrency-token entities (e.g. xmin).

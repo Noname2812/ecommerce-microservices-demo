@@ -1,6 +1,6 @@
 using MassTransit;
 using Microsoft.Extensions.Logging;
-using Shared.Application;
+using Shared.Contract.Abstractions;
 
 namespace Shared.Messaging
 {

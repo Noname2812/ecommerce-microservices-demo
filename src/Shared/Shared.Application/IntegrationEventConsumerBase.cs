@@ -1,26 +1,10 @@
 using MassTransit;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Shared.Application;
 using Shared.Contract.Abstractions;
 
 namespace Shared.Messaging
 {
-
-    /// <summary>
-    /// Base class for MassTransit consumers that handle integration events
-    /// by dispatching them as domain notifications via MediatR.
-    /// Provides structured logging; transient exceptions are rethrown so you can opt in to
-    /// per-endpoint <c>UseMessageRetry</c> (e.g. in <c>ConsumerDefinition.ConfigureConsumer</c>) — there is no bus-wide retry in <c>AddMessaging</c>.
-    ///
-    /// Usage:
-    /// <code>
-    /// public class OrderCreatedConsumer : IntegrationEventConsumerBase<OrderCreatedEvent>;
-    /// {
-    ///     public OrderCreatedConsumer(IMediator mediator, ILogger logger) : base(mediator, logger) {}
-    /// }
-    /// </code>
-    /// </summary>
     public abstract class IntegrationEventConsumerBase<TEvent, TConsumer>
         : IConsumer<TEvent>
         where TEvent : class, IIntegrationEvent
@@ -37,9 +21,6 @@ namespace Shared.Messaging
             _logger = logger;
         }
 
-        /// <summary>
-        /// Use when <see cref="HandleAsync"/> is overridden and the default MediatR publish path is not used.
-        /// </summary>
         protected IntegrationEventConsumerBase(ILogger<TConsumer> logger)
         {
             _mediator = null;
@@ -69,7 +50,7 @@ namespace Shared.Messaging
             catch (Exception ex) when (IsTransient(ex))
             {
                 _logger.LogWarning(ex,
-                    "Transient error processing {EventName} [{EventId}] — rethrown (use UseMessageRetry on the endpoint if retries are desired)",
+                    "Transient error processing {EventName} [{EventId}] — rethrown",
                     eventName, eventId);
                 throw;
             }
@@ -82,22 +63,18 @@ namespace Shared.Messaging
             }
         }
 
-        /// <summary>Override to implement your event handling logic.</summary>
         protected virtual Task HandleAsync(TEvent @event, CancellationToken cancellationToken)
         {
             if (_mediator is null)
             {
                 throw new InvalidOperationException(
-                    $"{GetType().Name} must override {nameof(HandleAsync)} when constructed with the logger-only constructor, " +
-                    $"or use the constructor that accepts {nameof(IMediator)}.");
+                    $"{GetType().Name} must override {nameof(HandleAsync)} when constructed with the logger-only constructor.");
             }
 
             return _mediator.Publish(new IntegrationEventNotification<TEvent>(@event), cancellationToken);
         }
 
-        /// <summary>Override to classify which exceptions are transient and should trigger retry.</summary>
         protected virtual bool IsTransient(Exception ex) =>
             ex is TimeoutException or TaskCanceledException or OperationCanceledException;
     }
-
 }
