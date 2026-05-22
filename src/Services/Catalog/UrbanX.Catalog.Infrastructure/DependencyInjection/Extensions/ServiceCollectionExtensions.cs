@@ -1,20 +1,34 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using UrbanX.Catalog.Application.Abstractions;
-using UrbanX.Catalog.Infrastructure;
+using UrbanX.Catalog.Infrastructure.DependencyInjection.Options;
+using UrbanX.Catalog.Infrastructure.Services;
 
-namespace UrbanX.Catalog.Application.DependencyInjection.Extensions
+namespace UrbanX.Catalog.Infrastructure.DependencyInjection.Extensions;
+
+public static class ServiceCollectionExtensions
 {
-    public static class ServiceCollectionExtensions
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
-        {
-            services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
-            {
-                client.BaseAddress = new Uri(config["Services:Inventory"] ?? throw new InvalidOperationException("Inventory service URL is not configured."));
-            });
+        services.AddSingleton<IValidateOptions<CatalogProjectionConsumerOptions>,
+            CatalogProjectionConsumerOptionsValidator>();
 
-            return services;
-        }
+        services
+            .AddOptions<CatalogProjectionConsumerOptions>()
+            .BindConfiguration(CatalogProjectionConsumerOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
+        {
+            client.BaseAddress = new Uri(
+                configuration["Services:Inventory"]
+                ?? throw new InvalidOperationException("Services:Inventory is not configured."));
+        });
+
+        return services;
     }
 }

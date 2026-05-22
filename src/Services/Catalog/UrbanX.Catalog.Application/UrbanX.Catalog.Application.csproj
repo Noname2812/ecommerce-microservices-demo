@@ -7,28 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Usecases\NewFolder\**" />
-    <Compile Remove="Usecases\V1\Dtos\**" />
-    <EmbeddedResource Remove="Usecases\NewFolder\**" />
-    <EmbeddedResource Remove="Usecases\V1\Dtos\**" />
-    <None Remove="Usecases\NewFolder\**" />
-    <None Remove="Usecases\V1\Dtos\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Abstractions\" />
-    <Folder Include="Adapters\" />
-    <Folder Include="DependencyInjection\Options\" />
-    <Folder Include="Mappers\Product\" />
-    <Folder Include="Usecases\V1\Event\" />
-    <Folder Include="Usecases\V1\Query\" />
-    <Folder Include="Usecases\V2\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="AutoMapper" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
   </ItemGroup>
 
   <ItemGroup>

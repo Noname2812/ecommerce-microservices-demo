@@ -1,15 +1,13 @@
-﻿using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Shared.Messaging.DependencyInjection.Extensions;
 
-namespace UrbanX.Catalog.Application.DependencyInjection.Extensions
+namespace UrbanX.Catalog.Application.DependencyInjection.Extensions;
+
+public static class ServiceCollectionExtensions
 {
-    public static class ServiceCollectionExtensions
+    public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
-        {
-            services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
-            return services;
-        }
+        services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
+        return services;
     }
 }
