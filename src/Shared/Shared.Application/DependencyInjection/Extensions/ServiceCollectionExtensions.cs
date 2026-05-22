@@ -9,7 +9,6 @@ using Shared.Application.Authorization;
 using Shared.Contract.Abstractions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.Behaviors;
-using Shared.Messaging.DependencyInjection;
 using Shared.Messaging.DependencyInjection.Options;
 using Shared.Messaging.Filters;
 using Shared.Messaging.Fomatters;

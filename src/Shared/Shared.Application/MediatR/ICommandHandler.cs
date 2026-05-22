@@ -10,12 +10,4 @@ namespace Shared.Application
     public interface ICommandHandler<TCommand, TResponse> : IRequestHandler<TCommand, Result<TResponse>>
         where TCommand : ICommand<TResponse>
     { }
-
-    public interface IMessagingCommandHandler<TCommand> : IRequestHandler<TCommand, Result>
-    where TCommand : IMessagingCommand
-    { }
-
-    public interface IMessagingCommandHandler<TCommand, TResponse> : IRequestHandler<TCommand, Result<TResponse>>
-        where TCommand : IMessagingCommand<TResponse>
-    { }
 }

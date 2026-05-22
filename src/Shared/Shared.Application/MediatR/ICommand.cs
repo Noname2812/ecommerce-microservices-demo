@@ -23,8 +23,4 @@ namespace Shared.Application
     public interface ICommand<TResponse> : ICommandBase, IRequest<Result<TResponse>>
     {
     }
-
-    public interface IMessagingCommand : IRequest<Result> { }
-
-    public interface IMessagingCommand<TResponse> : IRequest<Result<TResponse>> {   }
 }

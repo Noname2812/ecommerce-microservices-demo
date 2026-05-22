@@ -6,7 +6,7 @@ using UrbanX.Inventory.Domain.Models;
 
 namespace UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 
-public sealed class ReserveInventoryCommandHandler : IMessagingCommandHandler<ReserveInventoryCommand>
+public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInventoryCommand>
 {
     private readonly IInventoryItemRepository _inventoryItems;
     private readonly IInventoryReservationRepository _reservations;
