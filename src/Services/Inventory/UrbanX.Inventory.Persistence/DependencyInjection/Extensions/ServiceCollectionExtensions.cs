@@ -12,7 +12,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IInventoryItemRepository, InventoryItemRepository>();
         services.AddScoped<IInventoryReservationRepository, InventoryReservationRepository>();
-        services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         return services;
     }
 }

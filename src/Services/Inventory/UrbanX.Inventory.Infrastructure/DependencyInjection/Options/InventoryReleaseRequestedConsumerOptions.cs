@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Inventory.Application.Messaging;
+namespace UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
 /// <summary>
-/// Configuration for <see cref="InventoryReleaseRequestedConsumerDefinition"/> — queue name, retry, and optional RabbitMQ throughput.
+/// Configuration for <c>InventoryReleaseRequestedConsumerDefinition</c> — queue name, retry, and optional RabbitMQ throughput.
 /// Bind section <see cref="SectionName"/> from appsettings.
 /// </summary>
 public sealed class InventoryReleaseRequestedConsumerOptions

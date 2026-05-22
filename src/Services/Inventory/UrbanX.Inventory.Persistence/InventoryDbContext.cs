@@ -8,7 +8,6 @@ public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> opti
 {
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<InventoryReservation> InventoryReservations => Set<InventoryReservation>();
-    public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

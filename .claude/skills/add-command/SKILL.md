@@ -425,7 +425,6 @@ using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Contract.Messaging.Catalog;
 using Shared.Kernel.Primitives;
-using Shared.Outbox.Abstractions;
 using UrbanX.Catalog.Application.Usecases.V1.Errors;
 using UrbanX.Catalog.Domain;
 using UrbanX.Catalog.Domain.Helpers;

@@ -14,7 +14,8 @@
       "Bash(xargs cat *)",
       "Bash(xargs grep *)",
       "Bash(dotnet build *)",
-      "Bash(grep -v \"^\\\\s*//\")"
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(git stash *)"
     ]
   }
 }

@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\..\Shared\Shared.Cache\Shared.Cache.csproj" />
     <ProjectReference Include="..\UrbanX.Inventory.Domain\UrbanX.Inventory.Domain.csproj" />
     <ProjectReference Include="..\UrbanX.Inventory.Application\UrbanX.Inventory.Application.csproj" />
+    <ProjectReference Include="..\UrbanX.Inventory.Infrastructure\UrbanX.Inventory.Infrastructure.csproj" />
     <ProjectReference Include="..\UrbanX.Inventory.Persistence\UrbanX.Inventory.Persistence.csproj" />
   </ItemGroup>
 </Project>

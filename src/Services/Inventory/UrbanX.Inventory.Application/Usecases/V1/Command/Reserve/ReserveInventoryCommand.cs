@@ -4,27 +4,17 @@ using Shared.Application.Authorization;
 
 namespace UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 
-// Atomic CAS UPDATE in the handler eliminates xmin conflicts on inventory_items, but the unique
-// constraint on (OrderIdempotencyKey, InventoryItemId) can still raise PostgreSQL 23505 when two
-// concurrent deliveries of the same message both pass the idempotency check. IConcurrencyRetriableCommand
-// gives EfUnitOfWork bounded retry; on the second attempt the idempotency lookup finds the
-// just-committed row and returns Success — collapsing the duplicate into a single outcome.
+// Dispatched from ReserveInventoryRequestedConsumer. IMessagingCommand skips TransactionPipelineBehavior
+// because MassTransit EF Outbox already wraps the consumer in a DbContext transaction; double-wrapping
+// causes "already in transaction" errors and breaks rollback semantics on Result.Failure.
 [AllowAnonymous]
 public record ReserveInventoryCommand(
     Guid OrderId,
     double ExpiresInMinutes,
-    IReadOnlyList<ReserveInventoryLineItem> Items,
-    Guid? EventId = null
-) : ICommand<ReserveInventoryResponse>;
+    IReadOnlyList<ReserveInventoryLineItem> Items
+) : IMessagingCommand;
 
 public record ReserveInventoryLineItem(Guid VariantId, int Quantity);
-
-public record ReserveInventoryResponse(
-    Guid OrderId,
-    IReadOnlyCollection<Guid> ReservationIds,
-    DateTimeOffset ExpiresAt
-);
-
 
 public sealed class ReserveInventoryCommandValidator : AbstractValidator<ReserveInventoryCommand>
 {

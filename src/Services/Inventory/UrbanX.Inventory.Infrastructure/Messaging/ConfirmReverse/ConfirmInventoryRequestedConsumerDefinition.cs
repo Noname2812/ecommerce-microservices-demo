@@ -1,17 +1,17 @@
 using MassTransit;
 using MassTransit.RabbitMqTransport;
 using Microsoft.Extensions.Options;
-using UrbanX.Inventory.Application.DependencyInjection.Options;
+using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Inventory.Application.Messaging;
+namespace UrbanX.Inventory.Infrastructure.Messaging;
 
-public sealed class ReserveInventoryRequestedConsumerDefinition
-    : ConsumerDefinition<ReserveInventoryRequestedConsumer>
+public sealed class ConfirmInventoryRequestedConsumerDefinition
+    : ConsumerDefinition<ConfirmInventoryRequestedConsumer>
 {
-    private readonly ReserveInventoryRequestedConsumerOptions _options;
+    private readonly ConfirmInventoryRequestedConsumerOptions _options;
 
-    public ReserveInventoryRequestedConsumerDefinition(
-        IOptions<ReserveInventoryRequestedConsumerOptions> options)
+    public ConfirmInventoryRequestedConsumerDefinition(
+        IOptions<ConfirmInventoryRequestedConsumerOptions> options)
     {
         _options = options.Value;
 
@@ -21,7 +21,7 @@ public sealed class ReserveInventoryRequestedConsumerDefinition
 
     protected override void ConfigureConsumer(
         IReceiveEndpointConfigurator endpointConfigurator,
-        IConsumerConfigurator<ReserveInventoryRequestedConsumer> consumerConfigurator,
+        IConsumerConfigurator<ConfirmInventoryRequestedConsumer> consumerConfigurator,
         IRegistrationContext _)
     {
         var retry = _options.Retry;

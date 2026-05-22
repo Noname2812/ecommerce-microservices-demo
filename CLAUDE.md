@@ -57,12 +57,22 @@ dotnet ef database update
 ## Architecture
 
 ### Service structure (Clean Architecture per service)
+
+⭐ **Reference pattern: Inventory** (Application + Infrastructure tách rõ, Application slim).
+
 Each service is split into layers:
 - `*.API` — Minimal API endpoints using **Carter** (`ICarterModule`), Program.cs wiring
-- `*.Application` — CQRS use cases via **MediatR**: `Usecases/V1/Command/` and `Usecases/V1/Query/`
-- `*.Domain` — Entities, domain events, value objects
-- `*.Infrastructure` — EF Core DbContext, repositories, external service clients
-- `*.Persistence` — EF Core migrations (separate project to keep migrations isolated)
+- `*.Application` — CQRS use cases via **MediatR**: `Usecases/V1/Command/` and `Usecases/V1/Query/`. **DI chỉ MediatR + FluentValidation** (`AddApplication()` = 1 dòng `AddMediatorWithPielineDefault`). Không chứa consumer, job, options, repository, HTTP client.
+- `*.Domain` — Entities, value objects, `Errors/` (mã lỗi nghiệp vụ — `Error` từ `Shared.Kernel.Primitives`), repository interfaces
+- `*.Infrastructure` — All outbound implementations:
+  - `Messaging/<Event>/` — MassTransit `IConsumer<T>` + `ConsumerDefinition`
+  - `Jobs/` — Recurring jobs (Hangfire scoped services)
+  - `Services/`, `RefitApi/` — HTTP clients, external service adapters
+  - `DependencyInjection/Options/` — All `IOptions` classes (consumer/job/client) + `IValidateOptions` validators
+  - `DependencyInjection/Extensions/` — `AddInfrastructure()` entry point
+- `*.Persistence` — EF Core `DbContext` (register MT outbox entities), entity configs, repos, `EfUnitOfWork`, migrations
+
+**Program.cs order:** `AddNpgsqlDbContext` → `AddInfrastructure()` → `AddApplication()` → `AddConfigMessaging` + `AddMessaging(bus.AddConsumer<...>(typeof(...Def)))` → `AddPersistence()` → `AddCarter`. Infrastructure phải register options/validators TRƯỚC khi MassTransit resolve `ConsumerDefinition` lúc startup.
 
 ### Shared libraries (`src/Shared/`)
 | Library | Purpose |

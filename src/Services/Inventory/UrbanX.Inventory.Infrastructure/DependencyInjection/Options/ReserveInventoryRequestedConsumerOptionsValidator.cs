@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 
-namespace UrbanX.Inventory.Application.DependencyInjection.Options;
+namespace UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
 internal sealed class ReserveInventoryRequestedConsumerOptionsValidator
     : IValidateOptions<ReserveInventoryRequestedConsumerOptions>

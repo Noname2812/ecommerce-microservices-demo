@@ -7,9 +7,10 @@ using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using UrbanX.Inventory.Application.DependencyInjection.Extensions;
-using UrbanX.Inventory.Application.DependencyInjection.Options;
-using UrbanX.Inventory.Application.Jobs;
-using UrbanX.Inventory.Application.Messaging;
+using UrbanX.Inventory.Infrastructure.DependencyInjection.Extensions;
+using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
+using UrbanX.Inventory.Infrastructure.Jobs;
+using UrbanX.Inventory.Infrastructure.Messaging;
 using UrbanX.Inventory.Persistence;
 using UrbanX.Inventory.Persistence.DependencyInjection.Extensions;
 using UrbanX.Inventory.Persistence.Seeding;
@@ -39,7 +40,10 @@ builder.AddNpgsqlDbContext<InventoryDbContext>("inventorydb",
     },
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 
-// Application (options for ConsumerDefinition, MediatR, …) — register before MassTransit resolves definitions at startup
+// Infrastructure (consumer options + jobs) — register before MassTransit resolves definitions at startup
+builder.Services.AddInfrastructure();
+
+// Application (MediatR + FluentValidation)
 builder.Services.AddApplication();
 
 // Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)

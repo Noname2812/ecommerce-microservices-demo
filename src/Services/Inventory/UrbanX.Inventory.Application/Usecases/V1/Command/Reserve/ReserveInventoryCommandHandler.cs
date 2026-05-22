@@ -1,3 +1,4 @@
+using MassTransit;
 using Shared.Application;
 using Shared.Kernel.Primitives;
 using UrbanX.Inventory.Domain;
@@ -5,24 +6,29 @@ using UrbanX.Inventory.Domain.Models;
 
 namespace UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 
-public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInventoryCommand, ReserveInventoryResponse>
+public sealed class ReserveInventoryCommandHandler : IMessagingCommandHandler<ReserveInventoryCommand>
 {
     private readonly IInventoryItemRepository _inventoryItems;
     private readonly IInventoryReservationRepository _reservations;
+    private readonly IPublishEndpoint _publishEndpoint;
 
     public ReserveInventoryCommandHandler(
+        IPublishEndpoint publishEndpoint,
         IInventoryItemRepository inventoryItems,
         IInventoryReservationRepository reservations)
     {
+        _publishEndpoint = publishEndpoint;
         _inventoryItems = inventoryItems;
         _reservations = reservations;
     }
 
-    public async Task<Result<ReserveInventoryResponse>> Handle(
+    public async Task<Result> Handle(
         ReserveInventoryCommand request,
         CancellationToken cancellationToken)
     {
         // 1. Check VariantIds valid.
+            // If invalid => publish event InventoryReserveFailed
+        
         // 2. Create reservations with status=PENDING and expires_at=utc+request.ExpiresInMinutes.
         var utc = DateTimeOffset.UtcNow;
         var expiresAt = utc.AddMinutes(request.ExpiresInMinutes);
@@ -51,14 +57,13 @@ public sealed class ReserveInventoryCommandHandler : ICommandHandler<ReserveInve
 
         if (variantIdsOutOfStock.Count > 0)
         {
-            // throw OutOfStockException with list of variantIds that are out of stock.
+            // publish event Out of stock
+            // return Failure
         }
 
         _reservations.AddRange(newRows);
 
-        return Result.Success(new ReserveInventoryResponse(
-            request.OrderId,
-            newRows.Select(r => r.Id).ToList(),
-            expiresAt));
+        // publish event InventoryReserved
+        return Result.Success();
     }
 }

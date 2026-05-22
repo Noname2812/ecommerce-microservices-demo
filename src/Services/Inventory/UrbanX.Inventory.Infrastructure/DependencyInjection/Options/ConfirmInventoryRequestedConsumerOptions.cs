@@ -1,16 +1,16 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Inventory.Application.DependencyInjection.Options;
+namespace UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
-public sealed class ReserveInventoryRequestedConsumerOptions
+public sealed class ConfirmInventoryRequestedConsumerOptions
 {
-    public const string SectionName = "Inventory:Messaging:ReserveInventoryRequested";
+    public const string SectionName = "Inventory:Messaging:ConfirmInventoryRequested";
 
     [MaxLength(255)]
     public string? QueueName { get; set; }
 
     [Required]
-    public ReserveInventoryRequestedRetryOptions Retry { get; set; } = new();
+    public ConfirmInventoryRequestedRetryOptions Retry { get; set; } = new();
 
     public ushort? PrefetchCount { get; set; }
 
@@ -18,7 +18,7 @@ public sealed class ReserveInventoryRequestedConsumerOptions
     public int? ConcurrentMessageLimit { get; set; }
 }
 
-public sealed class ReserveInventoryRequestedRetryOptions
+public sealed class ConfirmInventoryRequestedRetryOptions
 {
     [Range(0, 100)]
     public int RetryLimit { get; set; } = 3;

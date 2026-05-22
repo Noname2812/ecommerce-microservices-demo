@@ -5,7 +5,19 @@ allowed-tools: Read, Grep, LS, Write, Edit, MultiEdit
 ---
 # Skill: add-consumer
 
-Thêm một MassTransit consumer vào service bất kỳ để xử lý integration event từ `Shared.Contract`.
+Thêm MassTransit consumer vào service để xử lý integration event từ `Shared.Contract`. **Reference pattern: Inventory service** ([ReserveInventoryRequestedConsumer.cs](src/Services/Inventory/UrbanX.Inventory.Infrastructure/Messaging/ReserveInventoryRequested/ReserveInventoryRequestedConsumer.cs)).
+
+---
+
+## Pattern cốt lõi
+
+- Consumer **trực tiếp** implement `IConsumer<TEvent>` (MassTransit) — KHÔNG dùng `IntegrationEventConsumerBase`, KHÔNG Processor class trung gian, KHÔNG `CommandFailedException` indirection.
+- Consumer chỉ làm 1 việc: map event → command → `_sender.Send(...)` qua MediatR.
+- **Command dispatched từ consumer phải là `IMessagingCommand` / `IMessagingCommand<T>`** (KHÔNG dùng `ICommand`). Lý do: MT EF Outbox đã wrap consumer trong DbContext transaction + dedup qua `inbox_state`; nếu dùng `ICommand` → `TransactionPipelineBehavior` sẽ chạy lại gây "already in transaction" hoặc rollback semantics vỡ.
+- **Vị trí**: `src/Services/<Service>/UrbanX.<Service>.Infrastructure/Messaging/<EventName>/` — KHÔNG đặt trong Application.
+- Options/Validator của consumer (queue name, retry, prefetch, concurrent limit) đặt tại `Infrastructure/DependencyInjection/Options/`.
+- Đăng ký consumer scope DI ở `Infrastructure/DependencyInjection/Extensions/ServiceCollectionExtensions.cs` (`AddInfrastructure()`).
+- Đăng ký bus ở `Program.cs`: `bus.AddConsumer<XConsumer>(typeof(XConsumerDefinition))`.
 
 ---
 
@@ -14,174 +26,349 @@ Thêm một MassTransit consumer vào service bất kỳ để xử lý integrat
 | Input | Ví dụ |
 |---|---|
 | Target service | `Inventory` |
-| Integration event (full type) | `ProductIntegrationEvents.ProductCreatedV1` |
-| Namespace của event trong Shared.Contract | `Shared.Contract.Messaging.Catalog` |
-| Tên consumer class | `ProductCreatedInventoryConsumer` |
+| Integration event (full type) | `ProductCreatedV1` |
+| Event namespace | `Shared.Contract.Messaging.Catalog` |
+| Tên consumer | `ProductCreatedInventoryConsumer` |
+| Section name appsettings | `Inventory:Messaging:ProductCreated` |
+| Command dispatch (đã có?) | `IndexProductCommand`, hoặc cần tạo (gọi skill `add-command`) |
 
 ---
 
 ## Các bước thực hiện
 
-### Bước 1 — Tạo consumer file
+### Bước 0 — Đảm bảo Command target đã dùng `IMessagingCommand`
 
-**Đường dẫn:** `src/Services/<Service>/UrbanX.<Service>.Application/Messaging/<ConsumerName>.cs`
+Command sẽ được consumer gọi (qua `_sender.Send`) phải implement `IMessagingCommand` (không `ICommand`):
 
 ```csharp
-using MediatR;
-using Microsoft.Extensions.Logging;
-using <EventNamespace>;
-using Shared.Messaging;
+// Application/Usecases/V1/Command/<Feature>/<X>Command.cs
+[AllowAnonymous]
+public record <X>Command(Guid OrderId, ...) : IMessagingCommand;
 
-namespace UrbanX.<Service>.Application.Messaging;
-
-public sealed class <ConsumerName>
-    : IntegrationEventConsumerBase<
-        <EventType>,
-        <ConsumerName>>
+// Handler
+internal sealed class <X>CommandHandler(...) : IMessagingCommandHandler<<X>Command>
 {
-    public <ConsumerName>(
-        IMediator mediator,
-        ILogger<<ConsumerName>> logger)
-        : base(mediator, logger)
+    public Task<Result> Handle(<X>Command cmd, CancellationToken ct)
     {
-    }
-
-    protected override async Task HandleAsync(
-        <EventType> @event,
-        CancellationToken cancellationToken)
-    {
-        // TODO: implement handler logic
-        // Default: base.HandleAsync publishes as MediatR notification
-        await base.HandleAsync(@event, cancellationToken);
+        // KHÔNG gọi SaveChanges — MT auto-commit sau khi Consume return
+        // throw để rollback (MT retry / DLQ); return Result.Failure cho business decision
+        return Task.FromResult(Result.Success());
     }
 }
 ```
 
-**Lưu ý:**
-- Dùng `sealed` trừ khi cần kế thừa
-- Nếu chỉ cần dispatch sang MediatR (publish as notification), xóa override `HandleAsync` — base class đã làm điều đó mặc định
-- Nếu cần custom logic (gọi command, ghi DB trực tiếp), override và implement trong `HandleAsync`
+Nếu command đang dùng `ICommand` và bị gọi từ cả API + consumer → **tách 2 command** (1 cho API dùng `ICommand`, 1 cho consumer dùng `IMessagingCommand`); KHÔNG share một command duy nhất cho cả 2 path.
 
 ---
 
-### Bước 2 — Đăng ký consumer trong Program.cs của API
+### Bước 1 — Tạo Consumer
+
+**File:** `src/Services/<Service>/UrbanX.<Service>.Infrastructure/Messaging/<EventName>/<ConsumerName>.cs`
+
+```csharp
+using MassTransit;
+using MediatR;
+using Microsoft.Extensions.Logging;
+using <EventNamespace>;
+using UrbanX.<Service>.Application.Usecases.V1.Command.<Feature>;
+
+namespace UrbanX.<Service>.Infrastructure.Messaging;
+
+public sealed class <ConsumerName> : IConsumer<<EventType>>
+{
+    private readonly ISender _sender;
+    private readonly ILogger<<ConsumerName>> _logger;
+
+    public <ConsumerName>(ISender sender, ILogger<<ConsumerName>> logger)
+    {
+        _sender = sender;
+        _logger = logger;
+    }
+
+    public async Task Consume(ConsumeContext<<EventType>> context)
+    {
+        var command = new <CommandName>(
+            // map từ context.Message.* sang field của command
+            OrderId: context.Message.OrderId,
+            EventId: context.Message.EventId);
+
+        await _sender.Send(command, context.CancellationToken);
+    }
+}
+```
+
+**Rules:**
+- `sealed` mặc định.
+- Namespace **bắt buộc** khớp project: `UrbanX.<Service>.Infrastructure.Messaging`.
+- KHÔNG kế thừa `IntegrationEventConsumerBase`. KHÔNG tạo Processor / FailedException / TransientClassifier riêng — Command handler trả `Result.Failure(...)` (bị retry hoặc DLQ tùy `ConsumerDefinition`), throw cho lỗi transient.
+
+---
+
+### Bước 2 — Tạo ConsumerDefinition (cùng folder)
+
+**File:** `src/Services/<Service>/UrbanX.<Service>.Infrastructure/Messaging/<EventName>/<ConsumerName>Definition.cs`
+
+```csharp
+using MassTransit;
+using MassTransit.RabbitMqTransport;
+using Microsoft.Extensions.Options;
+using UrbanX.<Service>.Infrastructure.DependencyInjection.Options;
+
+namespace UrbanX.<Service>.Infrastructure.Messaging;
+
+public sealed class <ConsumerName>Definition : ConsumerDefinition<<ConsumerName>>
+{
+    private readonly <ConsumerName>Options _options;
+
+    public <ConsumerName>Definition(IOptions<<ConsumerName>Options> options)
+    {
+        _options = options.Value;
+        if (!string.IsNullOrWhiteSpace(_options.QueueName))
+            Endpoint(e => e.Name = _options.QueueName!);
+    }
+
+    protected override void ConfigureConsumer(
+        IReceiveEndpointConfigurator endpointConfigurator,
+        IConsumerConfigurator<<ConsumerName>> consumerConfigurator,
+        IRegistrationContext _)
+    {
+        var retry = _options.Retry;
+        if (retry.RetryLimit > 0)
+        {
+            endpointConfigurator.UseMessageRetry(r => r.Exponential(
+                retryLimit: retry.RetryLimit,
+                minInterval: TimeSpan.FromMilliseconds(retry.MinIntervalMs),
+                maxInterval: TimeSpan.FromMilliseconds(retry.MaxIntervalMs),
+                intervalDelta: TimeSpan.FromMilliseconds(retry.IntervalDeltaMs)));
+        }
+
+        if (endpointConfigurator is IRabbitMqReceiveEndpointConfigurator rabbit)
+        {
+            if (_options.PrefetchCount is { } prefetch && prefetch > 0)
+                rabbit.PrefetchCount = prefetch;
+            if (_options.ConcurrentMessageLimit is > 0)
+                rabbit.ConcurrentMessageLimit = _options.ConcurrentMessageLimit;
+
+            // Optional — bind tới fanout exchange (ví dụ compensation events):
+            // rabbit.Bind("compensation.events", b => b.ExchangeType = "fanout");
+        }
+    }
+}
+```
+
+**Pattern retry/prefetch:**
+- `AddMessaging` (Shared.Messaging) **không** bật retry/prefetch toàn bus. Cấu hình per consumer ở Definition này.
+- Set `RetryLimit = 0` (hoặc bỏ qua) → tắt broker retry cho consumer này.
+- Set `MinIntervalMs > MaxIntervalMs` → fail validation (xem Step 3).
+
+---
+
+### Bước 3 — Tạo Options + Validator
+
+**File:** `src/Services/<Service>/UrbanX.<Service>.Infrastructure/DependencyInjection/Options/<ConsumerName>Options.cs`
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+
+namespace UrbanX.<Service>.Infrastructure.DependencyInjection.Options;
+
+public sealed class <ConsumerName>Options
+{
+    public const string SectionName = "<Service>:Messaging:<EventName>";
+
+    [MaxLength(255)]
+    public string? QueueName { get; set; }
+
+    [Required]
+    public <ConsumerName>RetryOptions Retry { get; set; } = new();
+
+    public ushort? PrefetchCount { get; set; }
+
+    [Range(1, 1024)]
+    public int? ConcurrentMessageLimit { get; set; }
+}
+
+public sealed class <ConsumerName>RetryOptions
+{
+    [Range(0, 100)]
+    public int RetryLimit { get; set; } = 3;
+
+    [Range(0, 60_000)]
+    public int MinIntervalMs { get; set; } = 200;
+
+    [Range(0, 300_000)]
+    public int MaxIntervalMs { get; set; } = 2_000;
+
+    [Range(0, 60_000)]
+    public int IntervalDeltaMs { get; set; } = 500;
+}
+```
+
+**File:** `<ConsumerName>OptionsValidator.cs` (cùng folder, `internal sealed`):
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+using Microsoft.Extensions.Options;
+
+namespace UrbanX.<Service>.Infrastructure.DependencyInjection.Options;
+
+internal sealed class <ConsumerName>OptionsValidator
+    : IValidateOptions<<ConsumerName>Options>
+{
+    public ValidateOptionsResult Validate(string? name, <ConsumerName>Options options)
+    {
+        var results = new List<ValidationResult>();
+        Validator.TryValidateObject(options, new ValidationContext(options), results, validateAllProperties: true);
+        if (options.Retry is not null)
+            Validator.TryValidateObject(options.Retry, new ValidationContext(options.Retry), results, validateAllProperties: true);
+
+        if (options.Retry is { } retry && retry.MaxIntervalMs < retry.MinIntervalMs)
+            results.Add(new ValidationResult("MaxIntervalMs must be >= MinIntervalMs.",
+                [nameof(<ConsumerName>RetryOptions.MaxIntervalMs)]));
+
+        if (options.QueueName is not null && options.QueueName.Length > 0 && string.IsNullOrWhiteSpace(options.QueueName))
+            results.Add(new ValidationResult("QueueName cannot be whitespace-only.",
+                [nameof(<ConsumerName>Options.QueueName)]));
+
+        if (options.PrefetchCount is { } prefetch && prefetch == 0)
+            results.Add(new ValidationResult("PrefetchCount must be omitted or > 0.",
+                [nameof(<ConsumerName>Options.PrefetchCount)]));
+
+        if (options.ConcurrentMessageLimit is not null && options.ConcurrentMessageLimit <= 0)
+            results.Add(new ValidationResult("ConcurrentMessageLimit must be omitted or > 0.",
+                [nameof(<ConsumerName>Options.ConcurrentMessageLimit)]));
+
+        return results.Count == 0
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(results.Select(r => r.ErrorMessage!).Where(static m => !string.IsNullOrEmpty(m)));
+    }
+}
+```
+
+---
+
+### Bước 4 — Đăng ký trong `AddInfrastructure()`
+
+**File:** `src/Services/<Service>/UrbanX.<Service>.Infrastructure/DependencyInjection/Extensions/ServiceCollectionExtensions.cs`
+
+Thêm vào method `AddInfrastructure(IServiceCollection services)`:
+
+```csharp
+services.AddSingleton<IValidateOptions<<ConsumerName>Options>, <ConsumerName>OptionsValidator>();
+services
+    .AddOptions<<ConsumerName>Options>()
+    .BindConfiguration(<ConsumerName>Options.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+```
+
+> Consumer KHÔNG cần `AddScoped<XConsumer>()` — MassTransit tự register khi `bus.AddConsumer<XConsumer>(typeof(XDef))` trong Program.cs.
+
+---
+
+### Bước 5 — Đăng ký bus trong `Program.cs`
 
 **File:** `src/Services/<Service>/UrbanX.<Service>.API/Program.cs`
 
-Tìm đoạn `AddMessaging(configureBus: bus =>` và thêm dòng:
+Trong block `AddMessaging(builder.Configuration, configureBus: bus => { ... })`, thêm:
 
 ```csharp
-bus.AddConsumer<<ConsumerName>>();
+bus.AddConsumer<<ConsumerName>>(typeof(<ConsumerName>Definition));
 ```
 
-**Nếu chưa có `AddMessaging`** (service chưa setup messaging), thêm toàn bộ block:
-
-```csharp
-using UrbanX.<Service>.Application.Messaging;
-
-// Sau dòng AddApplication(...)
-builder.Services
-    .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(configureBus: bus =>
-    {
-        bus.AddConsumer<<ConsumerName>>();
-    });
-```
-
-Và thêm using ở đầu file:
-```csharp
-using Shared.Messaging.DependencyInjection.Extensions;
-using UrbanX.<Service>.Application.Messaging;
-```
-
-**Retry (MassTransit):** `AddMessaging` không bật `UseMessageRetry` toàn bus. Consumer cần retry broker-level cho lỗi transient → thêm `ConsumerDefinition<TConsumer>` và trong `ConfigureConsumer` gọi `endpointConfigurator.UseMessageRetry(...)` (tham khảo `InventoryReleaseRequestedConsumerDefinition` đọc policy từ `IOptions<InventoryReleaseRequestedConsumerOptions>`). `IntegrationEventConsumerBase` chỉ rethrow transient exceptions để policy đó (nếu có) áp dụng được.
-
-**Throughput:** `AddMessaging` không set prefetch / concurrent limit toàn bus. Cần giới hạn song song hoặc prefetch theo queue → cấu hình trên receive endpoint của consumer (`ConsumerDefinition`, thường trong `ConfigureConsumer` với `IRabbitMqReceiveEndpointConfigurator`, hoặc `Endpoint(...)` tùy MassTransit). Có thể bind giá trị từ appsettings qua ctor `ConsumerDefinition(IOptions<T>)` giống Inventory compensation.
+Đảm bảo `using UrbanX.<Service>.Infrastructure.Messaging;` có ở đầu file.
 
 ---
 
-### Bước 3 — Kiểm tra ProjectReference trong .csproj
+### Bước 6 — Bind config trong appsettings.json
 
-File `UrbanX.<Service>.Application.csproj` phải có reference đến `Shared.Contract`:
+**File:** `src/Services/<Service>/UrbanX.<Service>.API/appsettings.json`
+
+```json
+{
+  "<Service>": {
+    "Messaging": {
+      "<EventName>": {
+        "QueueName": "<service>.<event>",
+        "Retry": {
+          "RetryLimit": 3,
+          "MinIntervalMs": 200,
+          "MaxIntervalMs": 2000,
+          "IntervalDeltaMs": 500
+        },
+        "PrefetchCount": 16,
+        "ConcurrentMessageLimit": 8
+      }
+    }
+  }
+}
+```
+
+> Có thể omit `PrefetchCount`/`ConcurrentMessageLimit` để dùng transport default.
+
+---
+
+### Bước 7 — Kiểm tra reference
+
+**`UrbanX.<Service>.Infrastructure.csproj`** đã có:
 
 ```xml
-<ProjectReference Include="..\..\..\..\..\Shared\Shared.Contract\Shared.Contract.csproj" />
-<ProjectReference Include="..\..\..\..\..\Shared\Shared.Messaging\Shared.Messaging.csproj" />
+<PackageReference Include="MassTransit.RabbitMQ" />
+<PackageReference Include="MediatR" />
+<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+
+<ProjectReference Include="..\UrbanX.<Service>.Application\..." />
+<ProjectReference Include="..\..\..\Shared\Shared.Contract\..." />
+<ProjectReference Include="..\..\..\Shared\Shared.Messaging\..." />
 ```
 
-Nếu chưa có, thêm vào `.csproj`. Không sửa `Directory.Packages.props` vì đây là ProjectReference, không phải NuGet package.
+Application.csproj KHÔNG cần MassTransit (consumer giờ ở Infrastructure).
 
 ---
 
-### Bước 4 — Tạo doc
+### Bước 8 — Tạo doc
 
-**File:** `docs/<service>/<consumer-name>.md`
+**File:** `docs/<service>/<consumer-kebab-case>.md`
 
 Nội dung tối thiểu:
-- Event được consume
-- Logic xử lý trong HandleAsync
-- Service nào publish event đó
+- Event được consume (từ service nào publish)
+- Command nào được dispatch
+- Section appsettings + giá trị mặc định
+- Retry policy + lý do (transient vs permanent error)
+- Queue / exchange binding nếu non-default
 
 ---
 
 ## Checklist hoàn thành
 
-- [ ] Consumer file tạo đúng đường dẫn `*.Application/Messaging/`
-- [ ] Class kế thừa `IntegrationEventConsumerBase<TEvent, TConsumer>`
-- [ ] `bus.AddConsumer<>()` đã được đăng ký trong `Program.cs`
-- [ ] ProjectReference đến `Shared.Contract` và `Shared.Messaging` có trong `.csproj`
+- [ ] Consumer file đặt `Infrastructure/Messaging/<EventName>/` với namespace `UrbanX.<Service>.Infrastructure.Messaging`
+- [ ] Consumer implement `IConsumer<TEvent>` trực tiếp, dispatch qua `ISender`
+- [ ] ConsumerDefinition đọc Options qua `IOptions<T>`, set retry/prefetch/concurrent limit từ config
+- [ ] Options + Validator ở `Infrastructure/DependencyInjection/Options/`
+- [ ] `AddInfrastructure()` register options + validator (Singleton)
+- [ ] `Program.cs` gọi `bus.AddConsumer<X>(typeof(XDefinition))`
+- [ ] `appsettings.json` có section `<Service>:Messaging:<EventName>`
+- [ ] Infrastructure.csproj có MassTransit.RabbitMQ + MediatR + Shared.Messaging refs
 - [ ] Build pass: `dotnet build`
-- [ ] Doc được tạo
+- [ ] Doc: `docs/<service>/<consumer>.md`
 
 ---
 
-## Ví dụ thực tế — Search service
+## Anti-patterns (đừng làm)
 
-Consumer: `ProductCreatedConsumer` consume `ProductIntegrationEvents.ProductCreatedV1`
-
-```csharp
-// src/Services/Search/UrbanX.Search.Application/Messaging/ProductCreatedConsumer.cs
-public class ProductCreatedConsumer
-    : IntegrationEventConsumerBase<
-        ProductIntegrationEvents.ProductCreatedV1,
-        ProductCreatedConsumer>
-{
-    public ProductCreatedConsumer(
-        IMediator mediator,
-        ILogger<ProductCreatedConsumer> logger)
-        : base(mediator, logger)
-    {
-    }
-
-    protected override async Task HandleAsync(
-        ProductIntegrationEvents.ProductCreatedV1 @event,
-        CancellationToken cancellationToken)
-    {
-        // Custom logic — index product vào Elasticsearch
-        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-    }
-}
-```
-
-DI trong `Program.cs`:
-```csharp
-builder.Services
-    .AddConfigMessaging(builder.Configuration)
-    .AddMessaging(configureBus: bus =>
-    {
-        bus.AddConsumer<ProductCreatedConsumer>();
-        bus.AddConsumer<ProductCatalogUpdatedConsumer>();
-        // ...
-    });
-```
+- ❌ Đặt Consumer trong `Application/Messaging/` — đã chuyển sang Infrastructure
+- ❌ Kế thừa `IntegrationEventConsumerBase` — pattern cũ, đã drop
+- ❌ Tách Processor class (`XProcessor`) làm trung gian giữa Consumer và MediatR — gộp luôn vào Consumer
+- ❌ Tạo `XCommandFailedException` + override `IsTransient` để classify lỗi — dùng `Result.Failure(Domain/Errors/...)` ở Command handler thay vì exception
+- ❌ Hardcode queue name / retry interval trong code — luôn qua Options + `appsettings`
+- ❌ `services.AddScoped<XConsumer>()` trong `AddInfrastructure()` — MassTransit tự quản lý lifetime
+- ❌ Đặt Options trong `Application/` — luôn ở `Infrastructure/DependencyInjection/Options/`
+- ❌ Command dispatched từ consumer dùng `ICommand` thay vì `IMessagingCommand` — sẽ bị `TransactionPipelineBehavior` wrap lại trong DbContext transaction (MT đã có sẵn) → "already in transaction" hoặc rollback vỡ
+- ❌ Custom `ProcessedEvent` table cho dedup — MT InboxState (auto-enable qua `AddInboxStateEntity()` + `DuplicateDetectionWindow`) đã handle
+- ❌ Gọi `SaveChangesAsync` / `_uow.ExecuteInTransactionAsync` trong handler của `IMessagingCommand` — MT auto-commit sau `Consume`
 
 ---
 
-## Base class reference
+## Ví dụ thực tế
 
-`IntegrationEventConsumerBase<TEvent, TConsumer>` từ `Shared.Messaging`:
-- Implements `IConsumer<TEvent>` (MassTransit)
-- Tự log EventId, EventName, CorrelationId
-- Với transient exceptions (`TimeoutException`, `TaskCanceledException`, …): log + **rethrow** — chỉ được retry lại ở MassTransit nếu endpoint có `UseMessageRetry` (không có mặc định toàn bus)
-- Default `HandleAsync`: publish event như MediatR notification (`INotification`)
-- Override `IsTransient(Exception)` để phân loại exception transient vs fatal
+Xem [ReserveInventoryRequestedConsumer.cs](src/Services/Inventory/UrbanX.Inventory.Infrastructure/Messaging/ReserveInventoryRequested/ReserveInventoryRequestedConsumer.cs) + [ReserveInventoryRequestedConsumerDefinition.cs](src/Services/Inventory/UrbanX.Inventory.Infrastructure/Messaging/ReserveInventoryRequested/ReserveInventoryRequestedConsumerDefinition.cs) + [ReserveInventoryRequestedConsumerOptions.cs](src/Services/Inventory/UrbanX.Inventory.Infrastructure/DependencyInjection/Options/ReserveInventoryRequestedConsumerOptions.cs).

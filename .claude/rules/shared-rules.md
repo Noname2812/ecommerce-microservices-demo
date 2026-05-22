@@ -66,8 +66,10 @@ Shared.Observability  (standalone)
 
 | Type | Namespace | Mục đích |
 |---|---|---|
-| `ICommand`, `ICommand<T>` | `Shared.Application` | Command markers (MediatR `IRequest`) |
-| `ICommandHandler<C>`, `ICommandHandler<C,R>` | `Shared.Application` | Handler interfaces |
+| `ICommandBase`, `ICommand`, `ICommand<T>` | `Shared.Application` | API-dispatched command markers (MediatR `IRequest`) — kích hoạt **TransactionPipelineBehavior** |
+| `ICommandHandler<C>`, `ICommandHandler<C,R>` | `Shared.Application` | Handler interfaces cho `ICommand` |
+| `IMessagingCommand`, `IMessagingCommand<T>` | `Shared.Application` | Consumer-dispatched command markers — **SKIP TransactionPipelineBehavior + IdempotencyPipelineBehavior** (vì MT EF Outbox đã quản transaction + InboxState đã dedup) |
+| `IMessagingCommandHandler<C>`, `IMessagingCommandHandler<C,R>` | `Shared.Application` | Handler interfaces cho `IMessagingCommand` |
 | `IQuery<T>`, `IQueryHandler<Q,R>` | `Shared.Application` | Query interfaces |
 | `IDomainEvent`, `DomainEventBase` | `Shared.Application` | In-process domain events |
 | `IDomainEventHandler<T>` | `Shared.Application` | Domain event handler |
@@ -100,7 +102,7 @@ Shared.Observability  (standalone)
 | MediatR behaviors | `Behaviors/Validation|Logging|Idempotency|Authorization|DistributedLockPipelineBehavior|TransactionPipelineBehavior.cs` |
 | MassTransit setup | `DependencyInjection/Extensions/ServiceCollectionExtensions.cs` |
 | Event publisher impl | `EventPublisher.cs` |
-| Consumer base | `IntegrationEventConsumerBase.cs` |
+| Consumer base (legacy) | `IntegrationEventConsumerBase.cs` — KHÔNG dùng cho consumer mới (xem rule bên dưới) |
 | Saga base classes | `Saga/SagaStateBase.cs`, `SagaStateMachineBase.cs`, `CompensatableActivityBase.cs` |
 | User context impl | `Authorization/UserHttpContext.cs` (internal — đọc Gateway headers) |
 | User context middleware | `Authorization/UserContextMiddleware.cs` (set OpenTelemetry tags) |
@@ -115,7 +117,7 @@ Shared.Observability  (standalone)
 - `app.UseUserContext()` — dùng trước `app.MapCarter()` để enrich tracing tags từ Gateway headers
 
 **Rules:**
-- Consumer mới kế thừa `IntegrationEventConsumerBase<TEvent, TConsumer>`
+- Consumer mới: implement **trực tiếp `IConsumer<TEvent>`** (MassTransit) trong `<Service>.Infrastructure/Messaging/<Event>/`, dispatch qua `ISender` (MediatR). KHÔNG kế thừa `IntegrationEventConsumerBase` — đây là pattern legacy chỉ còn để tương thích ngược. Xem skill `add-consumer` + ref [Inventory](src/Services/Inventory/UrbanX.Inventory.Infrastructure/Messaging/).
 - Behavior mới đăng ký trong `AddMediatorWithPielineDefault()`
 - `TransactionPipelineBehavior` dùng `IUnitOfWork` — mỗi service phải register `IUnitOfWork` trong `AddPersistence()` với `EfUnitOfWork<TDbContext>` tương ứng
 - `AuthorizationPipelineBehavior` tự động short-circuit Command/Query có `[RequirePermission]`/`[RequireRole]` mà không pass check — wrap `AuthorizationErrors` thành `Result.Failure` (hoặc `Result<T>.Failure`)

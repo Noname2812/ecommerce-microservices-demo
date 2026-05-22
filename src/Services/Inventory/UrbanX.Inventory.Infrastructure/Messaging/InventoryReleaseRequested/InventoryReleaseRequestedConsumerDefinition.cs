@@ -1,8 +1,9 @@
 using MassTransit;
 using MassTransit.RabbitMqTransport;
 using Microsoft.Extensions.Options;
+using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Inventory.Application.Messaging;
+namespace UrbanX.Inventory.Infrastructure.Messaging;
 
 /// <summary>
 /// Binds the consumer queue to the fanout <c>compensation.events</c> exchange (see CompensationOutbox relay).

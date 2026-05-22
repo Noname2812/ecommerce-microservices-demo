@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 
-namespace UrbanX.Inventory.Application.Messaging;
+namespace UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
 /// <summary>
 /// Validates <see cref="InventoryReleaseRequestedConsumerOptions"/> at startup (nested retry ranges, queue name, throughput).

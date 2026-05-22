@@ -2,9 +2,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shared.Kernel.Primitives;
 using UrbanX.Inventory.Domain;
-using UrbanX.Inventory.Application.DependencyInjection.Options;
+using UrbanX.Inventory.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Inventory.Application.Jobs;
+namespace UrbanX.Inventory.Infrastructure.Jobs;
 
 public sealed class ReleaseExpiredReservationsJob(
     IInventoryReservationRepository reservationRepository,
@@ -32,7 +32,7 @@ public sealed class ReleaseExpiredReservationsJob(
                     continue;
 
                 reservation.MarkReleased(utcNow);
-                reservation.InventoryItem.ReleaseReservedQuantity(reservation.Quantity, utcNow);
+                reservation.InventoryItem.ReleaseReservedQuantity(reservation.Quantity);
                 releasedCount++;
             }
         });

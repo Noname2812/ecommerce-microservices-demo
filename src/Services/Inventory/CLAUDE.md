@@ -6,17 +6,31 @@ Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `invent
 
 ---
 
+> ⭐ Service này là **reference pattern** cho `add-service` / `add-consumer` skills.
+
 ## Projects
 
 | Project | Responsibility |
 |---|---|
-| `UrbanX.Inventory.Domain` | Entities, value objects, domain exceptions, repository interfaces |
-| `UrbanX.Inventory.Application` | Commands, handlers, validators, error codes, MediatR behavior |
-| `UrbanX.Inventory.Persistence` | EF Core DbContext, entity configs, repos, migrations |
-| `UrbanX.Inventory.API` | Carter modules, HTTP endpoints, Trust-Gateway user context middleware, OpenAPI, Program.cs |
-| `UrbanX.Inventory.Infrastructure` | Empty placeholder |
+| `UrbanX.Inventory.Domain` | Entities, value objects, `Errors/InventoryStockErrors.cs`, repository interfaces |
+| `UrbanX.Inventory.Application` | Commands, handlers, validators. **DI chỉ MediatR + FluentValidation** (`AddApplication()` = 1 dòng). KHÔNG chứa consumer/job/options. |
+| `UrbanX.Inventory.Infrastructure` | **Implementations outbound**: MassTransit consumers (`Messaging/<Event>/`), Hangfire jobs (`Jobs/`), options + validators (`DependencyInjection/Options/`), `AddInfrastructure()` entry point |
+| `UrbanX.Inventory.Persistence` | EF Core `InventoryDbContext` (register MT outbox entities), entity configs, repos, `EfUnitOfWork`, migrations |
+| `UrbanX.Inventory.API` | Carter modules, Program.cs (Hangfire wiring), Trust-Gateway user context middleware, OpenAPI |
 
-**Dependency order:** Domain ← Persistence ← Application ← API
+**Dependency order:**
+```
+Domain ← Persistence
+Domain ← Infrastructure → Application
+Application → Domain only (không reference Persistence / Infrastructure)
+API → Application + Infrastructure + Persistence (+ Domain)
+```
+
+**Layered DI rule:**
+- Application chỉ DI **MediatR + FluentValidation** (`AddMediatorWithPielineDefault`)
+- Infrastructure DI: options + validators (Singleton), scoped jobs/HTTP clients (`AddInfrastructure()`)
+- Persistence DI: `IUnitOfWork` + repository impls (`AddPersistence()`)
+- Consumer DI ở `Program.cs`: `bus.AddConsumer<X>(typeof(XDefinition))` (KHÔNG register scoped manually)
 
 ---
 
@@ -65,19 +79,87 @@ Port: **dynamic (Aspire)** | DB: `urbanx_inventory` | Connection string: `invent
 
 ---
 
-## Application
+## Application (slim)
+
+`AddApplication()` chỉ chứa **1 dòng**:
+```csharp
+services.AddMediatorWithPielineDefault(AssemblyReference.Assembly);
+```
+
+KHÔNG register: consumer, processor, job, HTTP client, options, repository. Toàn bộ thuộc `AddInfrastructure()`.
 
 ### MediatR Behavior
 
 `TransactionPipelineBehavior` (từ `Shared.Messaging`) — wraps mọi command trong DB transaction qua `IUnitOfWork` (impl: `EfUnitOfWork` trong Persistence). Behaviors registered mặc định bởi `AddMediatorWithPielineDefault`: Authorization → Idempotency → Validation → DistributedLock → Transaction.
 
-### Error Codes (`InventoryErrors.cs`)
+### Error Codes — `Domain/Errors/`
 
-Chưa có. Thêm theo pattern:
-
+Đặt tại Domain, KHÔNG Application. Ví dụ `Domain/Errors/InventoryStockErrors.cs`:
 ```csharp
 public static Error NotFound(Guid id) =>
     new("InventoryItem.NotFound", $"Inventory item {id} not found");
+```
+
+---
+
+## Infrastructure (ref pattern)
+
+### Cấu trúc
+
+```
+UrbanX.Inventory.Infrastructure/
+  Messaging/
+    InventoryReleaseRequested/
+      InventoryReleaseRequestedConsumer.cs          (IConsumer<T> + ISender — simple pattern)
+      InventoryReleaseRequestedConsumerDefinition.cs (retry/queue/fanout binding)
+    ReserveInventoryRequested/
+    ConfirmReverse/
+  Jobs/
+    ReleaseExpiredReservationsJob.cs                 (Hangfire-invokable scoped service)
+  DependencyInjection/
+    Options/
+      InventoryReleaseRequestedConsumerOptions.cs   (+ Validator)
+      ReserveInventoryRequestedConsumerOptions.cs   (+ Validator)
+      ConfirmInventoryRequestedConsumerOptions.cs   (+ Validator)
+      ReleaseExpiredReservationsJobOptions.cs
+    Extensions/
+      ServiceCollectionExtensions.cs                 (AddInfrastructure)
+```
+
+### Consumer pattern (simple)
+
+```csharp
+namespace UrbanX.Inventory.Infrastructure.Messaging;
+
+public sealed class ReserveInventoryRequestedConsumer : IConsumer<ReserveInventoryRequestedV1>
+{
+    private readonly ISender _sender;
+    private readonly ILogger<ReserveInventoryRequestedConsumer> _logger;
+
+    public ReserveInventoryRequestedConsumer(ISender sender, ILogger<ReserveInventoryRequestedConsumer> logger)
+    { _sender = sender; _logger = logger; }
+
+    public Task Consume(ConsumeContext<ReserveInventoryRequestedV1> context)
+        => _sender.Send(new ReserveInventoryCommand(...), context.CancellationToken);
+}
+```
+
+KHÔNG có `IntegrationEventConsumerBase`, KHÔNG Processor class, KHÔNG `CommandFailedException` indirection. Result.Failure ở handler là cơ chế lỗi nghiệp vụ; exception thật mới rơi vào broker retry.
+
+### AddInfrastructure
+
+```csharp
+public static IServiceCollection AddInfrastructure(this IServiceCollection services)
+{
+    services.AddSingleton<IValidateOptions<InventoryReleaseRequestedConsumerOptions>, InventoryReleaseRequestedConsumerOptionsValidator>();
+    services.AddOptions<InventoryReleaseRequestedConsumerOptions>()
+        .BindConfiguration(InventoryReleaseRequestedConsumerOptions.SectionName)
+        .ValidateDataAnnotations().ValidateOnStart();
+    // ... tương tự cho 2 consumer còn lại + ReleaseExpiredReservationsJobOptions
+
+    services.AddScoped<ReleaseExpiredReservationsJob>();
+    return services;
+}
 ```
 
 ---
@@ -88,7 +170,7 @@ public static Error NotFound(Guid id) =>
 
 Kế thừa `DbContext`. Register MT outbox entities trong `OnModelCreating`. DbSets:
 
-`Warehouses`, `InventoryItems`, `InventoryReservations`, `StockMovements`, `ProcessedEvents` + MT outbox tables (`inbox_state`, `outbox_message`, `outbox_state`)
+`Warehouses`, `InventoryItems`, `InventoryReservations`, `StockMovements` + MT outbox/inbox tables (`inbox_state`, `outbox_message`, `outbox_state`)
 
 ### Table Names
 
@@ -157,19 +239,25 @@ Chưa có endpoint. Thêm bằng skill `add-command` / `add-query`.
 ### Program.cs Registration Order
 
 ```
-AddServiceDefaults() → AddOpenApi() → AddNpgsqlDbContext<InventoryDbContext>("inventorydb")
-→ AddApplication()  // options cho ConsumerDefinition, MediatR, …
-→ AddConfigMessaging()
+AddServiceDefaults() → AddSharedCache("redis") → AddOpenApi()
+→ AddNpgsqlDbContext<InventoryDbContext>("inventorydb", configureDbContextOptions: o => o.UseSnakeCaseNamingConvention())
+→ AddInfrastructure()   // ⭐ Register options/jobs/clients TRƯỚC khi MT resolve ConsumerDefinition
+→ AddApplication()       // MediatR + FluentValidation (1 dòng)
+→ AddConfigMessaging(builder.Configuration)
 → AddMessaging(configureBus: bus => {
     bus.AddEntityFrameworkOutbox<InventoryDbContext>(o => { o.UsePostgres(); o.UseBusOutbox(); ... });
-    bus.AddConsumer<...>(); ...
+    bus.AddConsumer<InventoryReleaseRequestedConsumer>(typeof(InventoryReleaseRequestedConsumerDefinition));
+    bus.AddConsumer<ReserveInventoryRequestedConsumer>(typeof(ReserveInventoryRequestedConsumerDefinition));
+    bus.AddConsumer<ConfirmInventoryRequestedConsumer>(typeof(ConfirmInventoryRequestedConsumerDefinition));
   })
-→ AddPersistence() → Carter
+→ AddHealthChecks → AddProblemDetails
+→ AddPersistence() → AddApiVersioning → AddCarter
+→ AddHangfire + AddHangfireServer  (TTL release expired reservations)
 
-app.UseExceptionHandler() → app.UseUserContext() → app.MapCarter()
+app.UseExceptionHandler() → app.UseUserContext() → migrate → schedule recurring jobs → app.MapCarter()
 ```
 
-Auto-runs EF migrations on startup.
+Auto-runs EF migrations on startup. Hangfire schedules `ttl-release-expired-reservations` job sau migrate.
 
 ---
 
@@ -202,8 +290,12 @@ gateway
 
 ## Integration Events / MassTransit
 
-- Contracts: `Shared.Contract/Messaging/PlaceOrder/` (ví dụ `InventoryReleaseRequestedV1`, `IInventoryReleaseRequested`).
-- Consumer compensation: `InventoryReleaseRequestedConsumer` + `InventoryReleaseRequestedConsumerDefinition` — bind queue tới fanout exchange `compensation.events`. **`InventoryReleaseRequestedProcessor`** chỉ gọi `ReleaseInventoryCommand` (không gọi `ExistsAsync` — tránh double read; dedupe nằm ở `ReleaseInventoryCommandHandler` + `StageInsert` + unique `EventId`). Lỗi `Result` từ handler → `InventoryReleaseCommandFailedException` (consumer `IsTransient` = true) để retry MassTransit ghi **Warning**, không *Fatal* mỗi lần. Retry / queue / throughput: **`InventoryReleaseRequestedConsumerOptions`**, validate startup qua **`InventoryReleaseRequestedConsumerOptionsValidator`**.
+- Contracts: `Shared.Contract/Messaging/PlaceOrder/` và `Shared.Contract/Messaging/PlaceOrderSaga/`.
+- 3 consumer (Reserve / Release / Confirm) đều dùng **simple pattern**: `IConsumer<T>` trực tiếp gọi `ISender.Send(command)`. KHÔNG có Processor class, Exception biên, Classifier riêng.
+- **Command dispatched từ consumer dùng `IMessagingCommand` + handler `IMessagingCommandHandler<>`** (KHÔNG `ICommand`). Lý do: MT EF Outbox đã wrap `Consume` trong DbContext transaction (`BeginTransactionAsync` → run → `SaveChangesAsync` + `CommitAsync` + insert `inbox_state`). `TransactionPipelineBehavior` (`where TRequest : ICommandBase`) tự skip `IMessagingCommand` để tránh "already in transaction" + rollback semantics vỡ.
+- **Idempotency** dùng MassTransit Inbox built-in: bảng `inbox_state` (đã register qua `AddInboxStateEntity()` ở DbContext) + `DuplicateDetectionWindow = 10 minutes`. KHÔNG cần custom `processed_events` table — handler không cần truyền/check `EventId`. `IdempotencyPipelineBehavior` (`where TRequest : IIdempotentCommand`) tự skip.
+- **Handler note**: không gọi `SaveChanges` thủ công (MT auto-commit); throw để rollback (MT retry/DLQ), `Result.Failure` chỉ dành cho business decision không cần rollback.
+- ConsumerDefinition đọc Options qua `IOptions<T>` để config queue name, exponential retry, prefetch, concurrent limit; Release consumer còn bind queue tới fanout exchange `compensation.events`.
 
 ### RabbitMQ consumer tuning (retry & throughput, opt-in)
 
