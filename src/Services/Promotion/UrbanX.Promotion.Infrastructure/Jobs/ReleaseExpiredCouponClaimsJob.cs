@@ -3,8 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
 using UrbanX.Promotion.Domain.Repositories;
+using UrbanX.Promotion.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Promotion.Application.Jobs;
+namespace UrbanX.Promotion.Infrastructure.Jobs;
 
 public sealed class ReleaseExpiredCouponClaimsJob(
     ICouponClaimRepository couponClaimRepository,

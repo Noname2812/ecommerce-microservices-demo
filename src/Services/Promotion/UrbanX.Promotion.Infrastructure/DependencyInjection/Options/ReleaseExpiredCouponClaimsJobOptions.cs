@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Promotion.Application.Jobs;
+namespace UrbanX.Promotion.Infrastructure.DependencyInjection.Options;
 
 public sealed class ReleaseExpiredCouponClaimsJobOptions
 {

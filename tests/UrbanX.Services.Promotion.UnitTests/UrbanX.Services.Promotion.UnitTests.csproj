@@ -27,8 +27,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MassTransit" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Promotion\UrbanX.Promotion.Application\UrbanX.Promotion.Application.csproj" />
     <ProjectReference Include="..\..\src\Services\Promotion\UrbanX.Promotion.Domain\UrbanX.Promotion.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Services\Promotion\UrbanX.Promotion.Infrastructure\UrbanX.Promotion.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

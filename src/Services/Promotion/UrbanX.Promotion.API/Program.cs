@@ -9,17 +9,16 @@ using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
 using StackExchange.Redis;
-using UrbanX.Promotion.API.SeedData;
-using UrbanX.Promotion.API.Messaging.ClaimCouponRequested;
-using UrbanX.Promotion.API.Messaging.CouponReleaseRequested;
 using UrbanX.Promotion.Application.DependencyInjection.Extensions;
-using UrbanX.Promotion.Application.Jobs;
-using UrbanX.Promotion.Application.Messaging.ClaimCouponRequested;
-using UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
-using UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;
-using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Application.Telemetry;
+using UrbanX.Promotion.Infrastructure.DependencyInjection.Extensions;
+using UrbanX.Promotion.Infrastructure.DependencyInjection.Options;
+using UrbanX.Promotion.Infrastructure.Jobs;
+using UrbanX.Promotion.Infrastructure.Messaging.ClaimCouponRequested;
+using UrbanX.Promotion.Infrastructure.Messaging.CouponReleaseRequested;
+using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Persistence.DependencyInjection.Extensions;
+using UrbanX.Promotion.Persistence.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,18 +29,24 @@ builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
 builder.AddNpgsqlDbContext<PromotionDbContext>("promotiondb",
+    configureSettings: settings =>
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(settings.ConnectionString)
+        {
+            MaxPoolSize = 20,
+            MinPoolSize = 2,
+            ConnectionIdleLifetime = 60,
+            ConnectionPruningInterval = 10,
+            Timeout = 15,
+            CommandTimeout = 30
+        };
+        settings.ConnectionString = csb.ConnectionString;
+    },
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<PromotionDbContext>(name: "promotiondb", tags: ["ready", "db"]);
+builder.Services.AddInfrastructure();
+builder.Services.AddApplication();
 
-builder.Services.AddProblemDetails();
-
-builder.Services.AddPersistence();
-builder.Services.AddPromotionInfrastructure();
-builder.Services.AddApplication(builder.Configuration);
-
-// Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(builder.Configuration,
@@ -59,6 +64,12 @@ builder.Services
             bus.AddConsumer<ClaimCouponRequestedConsumer>(typeof(ClaimCouponRequestedConsumerDefinition));
         });
 
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<PromotionDbContext>(name: "promotiondb", tags: ["ready", "db"]);
+
+builder.Services.AddProblemDetails();
+builder.Services.AddPersistence();
+
 builder.Services
     .AddApiVersioning(options => options.ReportApiVersions = true)
     .AddApiExplorer(options =>
@@ -69,7 +80,6 @@ builder.Services
 
 builder.Services.AddCarter();
 
-// In-memory storage is fine for local/dev. For production, switch to persistent storage (e.g. Hangfire.PostgreSql/Redis).
 builder.Services.AddHangfire(config =>
     config.UseInMemoryStorage());
 builder.Services.AddHangfireServer();
@@ -82,9 +92,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseExceptionHandler();
-
-// Trust-the-Gateway: read identity from X-User-* headers (set by Gateway).
-// Authorization is enforced via AuthorizationPipelineBehavior on each Command/Query.
 app.UseUserContext();
 
 using (var scope = app.Services.CreateScope())
@@ -96,18 +103,17 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Applying database migrations for PromotionDbContext...");
         await context.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
+
+        if (app.Environment.IsDevelopment())
+        {
+            var redis = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
+            await PromotionDataSeeder.SeedCouponsIfEmptyAsync(context, redis, logger);
+        }
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "An error occurred while applying database migrations");
         throw;
-    }
-
-    if (app.Environment.IsDevelopment())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<PromotionDbContext>();
-        var redis = scope.ServiceProvider.GetRequiredService<IConnectionMultiplexer>();
-        await PromotionDbContextSeed.SeedCouponsAsync(db, redis, logger);
     }
 }
 

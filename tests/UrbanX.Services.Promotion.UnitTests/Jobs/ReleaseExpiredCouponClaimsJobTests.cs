@@ -3,11 +3,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Shared.Kernel.Primitives;
-using UrbanX.Promotion.Application.Jobs;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
 using UrbanX.Promotion.Domain.Models;
 using UrbanX.Promotion.Domain.Repositories;
 using UrbanX.Promotion.Domain.ValueObjects;
+using UrbanX.Promotion.Infrastructure.DependencyInjection.Options;
+using UrbanX.Promotion.Infrastructure.Jobs;
 
 namespace UrbanX.Services.Promotion.UnitTests.Jobs;
 
@@ -25,7 +26,6 @@ public sealed class ReleaseExpiredCouponClaimsJobTests
     [Fact]
     public async Task ExecuteAsync_WhenExpiredClaimsExist_ReleasesExpiredClaims()
     {
-        // Arrange
         var expiredClaimOne = BuildClaim(
             Guid.Parse("10000000-0000-4000-8000-000000000001"),
             Guid.Parse("20000000-0000-4000-8000-000000000001"),
@@ -43,10 +43,8 @@ public sealed class ReleaseExpiredCouponClaimsJobTests
             .Setup(s => s.Send(It.IsAny<ReleaseCouponClaimCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success());
 
-        // Act
         await CreateJob().ExecuteAsync(CancellationToken.None);
 
-        // Assert
         _sender.Verify(
             s => s.Send(It.Is<ReleaseCouponClaimCommand>(c => c.ClaimId == expiredClaimOne.Id), It.IsAny<CancellationToken>()),
             Times.Once);
@@ -58,15 +56,12 @@ public sealed class ReleaseExpiredCouponClaimsJobTests
     [Fact]
     public async Task ExecuteAsync_WhenNoExpiredClaims_DoesNotReleaseAnyClaim()
     {
-        // Arrange
         _claimRepository
             .Setup(r => r.GetExpiredClaimedBatchAsync(200, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
-        // Act
         await CreateJob().ExecuteAsync(CancellationToken.None);
 
-        // Assert
         _sender.Verify(
             s => s.Send(It.IsAny<ReleaseCouponClaimCommand>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -75,7 +70,6 @@ public sealed class ReleaseExpiredCouponClaimsJobTests
     [Fact]
     public async Task ExecuteAsync_WhenOneReleaseFails_LogsWarningAndContinuesToNextClaim()
     {
-        // Arrange
         var failedClaim = BuildClaim(
             Guid.Parse("10000000-0000-4000-8000-000000000011"),
             Guid.Parse("20000000-0000-4000-8000-000000000011"),
@@ -101,10 +95,8 @@ public sealed class ReleaseExpiredCouponClaimsJobTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success());
 
-        // Act
         await CreateJob().ExecuteAsync(CancellationToken.None);
 
-        // Assert
         _sender.Verify(
             s => s.Send(It.Is<ReleaseCouponClaimCommand>(c => c.ClaimId == failedClaim.Id), It.IsAny<CancellationToken>()),
             Times.Once);

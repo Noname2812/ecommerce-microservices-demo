@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 
-namespace UrbanX.Promotion.Application.DependencyInjection.Options;
+namespace UrbanX.Promotion.Infrastructure.DependencyInjection.Options;
 
 internal sealed class ClaimCouponRequestedConsumerOptionsValidator
     : IValidateOptions<ClaimCouponRequestedConsumerOptions>

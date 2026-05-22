@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 
-namespace UrbanX.Promotion.Application.Messaging.CouponReleaseRequested;
+namespace UrbanX.Promotion.Infrastructure.DependencyInjection.Options;
 
 internal sealed class CouponReleaseRequestedConsumerOptionsValidator : IValidateOptions<CouponReleaseRequestedConsumerOptions>
 {
@@ -30,7 +30,6 @@ internal sealed class CouponReleaseRequestedConsumerOptionsValidator : IValidate
                 validateAllProperties: true);
         }
 
-        // Non-empty after trim would still be empty (e.g. "   ") — invalid queue name.
         if (!string.IsNullOrEmpty(options.QueueName) && string.IsNullOrWhiteSpace(options.QueueName))
         {
             results.Add(new ValidationResult(

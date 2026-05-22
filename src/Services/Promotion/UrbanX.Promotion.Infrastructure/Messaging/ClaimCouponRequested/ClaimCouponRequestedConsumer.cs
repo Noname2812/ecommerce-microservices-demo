@@ -2,31 +2,40 @@ using MassTransit;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Shared.Contract.Messaging.PlaceOrderSaga;
-using Shared.Messaging;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
 
-namespace UrbanX.Promotion.Application.Messaging.ClaimCouponRequested;
+namespace UrbanX.Promotion.Infrastructure.Messaging.ClaimCouponRequested;
 
-public sealed class ClaimCouponRequestedConsumer(
-    ISender mediator,
-    IPublishEndpoint publishEndpoint,
-    ILogger<ClaimCouponRequestedConsumer> logger)
-    : IntegrationEventConsumerBase<ClaimCouponRequestedV1, ClaimCouponRequestedConsumer>(logger)
+public sealed class ClaimCouponRequestedConsumer : IConsumer<ClaimCouponRequestedV1>
 {
-    protected override async Task HandleAsync(ClaimCouponRequestedV1 @event, CancellationToken cancellationToken)
+    private readonly ISender _sender;
+    private readonly IPublishEndpoint _publishEndpoint;
+    private readonly ILogger<ClaimCouponRequestedConsumer> _logger;
+
+    public ClaimCouponRequestedConsumer(
+        ISender sender,
+        IPublishEndpoint publishEndpoint,
+        ILogger<ClaimCouponRequestedConsumer> logger)
     {
+        _sender = sender;
+        _publishEndpoint = publishEndpoint;
+        _logger = logger;
+    }
+
+    public async Task Consume(ConsumeContext<ClaimCouponRequestedV1> context)
+    {
+        var @event = context.Message;
         var command = new ClaimCouponCommand(
             IdempotencyKey: @event.OrderIdempotencyKey,
             CouponCode: @event.CouponCode,
             UserId: Guid.Parse(@event.UserId),
-            OrderAmount: @event.OrderTotal
-        );
+            OrderAmount: @event.OrderTotal);
 
-        var result = await mediator.Send(command, cancellationToken);
+        var result = await _sender.Send(command, context.CancellationToken);
 
         if (result.IsSuccess)
         {
-            await publishEndpoint.Publish(new CouponClaimedV1
+            await _publishEndpoint.Publish(new CouponClaimedV1
             {
                 OrderId = @event.OrderId,
                 CorrelationId = @event.OrderId.ToString("D"),
@@ -34,18 +43,18 @@ public sealed class ClaimCouponRequestedConsumer(
                 ClaimId = result.Value.ClaimId,
                 DiscountAmount = result.Value.DiscountAmount,
                 ExpiresAt = result.Value.ExpiresAt
-            }, cancellationToken);
+            }, context.CancellationToken);
         }
         else
         {
-            await publishEndpoint.Publish(new CouponClaimFailedV1
+            await _publishEndpoint.Publish(new CouponClaimFailedV1
             {
                 OrderId = @event.OrderId,
                 CorrelationId = @event.OrderId.ToString("D"),
                 CausationId = @event.EventId.ToString(),
                 ErrorCode = result.Error!.Code,
                 ErrorMessage = result.Error!.Message
-            }, cancellationToken);
+            }, context.CancellationToken);
         }
     }
 }
