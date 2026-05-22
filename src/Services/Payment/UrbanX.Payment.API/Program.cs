@@ -1,12 +1,18 @@
 using Carter;
+using Hangfire;
+using Hangfire.InMemory;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Shared.Cache.DependencyInjection.Extensions;
 using Shared.Messaging.Authorization;
 using Shared.Messaging.DependencyInjection.Extensions;
-using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Payment.Application.DependencyInjection.Extensions;
-using UrbanX.Payment.Application.Messaging.CreatePaymentSession;
-using UrbanX.Payment.Application.Messaging.OrderCancelled;
+using UrbanX.Payment.Infrastructure.DependencyInjection.Extensions;
+using UrbanX.Payment.Infrastructure.DependencyInjection.Options;
+using UrbanX.Payment.Infrastructure.Jobs;
+using UrbanX.Payment.Infrastructure.Messaging.CreatePaymentSession;
+using UrbanX.Payment.Infrastructure.Messaging.OrderCancelled;
 using UrbanX.Payment.Persistence;
 using UrbanX.Payment.Persistence.DependencyInjection.Extensions;
 
@@ -16,11 +22,25 @@ builder.AddServiceDefaults();
 builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
-// Database
 builder.AddNpgsqlDbContext<PaymentDbContext>("paymentdb",
+    configureSettings: settings =>
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(settings.ConnectionString)
+        {
+            MaxPoolSize = 20,
+            MinPoolSize = 2,
+            ConnectionIdleLifetime = 60,
+            ConnectionPruningInterval = 10,
+            Timeout = 15,
+            CommandTimeout = 30
+        };
+        settings.ConnectionString = csb.ConnectionString;
+    },
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
 
-// Messaging (with MassTransit EF Outbox + BusOutbox for transactional publish)
+builder.Services.AddInfrastructure();
+builder.Services.AddApplication();
+
 builder.Services
     .AddConfigMessaging(builder.Configuration)
     .AddMessaging(
@@ -35,22 +55,15 @@ builder.Services
                 o.DuplicateDetectionWindow = TimeSpan.FromMinutes(10);
             });
 
-            bus.AddConsumer<OrderCancelledConsumer>();
-            bus.AddConsumer<CreatePaymentSessionConsumer>();
+            bus.AddConsumer<OrderCancelledConsumer>(typeof(OrderCancelledConsumerDefinition));
+            bus.AddConsumer<CreatePaymentSessionConsumer>(typeof(CreatePaymentSessionConsumerDefinition));
         });
 
-// Health checks
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PaymentDbContext>(name: "paymentdb", tags: ["ready", "db"]);
 
 builder.Services.AddProblemDetails();
-
-// Add Persistence
 builder.Services.AddPersistence();
-
-// Add Application
-builder.Services.AddApplication(builder.Configuration);
-builder.Services.AddHostedService<UrbanX.Payment.API.BackgroundJobs.PaymentExpirySweepHostedService>();
 
 builder.Services
     .AddApiVersioning(options => options.ReportApiVersions = true)
@@ -62,6 +75,9 @@ builder.Services
 
 builder.Services.AddCarter();
 
+builder.Services.AddHangfire(config => config.UseInMemoryStorage());
+builder.Services.AddHangfireServer();
+
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
@@ -70,9 +86,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseExceptionHandler();
-
-// Trust-the-Gateway: read identity from X-User-* headers (set by Gateway).
-// Authorization is enforced via AuthorizationPipelineBehavior on each Command/Query.
 app.UseUserContext();
 
 using (var scope = app.Services.CreateScope())
@@ -91,6 +104,13 @@ using (var scope = app.Services.CreateScope())
         throw;
     }
 }
+
+var sweepJobOptions = app.Services.GetRequiredService<IOptions<PaymentExpirySweepJobOptions>>().Value;
+app.Services.GetRequiredService<IRecurringJobManager>()
+    .AddOrUpdate<PaymentExpirySweepJob>(
+        recurringJobId: "payment-expiry-sweep",
+        methodCall: job => job.ExecuteAsync(default),
+        cronExpression: sweepJobOptions.CronExpression);
 
 app.MapCarter();
 app.Run();

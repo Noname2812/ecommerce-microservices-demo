@@ -8,6 +8,8 @@
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
     <PackageReference Include="Carter" />
+    <PackageReference Include="Hangfire.AspNetCore" />
+    <PackageReference Include="Hangfire.InMemory" />
     <PackageReference Include="MediatR" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
@@ -15,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\ServiceDefaults\UrbanX.ServiceDefaults\UrbanX.ServiceDefaults.csproj" />
     <ProjectReference Include="..\UrbanX.Payment.Application\UrbanX.Payment.Application.csproj" />
+    <ProjectReference Include="..\UrbanX.Payment.Infrastructure\UrbanX.Payment.Infrastructure.csproj" />
     <ProjectReference Include="..\UrbanX.Payment.Persistence\UrbanX.Payment.Persistence.csproj" />
   </ItemGroup>
 </Project>

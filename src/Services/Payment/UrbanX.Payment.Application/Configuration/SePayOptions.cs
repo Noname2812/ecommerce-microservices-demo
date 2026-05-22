@@ -21,13 +21,4 @@ public sealed class SePayOptions
 
     /// <summary>Max payments processed per expiry sweep iteration.</summary>
     public int ExpirySweepBatchSize { get; init; } = 200;
-
-    /// <summary>Delay before the first expiry sweep after host start.</summary>
-    public int ExpirySweepInitialDelaySeconds { get; init; } = 5;
-
-    /// <summary>Normal interval between sweeps (seconds).</summary>
-    public int ExpirySweepIntervalSeconds { get; init; } = 60;
-
-    /// <summary>Floor applied with <c>Math.Max</c> against <see cref="ExpirySweepIntervalSeconds"/> after errors or between runs.</summary>
-    public int ExpirySweepMinimumIntervalSeconds { get; init; } = 10;
 }
