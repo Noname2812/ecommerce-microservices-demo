@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Order.Application.DependencyInjection.Options;
+namespace UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
 public sealed class PlaceOrderOptions
 {
@@ -19,8 +19,8 @@ public sealed class PlaceOrderOptions
     public int CouponLockTtlSeconds { get; init; } = 960;
 
     /// <summary>
-    /// Acceptable relative drift between client `ExpectedTotal` and server-computed `FinalTotal`.
-    /// E.g. <c>0.01</c> = 1%. Must be in [0, 1].
+    /// Acceptable relative drift between client <c>ExpectedTotal</c> and server-computed
+    /// <c>FinalTotal</c>. E.g. <c>0.01</c> = 1%. Must be in [0, 1].
     /// </summary>
     [Range(typeof(decimal), "0", "1")]
     public decimal PriceMismatchTolerance { get; init; } = 0.01m;

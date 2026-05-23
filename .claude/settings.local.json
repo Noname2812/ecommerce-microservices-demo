@@ -15,7 +15,8 @@
       "Bash(xargs grep *)",
       "Bash(dotnet build *)",
       "Bash(grep -v \"^\\\\s*//\")",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(cmd /c dir /b src\\\\Services\\\\Order\\\\UrbanX.Order.Application\\\\Constants src\\\\Services\\\\Order\\\\UrbanX.Order.Application\\\\Exceptions)"
     ]
   }
 }

@@ -34,9 +34,10 @@ public sealed class CancelOrderCommandHandler(
             || order.Status == OrderStatus.Refunded)
             return Result.Failure(OrderErrors.CannotCancel);
 
-        var hadReservation = order.ReservationId.HasValue;
+        // Order doesn't track reservation IDs (those live on saga state / Inventory side).
+        // We publish InventoryReleaseRequestedV1 unconditionally; Inventory consumer is idempotent
+        // — it returns success when no reservation matches the OrderId.
         var hadCoupon = order.CouponClaimId.HasValue;
-        var reservationId = order.ReservationId;
         var claimId = order.CouponClaimId;
 
         order.Cancel(request.Reason, userId, changedByName: string.Empty);
@@ -48,18 +49,15 @@ public sealed class CancelOrderCommandHandler(
             ctx => ctx.MessageId = DeterministicMessageId.From($"order-cancelled:{order.Id}"),
             ct);
 
-        if (hadReservation)
-        {
-            await publishEndpoint.Publish(
-                new InventoryReleaseRequestedV1
-                {
-                    CorrelationId = correlationId,
-                    ReservationId = reservationId!.Value,
-                    Reason = $"Cancelled by user: {request.Reason}"
-                },
-                ctx => ctx.MessageId = DeterministicMessageId.From($"inv-release:{reservationId}"),
-                ct);
-        }
+        await publishEndpoint.Publish(
+            new InventoryReleaseRequestedV1
+            {
+                CorrelationId = correlationId,
+                OrderId = order.Id,
+                Reason = $"Cancelled by user: {request.Reason}"
+            },
+            ctx => ctx.MessageId = DeterministicMessageId.From($"inv-release:{order.Id}"),
+            ct);
 
         if (hadCoupon)
         {

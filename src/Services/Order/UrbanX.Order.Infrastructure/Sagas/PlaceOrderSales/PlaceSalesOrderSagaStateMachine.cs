@@ -11,15 +11,15 @@ using Shared.Messaging;
 using Shared.Messaging.Saga;
 using System.Text.Json;
 using UrbanX.Order.Application.Clients;
-using UrbanX.Order.Application.DependencyInjection.Options;
+using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.Application.Services;
-using UrbanX.Order.Application.Usecases.V1.Command.Common;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
+using UrbanX.Order.Infrastructure.DependencyInjection.Options;
 using SalesOrderItemSnapshot = Shared.Contract.Messaging.PlaceOrderSaga.OrderItemSnapshot;
 
-namespace UrbanX.Order.Application.Sagas.PlaceOrderSales;
+namespace UrbanX.Order.Infrastructure.Sagas.PlaceOrderSales;
 
 /// <summary>
 /// Orchestrates the place-sales-order flow (TASK-08):
@@ -93,7 +93,17 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
         // ── InventoryReserving ────────────────────────────────────────────────
         During(InventoryReserving,
             When(InventoryReserved)
-                .Then(ctx => { ctx.Saga.ReservationId = ctx.Message.ReservationId; StampInstance(ctx.Saga); })
+                .Then(ctx =>
+                {
+                    // Sales orders carry a single reservation conceptually (one campaign per order),
+                    // but the integration event returns the full list to stay consistent with the
+                    // Normal flow. Take the first; treat empty as protocol violation.
+                    ctx.Saga.ReservationId = ctx.Message.ReservationIds.Count > 0
+                        ? ctx.Message.ReservationIds[0]
+                        : throw new InvalidOperationException(
+                            $"InventoryReservedV1 for order {ctx.Saga.OrderId} returned no reservation ids.");
+                    StampInstance(ctx.Saga);
+                })
                 .Unschedule(InventoryTimeout)
                 .TransitionTo(PaymentSessionCreating),
 
@@ -416,7 +426,6 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
             if (order is null) return;
 
             order.MarkReadyForPayment(
-                ctx.Saga.ReservationId!.Value,
                 claimId: null,                 // Sales flow uses Redis coupon lock, not event-based claim id
                 ctx.Message.PaymentUrl,
                 ctx.Message.QrCodeUrl,
@@ -658,14 +667,13 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
     private static ReserveInventoryRequestedV1 BuildInventoryRequest(PlaceSalesOrderSagaState saga)
     {
         var items = DeserializeItems(saga)
-            .Select(i => new InventoryReserveItem(i.ProductId, i.VariantId, i.Quantity))
+            .Select(i => new InventoryReserveItem(i.VariantId, i.Quantity))
             .ToList();
 
         return new ReserveInventoryRequestedV1
         {
             CorrelationId = saga.OrderId.ToString("D"),
             OrderId = saga.OrderId,
-            OrderIdempotencyKey = $"{saga.IdempotencyKey}:inv",
             Items = items
         };
     }
@@ -682,15 +690,13 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
     private static InventoryReleaseRequestedV1 BuildInventoryRelease(PlaceSalesOrderSagaState saga) => new()
     {
         CorrelationId = saga.OrderId.ToString("D"),
-        ReservationId = saga.ReservationId!.Value,
+        OrderId = saga.OrderId,
         Reason = FailureReasonOf(saga)
     };
 
     private static ConfirmInventoryRequestedV1 BuildConfirmInventoryRequest(PlaceSalesOrderSagaState saga) => new()
     {
         CorrelationId = saga.OrderId.ToString("D"),
-        OrderId = saga.OrderId,
-        ReservationId = saga.ReservationId!.Value,
-        IdempotencyKey = $"{saga.IdempotencyKey}:confirm-inv"
+        OrderId = saga.OrderId
     };
 }

@@ -5,8 +5,8 @@ using Shared.Cache.Abstractions;
 using Shared.Cache.DependencyInjection.Options;
 using Shared.Kernel.Primitives;
 using StackExchange.Redis;
-using UrbanX.Order.Application.DependencyInjection.Options;
 using UrbanX.Order.Application.Services;
+using UrbanX.Order.Infrastructure.DependencyInjection.Options;
 using UrbanX.Order.Domain.Errors;
 
 namespace UrbanX.Order.Infrastructure.Services;

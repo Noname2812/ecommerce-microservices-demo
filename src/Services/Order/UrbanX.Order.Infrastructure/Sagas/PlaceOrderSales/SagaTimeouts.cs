@@ -1,4 +1,4 @@
-namespace UrbanX.Order.Application.Sagas.PlaceOrderSales;
+namespace UrbanX.Order.Infrastructure.Sagas.PlaceOrderSales;
 
 /// <summary>
 /// Per-step timeout for <see cref="PlaceSalesOrderSagaStateMachine"/> (single schedule per saga).
@@ -10,7 +10,7 @@ public abstract record OrderSagaStepTimeoutV1
 }
 
 /// <summary>
-/// Place-normal saga schedules must use distinct message types (MassTransit schedule registry key).
+/// Place-sales saga schedules must use distinct message types (MassTransit schedule registry key).
 /// </summary>
 public record InventoryStepTimeoutV1 : OrderSagaStepTimeoutV1
 {

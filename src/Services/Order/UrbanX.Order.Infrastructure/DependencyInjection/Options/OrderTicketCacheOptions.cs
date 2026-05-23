@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Order.Application.DependencyInjection.Options;
+namespace UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
 public sealed class OrderTicketCacheOptions
 {

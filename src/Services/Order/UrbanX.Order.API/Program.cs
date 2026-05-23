@@ -6,13 +6,16 @@ using Shared.Messaging.DependencyInjection.Extensions;
 using Shared.Messaging.Idempotency;
 using Shared.Cache.DependencyInjection.Extensions;
 using UrbanX.Order.Application.DependencyInjection.Extensions;
-using UrbanX.Order.Application.Messaging;
+using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
+using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.API.Middleware;
 using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
+using UrbanX.Order.Infrastructure.Messaging.OrderCancelledCache;
+using UrbanX.Order.Infrastructure.Messaging.OrderConfirmedCache;
+using UrbanX.Order.Infrastructure.Sagas.PlaceOrderNormal;
+using UrbanX.Order.Infrastructure.Sagas.PlaceOrderSales;
 using UrbanX.Order.Persistence;
 using UrbanX.Order.Persistence.DependencyInjection.Extensions;
-using UrbanX.Order.Application.Sagas.PlaceOrderSales;
-using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +42,14 @@ builder.AddNpgsqlDbContext<OrderDbContext>("orderdb",
         settings.ConnectionString = csb.ConnectionString;
     },
     configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
+
+// Infrastructure first — options/consumers/clients/sagas must be registered before MassTransit
+// resolves ConsumerDefinition (which inject IOptions<...> bound by AddInfrastructure).
+builder.Services.AddInfrastructure();
+
+// Application — MediatR + FluentValidation (single line)
+builder.Services.AddApplication();
+
 // Messaging
 builder.Services
     .AddConfigMessaging(builder.Configuration)
@@ -66,8 +77,8 @@ builder.Services
                 r.ExistingDbContext<OrderDbContext>();
             });
 
-        bus.AddConsumer<OrderConfirmedCacheConsumer>();
-        bus.AddConsumer<OrderCancelledCacheConsumer>();
+        bus.AddConsumer<OrderConfirmedCacheConsumer>(typeof(OrderConfirmedCacheConsumerDefinition));
+        bus.AddConsumer<OrderCancelledCacheConsumer>(typeof(OrderCancelledCacheConsumerDefinition));
     });
 
 // Health checks
@@ -76,14 +87,8 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddProblemDetails();
 
-// Add Infrastructure
-builder.Services.AddInfrastructure();
-
-// Add Persistence
+// Persistence — IUnitOfWork + repositories
 builder.Services.AddPersistence();
-
-// Add Application
-builder.Services.AddApplication(builder.Configuration);
 
 builder.Services
     .AddApiVersioning(options => options.ReportApiVersions = true)

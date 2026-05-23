@@ -11,13 +11,14 @@ using Shared.Messaging;
 using Shared.Messaging.Saga;
 using System.Text.Json;
 using UrbanX.Order.Application.Clients;
-using UrbanX.Order.Application.DependencyInjection.Options;
+using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
 using UrbanX.Order.Application.Services;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
+using UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Order.Application.Sagas.PlaceOrderNormal;
+namespace UrbanX.Order.Infrastructure.Sagas.PlaceOrderNormal;
 
 /// <summary>
 /// Orchestrates the place-normal-order flow:

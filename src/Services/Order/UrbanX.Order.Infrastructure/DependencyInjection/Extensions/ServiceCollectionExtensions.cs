@@ -5,8 +5,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
+using UrbanX.Order.Application.Abstractions;
 using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.Services;
+using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Infrastructure.DependencyInjection.Options;
 using UrbanX.Order.Infrastructure.Services;
 
@@ -16,6 +18,51 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
+        AddOrderOptions(services);
+        AddHttpClients(services);
+        AddRedisServices(services);
+        AddApplicationServices(services);
+
+        return services;
+    }
+
+    private static void AddOrderOptions(IServiceCollection services)
+    {
+        // ── Business / saga / cache config ────────────────────────────────────
+        services.AddOptions<ShippingOptions>()
+            .BindConfiguration(ShippingOptions.SectionName);
+
+        services.AddOptions<OrderPaymentOptions>()
+            .BindConfiguration(OrderPaymentOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<PlaceOrderOptions>()
+            .BindConfiguration(PlaceOrderOptions.SectionName)
+            .ValidateDataAnnotations()
+            // Cross-field invariant: the coupon Redis lock must outlive the payment window so the
+            // user cannot lose their coupon mid-checkout. We require at least a 60-second buffer
+            // beyond the saga's payment expiry. Catches config drift at startup, not at 3 a.m.
+            .Validate<IOptions<OrderPaymentOptions>>(
+                (place, payment) =>
+                    place.CouponLockTtlSeconds >= payment.Value.SalesOrderExpiryMinutes * 60 + 60,
+                "PlaceOrder:CouponLockTtlSeconds must be >= Order:Payment:SalesOrderExpiryMinutes*60 + 60s buffer.")
+            .ValidateOnStart();
+
+        services.AddOptions<OrderTicketCacheOptions>()
+            .BindConfiguration(OrderTicketCacheOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // ── Cache-invalidation consumer (Confirmed + Cancelled share these knobs) ─
+        services.AddSingleton<IValidateOptions<OrderTerminalStatusCacheConsumerOptions>,
+            OrderTerminalStatusCacheConsumerOptionsValidator>();
+        services.AddOptions<OrderTerminalStatusCacheConsumerOptions>()
+            .BindConfiguration(OrderTerminalStatusCacheConsumerOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // ── Outbound HTTP-client config ───────────────────────────────────────
         services.AddOptions<CatalogClientOptions>()
             .BindConfiguration(CatalogClientOptions.SectionName)
             .ValidateDataAnnotations()
@@ -40,7 +87,10 @@ public static class ServiceCollectionExtensions
             .BindConfiguration(PromotionClientResilienceOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
+    }
 
+    private static void AddHttpClients(IServiceCollection services)
+    {
         // Register the raw HTTP client as a concrete typed client (no interface mapping) so the
         // Redis caching decorator below can wrap it. The decorator implements ICatalogServiceClient
         // and is what application code resolves.
@@ -53,12 +103,19 @@ public static class ServiceCollectionExtensions
         services.AddResilientHttpClient<ISaleEligibilityService, PromotionSaleEligibilityClient, PromotionClientOptions, PromotionClientResilienceOptions>(
             o => o.BaseAddress,
             aspireServiceName: "promotion");
+    }
 
+    private static void AddRedisServices(IServiceCollection services)
+    {
         services.AddSingleton<IPendingOrderSlotService, RedisPendingOrderSlotService>();
         services.AddSingleton<IFlashSaleStockService, RedisFlashSaleStockService>();
         services.AddSingleton<ICouponLockService, RedisCouponLockService>();
+    }
 
-        return services;
+    private static void AddApplicationServices(IServiceCollection services)
+    {
+        services.AddScoped<IShippingValidator, ShippingValidator>();
+        services.AddSingleton<IOrderStatusCachePolicy, OrderStatusCachePolicy>();
     }
 
     /// <summary>

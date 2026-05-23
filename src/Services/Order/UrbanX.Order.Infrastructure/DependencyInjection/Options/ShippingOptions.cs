@@ -1,4 +1,4 @@
-namespace UrbanX.Order.Application.DependencyInjection.Options;
+namespace UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
 public sealed class ShippingOptions
 {

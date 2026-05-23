@@ -1,11 +1,12 @@
 using Microsoft.Extensions.Options;
 using Shared.Kernel.Primitives;
-using UrbanX.Order.Application.DependencyInjection.Options;
+using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Errors;
+using UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
-namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
+namespace UrbanX.Order.Infrastructure.Services;
 
-public sealed class ShippingValidator(IOptions<ShippingOptions> options) : IShippingValidator
+internal sealed class ShippingValidator(IOptions<ShippingOptions> options) : IShippingValidator
 {
     private readonly HashSet<string> _supportedRegions =
         new(options.Value.SupportedRegions, StringComparer.OrdinalIgnoreCase);

@@ -1,7 +1,7 @@
-namespace UrbanX.Order.Application.Sagas.PlaceOrderNormal;
+namespace UrbanX.Order.Infrastructure.Sagas.PlaceOrderNormal;
 
 /// <summary>
-/// Per-step timeout for <see cref="PlaceSalesOrderSagaStateMachine"/> (single schedule per saga).
+/// Per-step timeout for <see cref="PlaceOrderNormalSagaStateMachine"/> (single schedule per saga).
 /// Correlated by <see cref="OrderId"/>.
 /// </summary>
 public abstract record OrderSagaStepTimeoutV1

@@ -1,10 +1,8 @@
-using Microsoft.Extensions.Options;
 using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Cache.Abstractions;
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Abstractions;
-using UrbanX.Order.Application.DependencyInjection.Options;
 using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
@@ -16,11 +14,9 @@ public sealed class GetOrderByTicketQueryHandler(
     IOrderTicketStatusQuery ticketStatusQuery,
     IUserContext userContext,
     ICacheService cache,
-    IOptions<OrderTicketCacheOptions> cacheOptions)
+    IOrderStatusCachePolicy cachePolicy)
     : IQueryHandler<GetOrderByTicketQuery, OrderTicketStatusDto>
 {
-    private readonly OrderTicketCacheOptions _opts = cacheOptions.Value;
-
     public async Task<Result<OrderTicketStatusDto>> Handle(
         GetOrderByTicketQuery query, CancellationToken ct)
     {
@@ -47,9 +43,9 @@ public sealed class GetOrderByTicketQueryHandler(
     private TimeSpan ResolveTtl(Result<OrderTicketStatusDto> result)
     {
         if (result.IsSuccess && result.Value is { } dto && IsTerminal(dto.Status))
-            return TimeSpan.FromSeconds(_opts.TerminalTtlSeconds);
+            return cachePolicy.TerminalTtl;
 
-        return TimeSpan.FromSeconds(_opts.NonTerminalTtlSeconds);
+        return cachePolicy.NonTerminalTtl;
     }
 
     private async Task<Result<OrderTicketStatusDto>?> LoadTicketStatusAsync(

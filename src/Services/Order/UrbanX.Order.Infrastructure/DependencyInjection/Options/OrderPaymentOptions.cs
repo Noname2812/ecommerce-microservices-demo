@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UrbanX.Order.Application.DependencyInjection.Options;
+namespace UrbanX.Order.Infrastructure.DependencyInjection.Options;
 
 public sealed class OrderPaymentOptions
 {
@@ -14,7 +14,7 @@ public sealed class OrderPaymentOptions
 
     /// <summary>
     /// Per-step timeout (catalog response, inventory ack, payment-session creation, etc.) for sagas
-    /// that schedule `StepTimeout`. Anything longer than this is considered a step failure.
+    /// that schedule <c>StepTimeout</c>. Anything longer than this is considered a step failure.
     /// </summary>
     [Range(1, 600)]
     public int StepTimeoutSeconds { get; init; } = 30;
