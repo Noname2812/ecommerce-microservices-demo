@@ -46,6 +46,7 @@ public sealed class CompleteRefundCommandHandler(
             }
 
             var providerResult = await refundProvider.RefundAsync(
+                refund.Id,
                 payment.Id,
                 payment.ProviderTransactionId!,
                 refund.Amount,

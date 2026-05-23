@@ -135,8 +135,10 @@ Server trả `{"resultCode":0,"message":"Confirm Success"}` khi handler chạy x
 | Signature sai | Endpoint return 204 (silent ignore — tránh retry loop) |
 | `orderId` không match Payment | Return 200 (acknowledge) để MoMo dừng retry |
 | Payment status `Completed` | Return 200 với message `already completed` |
-| Payment status `Expired` | Record `WebhookReceivedAfterExpiry` event, return 200. Cần refund thủ công |
+| Payment status `Expired` + resultCode success | Record `WebhookReceivedAfterExpiry` event + **auto refund full amount** (no threshold). Xem `IAutoRefundService` |
+| Payment status `Cancelled` + resultCode success | Record `WebhookReceivedAfterCancellation` event + **auto refund full amount**. Race condition order-cancel ↔ webhook |
 | `resultCode` pending (1000/7000) | Ghi event nhưng giữ PENDING — IPN sau sẽ finalize |
+| Overpayment (request.Amount > payment.Amount, delta > 10k VND) | Mark Completed bình thường + record `WebhookOverpayment` + **auto refund excess delta** |
 
 ## Refund auto qua MoMo API
 

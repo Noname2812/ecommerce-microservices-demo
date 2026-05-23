@@ -3,6 +3,7 @@ using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using UrbanX.Payment.Application.Abstractions;
 using UrbanX.Payment.Application.Configuration;
+using UrbanX.Payment.Application.Services;
 using UrbanX.Payment.Infrastructure.DependencyInjection.Options;
 using UrbanX.Payment.Infrastructure.Integrations.Momo;
 using UrbanX.Payment.Infrastructure.Integrations.SePay;
@@ -25,6 +26,12 @@ public static class ServiceCollectionExtensions
         services
             .AddOptions<MomoOptions>()
             .BindConfiguration(MomoOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services
+            .AddOptions<PaymentBusinessOptions>()
+            .BindConfiguration(PaymentBusinessOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -56,6 +63,8 @@ public static class ServiceCollectionExtensions
 
         // Refund providers — resolved by Method string in CompleteRefund handler
         services.AddScoped<IPaymentRefundProvider, MomoRefundProvider>();
+
+        services.AddScoped<IAutoRefundService, AutoRefundService>();
 
         services.AddHttpClient<IMomoClient, MomoClient>((sp, client) =>
         {

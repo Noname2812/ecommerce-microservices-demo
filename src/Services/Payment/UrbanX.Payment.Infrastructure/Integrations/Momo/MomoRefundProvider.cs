@@ -19,6 +19,7 @@ internal sealed class MomoRefundProvider(
     public string Method => ProviderType.Momo;
 
     public async Task<Result<string>> RefundAsync(
+        Guid refundId,
         Guid paymentId,
         string providerTransactionId,
         decimal amount,
@@ -34,8 +35,9 @@ internal sealed class MomoRefundProvider(
         }
 
         var opts = momoOptions.Value;
-        var orderId = $"refund-{paymentId:N}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
-        var requestId = Guid.NewGuid().ToString("N");
+        // Deterministic ids → MoMo dedups identical refund attempts (idempotent on retry).
+        var orderId = $"refund-{refundId:N}";
+        var requestId = $"req-{refundId:N}";
         var refundAmount = (long)Math.Round(amount, 0);
         var description = Truncate(reason, MomoIntegrationConstants.RefundDescriptionMaxLength);
 

@@ -5,9 +5,10 @@ using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
+using UrbanX.Payment.Application.Abstractions;
+using UrbanX.Payment.Application.Integrations.SePay;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.Models;
-using UrbanX.Payment.Application.Integrations.SePay;
 using UrbanX.Payment.Domain.ValueObjects;
 using PaymentEntity = UrbanX.Payment.Domain.Models.Payment;
 
@@ -16,6 +17,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.HandleSePayWebhook;
 internal sealed class HandleSePayWebhookCommandHandler(
     IPaymentRepository paymentRepository,
     IPaymentEventRepository paymentEventRepository,
+    IAutoRefundService autoRefundService,
     IEventPublisher eventPublisher,
     ILogger<HandleSePayWebhookCommandHandler> logger) : ICommandHandler<HandleSePayWebhookCommand, SePayWebhookResult>
 {
@@ -73,7 +75,46 @@ internal sealed class HandleSePayWebhookCommandHandler(
                 request.ExternalTransactionId,
                 request.TransferAmount,
                 cancellationToken);
+
+            // Funds arrived after the order saga already gave up — refund full transfer regardless of threshold.
+            await autoRefundService.CreateAndAttemptAsync(
+                payment.Id,
+                request.TransferAmount,
+                reason: "cancelled-but-paid:expired",
+                enforceThreshold: false,
+                cancellationToken);
+
             return Result.Success(new SePayWebhookResult(true));
+        }
+
+        if (payment.Status == PaymentStatus.Cancelled)
+        {
+            logger.LogWarning(
+                "SePay webhook arrived after payment {PaymentId} was cancelled — issuing auto-refund.",
+                payment.Id);
+
+            await RecordEventAsync(
+                payment,
+                PaymentEventTypes.WebhookReceivedAfterCancellation,
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        transferAmount = request.TransferAmount,
+                        cancelledAt = payment.UpdatedAt
+                    },
+                    JsonOptions),
+                request.ExternalTransactionId,
+                request.TransferAmount,
+                cancellationToken);
+
+            await autoRefundService.CreateAndAttemptAsync(
+                payment.Id,
+                request.TransferAmount,
+                reason: "cancelled-but-paid:cancelled",
+                enforceThreshold: false,
+                cancellationToken);
+
+            return Result.Success(new SePayWebhookResult(true, "cancelled-but-paid"));
         }
 
         if (payment.Status is not (PaymentStatus.Pending or PaymentStatus.PartiallyPaid))
@@ -128,6 +169,14 @@ internal sealed class HandleSePayWebhookCommandHandler(
                     JsonOptions),
                 null,
                 null,
+                cancellationToken);
+
+            // Threshold-guarded so trivial round-ups don't trigger refund overhead.
+            await autoRefundService.CreateAndAttemptAsync(
+                payment.Id,
+                delta,
+                reason: "overpayment-auto",
+                enforceThreshold: true,
                 cancellationToken);
         }
 

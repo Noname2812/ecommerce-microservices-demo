@@ -1,9 +1,8 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
+using UrbanX.Payment.Application.Abstractions;
 using UrbanX.Payment.Application.Integrations.Momo;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.Models;
@@ -15,16 +14,11 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.HandleMomoIpn;
 internal sealed class HandleMomoIpnCommandHandler(
     IPaymentRepository paymentRepository,
     IPaymentEventRepository paymentEventRepository,
+    IAutoRefundService autoRefundService,
     IEventPublisher eventPublisher,
     ILogger<HandleMomoIpnCommandHandler> logger)
     : ICommandHandler<HandleMomoIpnCommand, MomoIpnResult>
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     public async Task<Result<MomoIpnResult>> Handle(HandleMomoIpnCommand request, CancellationToken cancellationToken)
     {
         var externalTxId = request.TransId.ToString();
@@ -49,6 +43,9 @@ internal sealed class HandleMomoIpnCommandHandler(
         if (payment.Status == PaymentStatus.Completed)
             return Result.Success(new MomoIpnResult(true, "already completed"));
 
+        var isSuccessResult = request.ResultCode is
+            MomoIntegrationConstants.ResultCodeSuccess or MomoIntegrationConstants.ResultCodeAuthorized;
+
         if (payment.Status == PaymentStatus.Expired)
         {
             await RecordEventAsync(
@@ -58,11 +55,46 @@ internal sealed class HandleMomoIpnCommandHandler(
                 externalTxId,
                 request.Amount,
                 cancellationToken);
+
+            // Funds arrived after the order saga gave up — refund full amount regardless of threshold.
+            if (isSuccessResult && request.Amount > 0)
+            {
+                await autoRefundService.CreateAndAttemptAsync(
+                    payment.Id,
+                    request.Amount,
+                    reason: "cancelled-but-paid:expired",
+                    enforceThreshold: false,
+                    cancellationToken);
+            }
             return Result.Success(new MomoIpnResult(true, "expired"));
         }
 
-        var isSuccess = request.ResultCode is
-            MomoIntegrationConstants.ResultCodeSuccess or MomoIntegrationConstants.ResultCodeAuthorized;
+        if (payment.Status == PaymentStatus.Cancelled)
+        {
+            logger.LogWarning(
+                "MoMo IPN arrived after payment {PaymentId} was cancelled — issuing auto-refund.",
+                payment.Id);
+
+            await RecordEventAsync(
+                payment,
+                PaymentEventTypes.WebhookReceivedAfterCancellation,
+                request.RawPayloadJson,
+                externalTxId,
+                request.Amount,
+                cancellationToken);
+
+            if (isSuccessResult && request.Amount > 0)
+            {
+                await autoRefundService.CreateAndAttemptAsync(
+                    payment.Id,
+                    request.Amount,
+                    reason: "cancelled-but-paid:cancelled",
+                    enforceThreshold: false,
+                    cancellationToken);
+            }
+            return Result.Success(new MomoIpnResult(true, "cancelled-but-paid"));
+        }
+
         var isPending = request.ResultCode is
             MomoIntegrationConstants.ResultCodeInitiated or
             MomoIntegrationConstants.ResultCodeProcessing or
@@ -80,7 +112,7 @@ internal sealed class HandleMomoIpnCommandHandler(
             return Result.Success(new MomoIpnResult(true, "pending"));
         }
 
-        if (!isSuccess)
+        if (!isSuccessResult)
         {
             var reason = $"momo:{request.ResultCode}:{request.Message}";
             payment.MarkFailed(reason);
@@ -104,7 +136,10 @@ internal sealed class HandleMomoIpnCommandHandler(
             return Result.Success(new MomoIpnResult(true, "failed"));
         }
 
-        // Success path — MoMo guarantees exact amount on resultCode 0/9000
+        // Success path — MoMo enforces the fixed amount at /create, but guard against gateway anomalies.
+        var expectedAmount = payment.Amount;
+        var delta = request.Amount - expectedAmount;
+
         payment.MarkCompletedViaBankTransfer(request.Amount, request.RawPayloadJson, externalTxId);
 
         await RecordEventAsync(
@@ -128,6 +163,25 @@ internal sealed class HandleMomoIpnCommandHandler(
             payment.PaidAt!.Value);
 
         await eventPublisher.PublishAsync(completedEvent, cancellationToken);
+
+        if (delta > 0)
+        {
+            await RecordEventAsync(
+                payment,
+                PaymentEventTypes.WebhookOverpayment,
+                request.RawPayloadJson,
+                externalTxId,
+                delta,
+                cancellationToken);
+
+            await autoRefundService.CreateAndAttemptAsync(
+                payment.Id,
+                delta,
+                reason: "overpayment-auto",
+                enforceThreshold: true,
+                cancellationToken);
+        }
+
         return Result.Success(new MomoIpnResult(true));
     }
 

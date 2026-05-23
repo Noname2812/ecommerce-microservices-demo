@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Contract.Messaging.Payment;
 using Shared.Kernel.Primitives;
+using UrbanX.Payment.Application.Abstractions;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.Models;
 using UrbanX.Payment.Domain.ValueObjects;
@@ -12,6 +13,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.ExpirePayment;
 internal sealed class ExpirePaymentCommandHandler(
     IPaymentRepository paymentRepository,
     IPaymentEventRepository paymentEventRepository,
+    IAutoRefundService autoRefundService,
     IEventPublisher eventPublisher,
     ILogger<ExpirePaymentCommandHandler> logger) : ICommandHandler<ExpirePaymentCommand>
 {
@@ -63,7 +65,28 @@ internal sealed class ExpirePaymentCommandHandler(
 
         await eventPublisher.PublishAsync(expiredEvent, cancellationToken);
 
-        logger.LogInformation("Payment {PaymentId} expired (SePay / bank transfer window).", payment.Id);
+        logger.LogInformation(
+            "Payment {PaymentId} expired (PaidAmount={PaidAmount}, Amount={Amount}).",
+            payment.Id, payment.PaidAmount, payment.Amount);
+
+        // Auto-refund any partial amount that was received before expiry.
+        // Skip the threshold gate — partial bank transfers must be returned in full regardless of size.
+        if (payment.PaidAmount > 0)
+        {
+            var refundResult = await autoRefundService.CreateAndAttemptAsync(
+                payment.Id,
+                payment.PaidAmount,
+                reason: "expiry-partial-auto",
+                enforceThreshold: false,
+                cancellationToken);
+
+            if (refundResult.IsFailure)
+            {
+                logger.LogWarning(
+                    "Auto-refund failed for expired payment {PaymentId}: {Code} {Message}",
+                    payment.Id, refundResult.Error.Code, refundResult.Error.Message);
+            }
+        }
 
         return Result.Success();
     }
