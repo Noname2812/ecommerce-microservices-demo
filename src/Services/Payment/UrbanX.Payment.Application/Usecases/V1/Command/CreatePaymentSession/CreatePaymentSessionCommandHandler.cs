@@ -1,9 +1,8 @@
-using System.Globalization;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Shared.Application;
+using Shared.Contract.Dtos.Payment;
 using Shared.Kernel.Primitives;
-using UrbanX.Payment.Application.Configuration;
+using UrbanX.Payment.Application.Abstractions;
 using UrbanX.Payment.Domain;
 using UrbanX.Payment.Domain.Errors;
 using UrbanX.Payment.Domain.ValueObjects;
@@ -13,14 +12,10 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.CreatePaymentSession;
 
 internal sealed class CreatePaymentSessionCommandHandler(
     IPaymentRepository paymentRepository,
-    IPaymentProviderRepository paymentProviderRepository,
-    IOptionsSnapshot<SePayOptions> sePayOptions,
+    IEnumerable<IPaymentSessionProvider> sessionProviders,
     ILogger<CreatePaymentSessionCommandHandler> logger)
     : ICommandHandler<CreatePaymentSessionCommand, CreatePaymentSessionResult>
 {
-    private const string QrEndpoint = "https://qr.sepay.vn/img";
-    private const string SePayProviderName = "SePay";
-
     public async Task<Result<CreatePaymentSessionResult>> Handle(
         CreatePaymentSessionCommand request,
         CancellationToken cancellationToken)
@@ -29,51 +24,70 @@ internal sealed class CreatePaymentSessionCommandHandler(
         if (existing is not null)
         {
             logger.LogInformation(
-                "SePay payment session idempotent hit. PaymentId={PaymentId} IdempotencyKey={IdempotencyKey}",
+                "Payment session idempotent hit. PaymentId={PaymentId} IdempotencyKey={IdempotencyKey}",
                 existing.Id, request.IdempotencyKey);
 
             return Result.Success(new CreatePaymentSessionResult(
                 existing.Id,
-                existing.QrCodeUrl ?? string.Empty,
-                existing.BankAccount ?? string.Empty,
-                existing.BankCode ?? string.Empty,
+                existing.ProviderName,
+                existing.QrCodeUrl,
+                existing.BankAccount,
+                existing.BankCode,
                 existing.TransferReference ?? existing.OrderNumber,
+                existing.PayUrl,
+                Deeplink: null,
                 existing.ExpiresAt ?? DateTimeOffset.UtcNow));
         }
 
-        var provider = await paymentProviderRepository.GetActiveByTypeAsync(ProviderType.Sepay, cancellationToken);
+        var providerCode = request.PaymentMethod.ToProviderTypeCode();
+        var provider = sessionProviders.FirstOrDefault(p =>
+            string.Equals(p.Method, providerCode, StringComparison.OrdinalIgnoreCase));
         if (provider is null)
         {
-            logger.LogWarning("Active SePay PaymentProvider not found (type={ProviderType}).", ProviderType.Sepay);
-            return Result.Failure<CreatePaymentSessionResult>(PaymentErrors.ProviderNotFound);
+            logger.LogWarning(
+                "No payment session provider registered for method {Method}.", request.PaymentMethod);
+            return Result.Failure<CreatePaymentSessionResult>(PaymentErrors.UnsupportedPaymentMethod);
         }
 
-        var opts = sePayOptions.Value;
-        var transferReference = request.OrderNumber;
-        var qrUrl = BuildVietQrUrl(opts, request.Amount, transferReference);
+        var paymentId = Guid.NewGuid();
+        var context = new PaymentSessionContext(
+            PaymentId: paymentId,
+            OrderId: request.OrderId,
+            OrderNumber: request.OrderNumber,
+            Amount: request.Amount,
+            Currency: string.IsNullOrWhiteSpace(request.Currency) ? PaymentCurrency.Vnd : request.Currency,
+            CustomerId: request.CustomerId,
+            CustomerEmail: request.CustomerEmail);
+
+        var artifactResult = await provider.CreateSessionAsync(context, cancellationToken);
+        if (artifactResult.IsFailure)
+            return Result.Failure<CreatePaymentSessionResult>(artifactResult.Error);
+
+        var artifact = artifactResult.Value;
         var now = DateTimeOffset.UtcNow;
-        var expiresAt = now.AddMinutes(opts.PaymentSessionExpiresAfterMinutes);
 
         var payment = new PaymentEntity
         {
-            Id = Guid.NewGuid(),
+            Id = paymentId,
             OrderId = request.OrderId,
             OrderNumber = request.OrderNumber,
             CustomerId = request.CustomerId ?? Guid.Empty,
             CustomerEmail = request.CustomerEmail ?? string.Empty,
-            ProviderId = provider.Id,
-            ProviderName = SePayProviderName,
+            ProviderId = artifact.ProviderId,
+            ProviderName = artifact.ProviderName,
+            ProviderTransactionId = artifact.ProviderRequestId,
             Amount = request.Amount,
             PaidAmount = 0m,
             RemainingAmount = request.Amount,
-            Currency = string.IsNullOrWhiteSpace(request.Currency) ? PaymentCurrency.Vnd : request.Currency,
+            Currency = context.Currency,
             Status = PaymentStatus.Pending,
             IdempotencyKey = request.IdempotencyKey,
-            BankAccount = opts.BankAccount,
-            BankCode = opts.BankCode,
-            TransferReference = transferReference,
-            QrCodeUrl = qrUrl,
-            ExpiresAt = expiresAt,
+            BankAccount = artifact.BankAccount,
+            BankCode = artifact.BankCode,
+            TransferReference = artifact.TransferReference,
+            QrCodeUrl = artifact.QrCodeUrl,
+            PayUrl = artifact.PayUrl,
+            ExpiresAt = artifact.ExpiresAt,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -81,22 +95,18 @@ internal sealed class CreatePaymentSessionCommandHandler(
         await paymentRepository.AddAsync(payment, cancellationToken);
 
         logger.LogInformation(
-            "Created SePay payment session. PaymentId={PaymentId} OrderId={OrderId} Amount={Amount} Reference={Reference}",
-            payment.Id, payment.OrderId, payment.Amount, transferReference);
+            "Created payment session via {Provider}. PaymentId={PaymentId} OrderId={OrderId} Amount={Amount}",
+            artifact.ProviderName, payment.Id, payment.OrderId, payment.Amount);
 
         return Result.Success(new CreatePaymentSessionResult(
-            payment.Id, qrUrl, opts.BankAccount, opts.BankCode, transferReference, expiresAt));
-    }
-
-    private static string BuildVietQrUrl(SePayOptions opts, decimal amount, string transferReference)
-    {
-        var amountStr = amount.ToString("0.##", CultureInfo.InvariantCulture);
-        var qs =
-            $"acc={Uri.EscapeDataString(opts.BankAccount)}" +
-            $"&bank={Uri.EscapeDataString(opts.BankCode)}" +
-            $"&amount={Uri.EscapeDataString(amountStr)}" +
-            $"&des={Uri.EscapeDataString(transferReference)}" +
-            $"&template={Uri.EscapeDataString(opts.QrTemplate)}";
-        return $"{QrEndpoint}?{qs}";
+            payment.Id,
+            artifact.ProviderName,
+            artifact.QrCodeUrl,
+            artifact.BankAccount,
+            artifact.BankCode,
+            artifact.TransferReference,
+            artifact.PayUrl,
+            artifact.Deeplink,
+            artifact.ExpiresAt));
     }
 }

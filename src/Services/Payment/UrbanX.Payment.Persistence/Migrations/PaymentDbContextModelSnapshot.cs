@@ -17,7 +17,7 @@ namespace UrbanX.Payment.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.6")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -318,6 +318,11 @@ namespace UrbanX.Payment.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("paid_at");
 
+                    b.Property<string>("PayUrl")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("pay_url");
+
                     b.Property<string>("PaymentMethodDetails")
                         .HasColumnType("jsonb")
                         .HasColumnName("payment_method_details");
@@ -359,8 +364,8 @@ namespace UrbanX.Payment.Persistence.Migrations
                         .HasColumnName("status");
 
                     b.Property<string>("TransferReference")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("transfer_reference");
 
                     b.Property<DateTimeOffset>("UpdatedAt")

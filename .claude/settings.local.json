@@ -22,7 +22,12 @@
       "WebFetch(domain:docs.sepay.vn)",
       "WebFetch(domain:developer.sepay.vn)",
       "PowerShell(dotnet ef migrations add AddSePayQrFieldsToPayment --project src/Services/Payment/UrbanX.Payment.Persistence --startup-project src/Services/Payment/UrbanX.Payment.API --context PaymentDbContext --no-build 2>&1)",
-      "PowerShell(dotnet ef migrations add AddSePayQrFieldsToPayment --project src/Services/Payment/UrbanX.Payment.Persistence --startup-project src/Services/Payment/UrbanX.Payment.Persistence --context PaymentDbContext 2>&1)"
+      "PowerShell(dotnet ef migrations add AddSePayQrFieldsToPayment --project src/Services/Payment/UrbanX.Payment.Persistence --startup-project src/Services/Payment/UrbanX.Payment.Persistence --context PaymentDbContext 2>&1)",
+      "Bash(Get-ChildItem -Path \"e:\\\\Learn\\\\dotnet\\\\urbanx-sample\\\\src\\\\Services\\\\Payment\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "WebFetch(domain:developers.momo.vn)",
+      "Bash(grep -E \"\\\\.\\(cs|json\\)$\")",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

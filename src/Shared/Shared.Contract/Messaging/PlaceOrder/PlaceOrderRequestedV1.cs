@@ -1,5 +1,6 @@
 using Shared.Contract.Abstractions;
 using Shared.Contract.Dtos.Order;
+using Shared.Contract.Dtos.Payment;
 
 namespace Shared.Contract.Messaging.PlaceOrder;
 
@@ -22,6 +23,7 @@ public record PlaceOrderRequestedV1 : IntegrationEventBase
     public string CustomerName { get; init; } = "";
     public string? CustomerPhone { get; init; }
     public string? CustomerNote { get; init; }
+    public PaymentMethod PaymentMethod { get; init; } = PaymentMethod.Sepay;
 }
 
 public record NormalOrderItemSnapshot(

@@ -62,7 +62,8 @@ internal static class OrderFactory
             request.IdempotencyKey,
             specs,
             orderType,
-            campaignId);
+            campaignId,
+            paymentMethod: request.PaymentMethod.ToString());
     }
 
     public static OrderEntity BuildFromSaga(
@@ -118,7 +119,8 @@ internal static class OrderFactory
             saga.CustomerNote,
             saga.IdempotencyKey,
             items,
-            OrderType.Normal);
+            OrderType.Normal,
+            paymentMethod: saga.PaymentMethod.ToString());
     }
 
     public static OrderEntity BuildSalesFromSaga(
@@ -176,7 +178,8 @@ internal static class OrderFactory
             saga.IdempotencyKey,
             items,
             OrderType.Sales,
-            campaignId: saga.CampaignId);
+            campaignId: saga.CampaignId,
+            paymentMethod: saga.PaymentMethod.ToString());
     }
 
     private static ShippingAddress MapShippingAddress(PlaceOrderShippingAddressDto dto) =>

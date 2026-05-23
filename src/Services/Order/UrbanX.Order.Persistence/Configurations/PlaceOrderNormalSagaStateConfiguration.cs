@@ -29,6 +29,10 @@ internal sealed class PlaceOrderNormalSagaStateConfiguration
         builder.Property(x => x.CustomerName).HasMaxLength(255);
         builder.Property(x => x.CustomerPhone).HasMaxLength(32);
         builder.Property(x => x.CustomerNote).HasMaxLength(1000);
+        builder.Property(x => x.PaymentMethod)
+            .HasConversion<string>()
+            .HasMaxLength(16)
+            .IsRequired();
         builder.Property(x => x.PaymentSessionId).HasMaxLength(255);
         builder.Property(x => x.PaymentUrl).HasMaxLength(2048);
         builder.Property(x => x.QrCodeUrl).HasMaxLength(2048);

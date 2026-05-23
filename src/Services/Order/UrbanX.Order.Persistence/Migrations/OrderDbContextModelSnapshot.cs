@@ -338,6 +338,12 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("payment_expiry_token_id");
 
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("payment_method");
+
                     b.Property<Guid?>("PaymentSessionExpiryTokenId")
                         .HasColumnType("uuid")
                         .HasColumnName("payment_session_expiry_token_id");
@@ -532,6 +538,12 @@ namespace UrbanX.Order.Persistence.Migrations
                     b.Property<Guid?>("PaymentExpiryTokenId")
                         .HasColumnType("uuid")
                         .HasColumnName("payment_expiry_token_id");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("payment_method");
 
                     b.Property<string>("PaymentSessionId")
                         .HasMaxLength(255)

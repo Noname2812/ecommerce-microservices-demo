@@ -21,6 +21,13 @@ Luôn hỏi xác nhận trước khi xóa bất kỳ file nào, kể cả file t
  - Khi làm việc với service cụ thể, CHỈ đọc files trong folder đó.
  - Không cần đọc các service khác trừ khi được yêu cầu rõ ràng.
 
+## 6. Comments in code: English only
+- Mọi comment trong source code (`.cs`, `.ts`, `.tsx`, `.sql`, …) phải viết bằng **tiếng Anh** — bao gồm `//`, `/* */`, XML doc (`/// <summary>`), TODO, inline annotation.
+- Áp dụng cho code mới và comment thêm vào file cũ. Không bắt buộc rewrite comment tiếng Việt có sẵn trừ khi đang edit chính đoạn đó.
+- Trả lời và chat với user vẫn tiếng Việt như bình thường — quy tắc này chỉ áp dụng cho nội dung viết vào file source.
+- Domain string cho user cuối (vd: `Error.Message` trong `Domain/Errors/*`, validation messages) KHÔNG phải comment — giữ theo convention hiện tại của project (thường tiếng Việt).
+- File doc trong `docs/**/*.md` vẫn viết tiếng Việt như hiện nay.
+
 **Ví dụ:**
 - Thêm endpoint product-search vào Catalog → `./docs/catalog/product-search.md`
 - Thêm consumer mới như sync-product-info ở Search → `./docs/search/sync-product-info.md`

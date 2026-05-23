@@ -457,6 +457,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
         saga.CustomerName        = msg.CustomerName;
         saga.CustomerPhone       = msg.CustomerPhone;
         saga.CustomerNote        = msg.CustomerNote;
+        saga.PaymentMethod       = msg.PaymentMethod;
     }
 
     // ── Business validation ───────────────────────────────────────────────────
@@ -526,11 +527,13 @@ public sealed class PlaceOrderNormalSagaStateMachine
     {
         CorrelationId  = saga.OrderId.ToString("D"),
         OrderId        = saga.OrderId,
+        OrderNumber    = saga.OrderNumber,
         IdempotencyKey = $"{saga.IdempotencyKey}:pay",
         Amount         = CalculateOrderTotal(saga),
         Currency       = "VND",
         CustomerId     = Guid.TryParse(saga.UserId, out var customerId) ? customerId : null,
-        CustomerEmail  = saga.CustomerEmail
+        CustomerEmail  = saga.CustomerEmail,
+        PaymentMethod  = saga.PaymentMethod
     };
 
     private static InventoryReleaseRequestedV1 BuildInventoryRelease(PlaceOrderNormalSagaState saga) => new()

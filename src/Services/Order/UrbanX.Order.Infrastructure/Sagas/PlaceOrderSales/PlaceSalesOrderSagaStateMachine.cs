@@ -597,6 +597,7 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
         saga.CustomerName = msg.CustomerName;
         saga.CustomerPhone = msg.CustomerPhone;
         saga.CustomerNote = msg.CustomerNote;
+        saga.PaymentMethod = msg.PaymentMethod;
     }
 
     /// <summary>
@@ -686,7 +687,8 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
         Amount = saga.FinalTotal,
         Currency = "VND",
         CustomerId = Guid.TryParse(saga.UserId, out var customerId) ? customerId : null,
-        CustomerEmail = saga.CustomerEmail
+        CustomerEmail = saga.CustomerEmail,
+        PaymentMethod = saga.PaymentMethod
     };
 
     private static InventoryReleaseRequestedV1 BuildInventoryRelease(PlaceSalesOrderSagaState saga) => new()

@@ -58,7 +58,8 @@ public sealed class PlaceOrderCommandHandler(
                     CustomerName = cmd.ShippingAddress.FullName,
                     CustomerPhone = cmd.ShippingAddress.Phone,
                     CustomerNote = cmd.CustomerNote,
-                    Items = PlaceOrderEventMappings.MapNormalItems(cmd.Items)
+                    Items = PlaceOrderEventMappings.MapNormalItems(cmd.Items),
+                    PaymentMethod = cmd.PaymentMethod
                 },
                 ctx => ctx.MessageId = DeterministicMessageId.From($"place-order-requested:{orderId}"),
                 ct);

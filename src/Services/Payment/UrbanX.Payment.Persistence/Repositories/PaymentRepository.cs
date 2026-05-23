@@ -23,6 +23,11 @@ internal sealed class PaymentRepository(PaymentDbContext dbContext) : IPaymentRe
         await dbContext.Payments
             .FirstOrDefaultAsync(p => p.IdempotencyKey == key, cancellationToken);
 
+    public async Task<PaymentEntity?> GetByTransferReferenceAsync(string transferReference, CancellationToken cancellationToken = default) =>
+        await dbContext.Payments
+            .Include(p => p.Provider)
+            .FirstOrDefaultAsync(p => p.TransferReference == transferReference, cancellationToken);
+
     public async Task AddAsync(PaymentEntity payment, CancellationToken cancellationToken = default) =>
         await dbContext.Payments.AddAsync(payment, cancellationToken);
 

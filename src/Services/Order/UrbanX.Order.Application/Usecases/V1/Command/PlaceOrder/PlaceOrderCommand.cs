@@ -1,6 +1,7 @@
 using FluentValidation;
 using Shared.Application;
 using Shared.Application.Authorization;
+using Shared.Contract.Dtos.Payment;
 using UrbanX.Order.Application.Usecases.V1.Command.Common;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
@@ -14,7 +15,8 @@ public record PlaceOrderCommand(
     string IdempotencyKey,
     PlaceOrderPricingSnapshotDto PricingSnapshot,
     IReadOnlyList<PlaceOrderLineDto> Items,
-    string? CustomerEmail = null
+    string? CustomerEmail = null,
+    PaymentMethod PaymentMethod = PaymentMethod.Sepay
 ) : ICommand<Guid>, IPlaceOrderRequest, IIdempotentCommand
 {
     public TimeSpan? IdempotencyTtl => TimeSpan.FromMinutes(60);
@@ -64,6 +66,7 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
         this.RuleForCouponCode();
         this.RuleForCustomerEmail();
         this.RuleForPricingSnapshot();
+        this.RuleForPaymentMethod();
         this.RuleForItems(
             MaxItems,
             MaxQtyPerItem,

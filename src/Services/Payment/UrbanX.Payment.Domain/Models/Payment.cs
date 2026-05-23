@@ -31,6 +31,7 @@ public class Payment : BaseEntity<Guid>
     public string? BankCode { get; set; }
     public string? TransferReference { get; set; }
     public string? QrCodeUrl { get; set; }
+    public string? PayUrl { get; set; }
 
     public DateTimeOffset? PaidAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }

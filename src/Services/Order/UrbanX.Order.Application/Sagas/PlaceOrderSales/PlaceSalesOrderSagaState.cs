@@ -1,3 +1,4 @@
+using Shared.Contract.Dtos.Payment;
 using Shared.Messaging.Saga;
 
 namespace UrbanX.Order.Application.Sagas.PlaceOrderSales;
@@ -51,6 +52,7 @@ public sealed class PlaceSalesOrderSagaState : SagaStateBase
     public bool CouponLocked { get; set; }
 
     // ── Payment tracking ──────────────────────────────────────────────────────
+    public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Sepay;
     public string? PaymentSessionId { get; set; }
     public string? PaymentUrl { get; set; }
     public string? QrCodeUrl { get; set; }

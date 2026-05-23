@@ -1,3 +1,4 @@
+using Shared.Contract.Dtos.Payment;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.Common;
@@ -12,4 +13,5 @@ public interface IPlaceOrderRequest
     PlaceOrderPricingSnapshotDto PricingSnapshot { get; }
     IReadOnlyList<PlaceOrderLineDto> Items { get; }
     string? CustomerEmail { get; }
+    PaymentMethod PaymentMethod { get; }
 }

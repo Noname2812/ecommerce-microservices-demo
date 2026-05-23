@@ -1,4 +1,5 @@
 using Shared.Contract.Abstractions;
+using Shared.Contract.Dtos.Payment;
 
 namespace Shared.Contract.Messaging.Payment;
 
@@ -13,4 +14,6 @@ public record CreatePaymentSessionV1 : IntegrationEventBase
     public string? OrderNumber { get; init; }
     public Guid? CustomerId { get; init; }
     public string? CustomerEmail { get; init; }
+
+    public PaymentMethod PaymentMethod { get; init; } = PaymentMethod.Sepay;
 }

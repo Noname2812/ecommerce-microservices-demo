@@ -2,6 +2,7 @@ using FluentValidation;
 using Shared.Application;
 using Shared.Application.Authorization;
 using Shared.Contract.Abstractions;
+using Shared.Contract.Dtos.Payment;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Application.Usecases.V1.Command.Common;
 
@@ -18,7 +19,8 @@ public record PlaceSalesOrderCommand(
     PlaceOrderPricingSnapshotDto PricingSnapshot,
     decimal ExpectedTotal,
     IReadOnlyList<PlaceOrderLineDto> Items,
-    string? CustomerEmail = null
+    string? CustomerEmail = null,
+    PaymentMethod PaymentMethod = PaymentMethod.Sepay
 ) : ICommand<Guid>, IIdempotentCommand, IPlaceOrderRequest
 {
     TimeSpan? IIdempotentCommand.IdempotencyTtl => TimeSpan.FromHours(24);
@@ -40,6 +42,7 @@ public sealed class PlaceSalesOrderCommandValidator : AbstractValidator<PlaceSal
         this.RuleForCouponCode();
         this.RuleForCustomerEmail();
         this.RuleForPricingSnapshot();
+        this.RuleForPaymentMethod();
         this.RuleForItems(
             MaxItems,
             MaxQtyPerItem,

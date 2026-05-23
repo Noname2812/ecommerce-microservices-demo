@@ -29,7 +29,8 @@ public sealed class CreatePaymentSessionConsumer(
             Currency: evt.Currency,
             IdempotencyKey: evt.IdempotencyKey,
             CustomerId: evt.CustomerId,
-            CustomerEmail: evt.CustomerEmail);
+            CustomerEmail: evt.CustomerEmail,
+            PaymentMethod: evt.PaymentMethod);
 
         var result = await sender.Send(cmd, context.CancellationToken);
         if (result.IsFailure)
@@ -42,13 +43,15 @@ public sealed class CreatePaymentSessionConsumer(
                 $"CreatePaymentSession failed for OrderId={evt.OrderId}: {result.Error.Code} {result.Error.Message}");
         }
 
+        var paymentUrl = result.Value.PayUrl ?? result.Value.QrCodeUrl ?? string.Empty;
+
         await publishEndpoint.Publish(new PaymentSessionCreatedV1
         {
             CorrelationId = evt.OrderId.ToString("D"),
             CausationId = evt.EventId.ToString(),
             OrderId = evt.OrderId,
             PaymentSessionId = result.Value.PaymentId.ToString("N"),
-            PaymentUrl = result.Value.QrCodeUrl,
+            PaymentUrl = paymentUrl,
             QrCodeUrl = result.Value.QrCodeUrl,
             ExpiresAt = result.Value.ExpiresAt,
         }, context.CancellationToken);

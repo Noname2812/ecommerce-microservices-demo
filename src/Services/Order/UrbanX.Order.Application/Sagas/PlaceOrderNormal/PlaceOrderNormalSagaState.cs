@@ -1,3 +1,4 @@
+using Shared.Contract.Dtos.Payment;
 using Shared.Messaging.Saga;
 
 namespace UrbanX.Order.Application.Sagas.PlaceOrderNormal;
@@ -34,6 +35,7 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     public string? ValidationError { get; set; }
 
     // Payment
+    public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Sepay;
     public string? PaymentSessionId { get; set; }
     public string? PaymentUrl { get; set; }
     public string? QrCodeUrl { get; set; }

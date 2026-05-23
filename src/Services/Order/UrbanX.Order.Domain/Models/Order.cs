@@ -71,7 +71,8 @@ public sealed class Order : BaseEntity<Guid>
         string idempotencyKey,
         IReadOnlyList<NewOrderItemSpec> items,
         string orderType = Models.OrderType.Normal,
-        Guid? campaignId = null)
+        Guid? campaignId = null,
+        string? paymentMethod = null)
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -94,6 +95,7 @@ public sealed class Order : BaseEntity<Guid>
             IdempotencyKey = idempotencyKey,
             Status = OrderStatus.Processing,
             PaymentStatus = Models.PaymentStatus.Unpaid,
+            PaymentMethod = paymentMethod,
             CreatedAt = now,
             UpdatedAt = now,
             OrderType = orderType,

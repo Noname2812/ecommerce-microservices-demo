@@ -55,6 +55,12 @@ internal static class PlaceOrderValidationRules
         where T : IPlaceOrderRequest
         => validator.RuleFor(x => x.PricingSnapshot).NotNull();
 
+    public static void RuleForPaymentMethod<T>(this AbstractValidator<T> validator)
+        where T : IPlaceOrderRequest
+        => validator.RuleFor(x => x.PaymentMethod)
+            .IsInEnum()
+            .WithMessage("PaymentMethod must be either 'Sepay' or 'Momo'.");
+
     public static void RuleForPricingWindow<T>(
         this AbstractValidator<T> validator,
         TimeSpan window,

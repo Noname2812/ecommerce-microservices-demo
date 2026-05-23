@@ -59,7 +59,8 @@ public sealed class PlaceSalesOrderCommandHandler(
                 CustomerName = cmd.ShippingAddress.FullName,
                 CustomerPhone = cmd.ShippingAddress.Phone,
                 CustomerNote = cmd.CustomerNote,
-                Items = PlaceOrderEventMappings.MapSalesItems(cmd.Items)
+                Items = PlaceOrderEventMappings.MapSalesItems(cmd.Items),
+                PaymentMethod = cmd.PaymentMethod
             }, ct);
         }
         catch
