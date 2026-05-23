@@ -1,41 +1,56 @@
 using MassTransit;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using Shared.Contract.Messaging.Payment;
+using UrbanX.Payment.Application.Usecases.V1.Command.CreatePaymentSession;
 
 namespace UrbanX.Payment.Infrastructure.Messaging.CreatePaymentSession;
 
 /// <summary>
-/// Demo consumer for the saga's <c>PaymentSessionCreating</c> state: publishes a stub
-/// <see cref="PaymentSessionCreatedV1"/> until a real payment provider is wired in.
+/// Translates the saga's <see cref="CreatePaymentSessionV1"/> into a Payment row + SePay VietQR URL,
+/// then publishes <see cref="PaymentSessionCreatedV1"/> so the saga can advance.
 /// </summary>
 public sealed class CreatePaymentSessionConsumer(
+    ISender sender,
     IPublishEndpoint publishEndpoint,
     ILogger<CreatePaymentSessionConsumer> logger) : IConsumer<CreatePaymentSessionV1>
 {
-    private const int DemoSessionExpiryMinutes = 15;
-
     public async Task Consume(ConsumeContext<CreatePaymentSessionV1> context)
     {
-        var @event = context.Message;
-        var sessionId = Guid.NewGuid().ToString("N");
-        var paymentUrl = $"https://demo.payment.local/checkout/{@event.OrderId:N}";
-        var qrCodeUrl = $"https://demo.payment.local/qr/{@event.OrderId:N}.png";
+        var evt = context.Message;
+        var orderNumber = !string.IsNullOrWhiteSpace(evt.OrderNumber)
+            ? evt.OrderNumber!
+            : evt.OrderId.ToString("N")[..8].ToUpperInvariant();
 
-        logger.LogInformation(
-            "Demo payment session created for OrderId={OrderId}, SessionId={SessionId}, Url={PaymentUrl}",
-            @event.OrderId,
-            sessionId,
-            paymentUrl);
+        var cmd = new CreatePaymentSessionCommand(
+            OrderId: evt.OrderId,
+            OrderNumber: orderNumber,
+            Amount: evt.Amount,
+            Currency: evt.Currency,
+            IdempotencyKey: evt.IdempotencyKey,
+            CustomerId: evt.CustomerId,
+            CustomerEmail: evt.CustomerEmail);
+
+        var result = await sender.Send(cmd, context.CancellationToken);
+        if (result.IsFailure)
+        {
+            logger.LogError(
+                "CreatePaymentSession failed for OrderId={OrderId}: {ErrorCode} {ErrorMessage}",
+                evt.OrderId, result.Error.Code, result.Error.Message);
+
+            throw new InvalidOperationException(
+                $"CreatePaymentSession failed for OrderId={evt.OrderId}: {result.Error.Code} {result.Error.Message}");
+        }
 
         await publishEndpoint.Publish(new PaymentSessionCreatedV1
         {
-            CorrelationId = @event.OrderId.ToString("D"),
-            CausationId = @event.EventId.ToString(),
-            OrderId = @event.OrderId,
-            PaymentSessionId = sessionId,
-            PaymentUrl = paymentUrl,
-            QrCodeUrl = qrCodeUrl,
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(DemoSessionExpiryMinutes),
+            CorrelationId = evt.OrderId.ToString("D"),
+            CausationId = evt.EventId.ToString(),
+            OrderId = evt.OrderId,
+            PaymentSessionId = result.Value.PaymentId.ToString("N"),
+            PaymentUrl = result.Value.QrCodeUrl,
+            QrCodeUrl = result.Value.QrCodeUrl,
+            ExpiresAt = result.Value.ExpiresAt,
         }, context.CancellationToken);
     }
 }

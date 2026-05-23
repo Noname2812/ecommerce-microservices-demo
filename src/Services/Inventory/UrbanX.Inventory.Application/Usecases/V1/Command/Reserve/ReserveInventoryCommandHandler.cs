@@ -53,9 +53,14 @@ public sealed class ReserveInventoryCommandHandler(
             if (affected == 0)
             {
                 outOfStock.Add(line.VariantId);
-                break;
+                continue;
             }
 
+            if (outOfStock.Count > 0)
+            {
+                continue;
+            }
+            
             var reservation = InventoryReservation.CreatePending(
                 Guid.NewGuid(),
                 itemId,

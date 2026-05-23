@@ -528,7 +528,9 @@ public sealed class PlaceOrderNormalSagaStateMachine
         OrderId        = saga.OrderId,
         IdempotencyKey = $"{saga.IdempotencyKey}:pay",
         Amount         = CalculateOrderTotal(saga),
-        Currency       = "VND"
+        Currency       = "VND",
+        CustomerId     = Guid.TryParse(saga.UserId, out var customerId) ? customerId : null,
+        CustomerEmail  = saga.CustomerEmail
     };
 
     private static InventoryReleaseRequestedV1 BuildInventoryRelease(PlaceOrderNormalSagaState saga) => new()

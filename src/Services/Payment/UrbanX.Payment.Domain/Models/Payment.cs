@@ -27,6 +27,11 @@ public class Payment : BaseEntity<Guid>
     public string? PaymentMethodDetails { get; set; }
     public string? IpAddress { get; set; }
 
+    public string? BankAccount { get; set; }
+    public string? BankCode { get; set; }
+    public string? TransferReference { get; set; }
+    public string? QrCodeUrl { get; set; }
+
     public DateTimeOffset? PaidAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

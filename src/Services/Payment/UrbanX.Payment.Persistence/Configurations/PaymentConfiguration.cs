@@ -35,6 +35,11 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<PaymentEnt
 
         builder.Property(x => x.IdempotencyKey).HasMaxLength(255).IsRequired();
 
+        builder.Property(x => x.BankAccount).HasMaxLength(50);
+        builder.Property(x => x.BankCode).HasMaxLength(50);
+        builder.Property(x => x.TransferReference).HasMaxLength(50);
+        builder.Property(x => x.QrCodeUrl).HasMaxLength(500);
+
         builder.HasIndex(x => x.IdempotencyKey).IsUnique();
         builder.HasIndex(x => x.OrderId);
         builder.HasIndex(x => x.CustomerId);

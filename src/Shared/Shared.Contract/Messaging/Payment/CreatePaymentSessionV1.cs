@@ -11,4 +11,6 @@ public record CreatePaymentSessionV1 : IntegrationEventBase
     public required decimal Amount { get; init; }
     public string Currency { get; init; } = "VND";
     public string? OrderNumber { get; init; }
+    public Guid? CustomerId { get; init; }
+    public string? CustomerEmail { get; init; }
 }

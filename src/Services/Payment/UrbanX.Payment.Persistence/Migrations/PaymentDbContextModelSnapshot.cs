@@ -17,7 +17,7 @@ namespace UrbanX.Payment.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.6")
+                .HasAnnotation("ProductVersion", "10.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -250,6 +250,16 @@ namespace UrbanX.Payment.Persistence.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("amount");
 
+                    b.Property<string>("BankAccount")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("bank_account");
+
+                    b.Property<string>("BankCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("bank_code");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -331,6 +341,11 @@ namespace UrbanX.Payment.Persistence.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("provider_transaction_id");
 
+                    b.Property<string>("QrCodeUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("qr_code_url");
+
                     b.Property<decimal>("RemainingAmount")
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("remaining_amount");
@@ -342,6 +357,11 @@ namespace UrbanX.Payment.Persistence.Migrations
                         .HasColumnType("character varying(30)")
                         .HasDefaultValue("PENDING")
                         .HasColumnName("status");
+
+                    b.Property<string>("TransferReference")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("transfer_reference");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -470,6 +490,16 @@ namespace UrbanX.Payment.Persistence.Migrations
                         .HasDatabaseName("ix_payment_providers_is_active");
 
                     b.ToTable("payment_providers", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-000000000001"),
+                            IsActive = true,
+                            Name = "SePay",
+                            SupportedCurrencies = new[] { "VND" },
+                            Type = "SEPAY"
+                        });
                 });
 
             modelBuilder.Entity("UrbanX.Payment.Domain.Models.Refund", b =>

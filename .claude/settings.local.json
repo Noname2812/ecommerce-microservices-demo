@@ -16,7 +16,13 @@
       "Bash(dotnet build *)",
       "Bash(grep -v \"^\\\\s*//\")",
       "Bash(git stash *)",
-      "Bash(cmd /c dir /b src\\\\Services\\\\Order\\\\UrbanX.Order.Application\\\\Constants src\\\\Services\\\\Order\\\\UrbanX.Order.Application\\\\Exceptions)"
+      "Bash(cmd /c dir /b src\\\\Services\\\\Order\\\\UrbanX.Order.Application\\\\Constants src\\\\Services\\\\Order\\\\UrbanX.Order.Application\\\\Exceptions)",
+      "WebSearch",
+      "Bash(grep \"\\\\.cs$\")",
+      "WebFetch(domain:docs.sepay.vn)",
+      "WebFetch(domain:developer.sepay.vn)",
+      "PowerShell(dotnet ef migrations add AddSePayQrFieldsToPayment --project src/Services/Payment/UrbanX.Payment.Persistence --startup-project src/Services/Payment/UrbanX.Payment.API --context PaymentDbContext --no-build 2>&1)",
+      "PowerShell(dotnet ef migrations add AddSePayQrFieldsToPayment --project src/Services/Payment/UrbanX.Payment.Persistence --startup-project src/Services/Payment/UrbanX.Payment.Persistence --context PaymentDbContext 2>&1)"
     ]
   }
 }
