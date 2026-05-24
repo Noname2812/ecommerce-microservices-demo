@@ -16,6 +16,9 @@ export function seedAvailableQty(n: number): number {
   return 100 - i - i;
 }
 
+/** Initial RowVersion populated by OrderReadModelSeeder for every seeded variant. */
+export const SEED_VARIANT_VERSION = 1;
+
 export function seedProductMeta(n: number) {
   const price = 100_000 + n * 10_000;
   return {
@@ -27,6 +30,7 @@ export function seedProductMeta(n: number) {
     variantName: `Variant ${n}`,
     unitPrice: price,
     availableQty: seedAvailableQty(n),
+    version: SEED_VARIANT_VERSION,
   };
 }
 

@@ -40,6 +40,7 @@ function lineFromSeed(productIndex: number, quantity: number): PlaceOrderLine {
     quantity,
     discountAmount: 0,
     imageUrl: null,
+    version: m.version,
   };
 }
 

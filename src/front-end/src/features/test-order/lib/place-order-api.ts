@@ -13,6 +13,8 @@ export type PlaceOrderLine = {
   quantity: number;
   discountAmount: number;
   imageUrl: string | null;
+  /** Variant RowVersion read from Catalog. Order rejects with Variant.VersionMismatch if stale. */
+  version: number;
 };
 
 export type PlaceOrderBody = {

@@ -16,6 +16,7 @@ const SEED_SELLER_NAME = "UrbanX Seed Seller";
 const SEED_VARIANT_SKU = "SEED-SKU-01";
 const SEED_VARIANT_NAME = "Variant 1";
 const SEED_UNIT_PRICE = 110_000;
+const SEED_VARIANT_VERSION = 1;
 
 function uuidV4(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -77,6 +78,8 @@ export function TestPlaceOrderPage() {
   const [userId, setUserId] = useState("11111111-1111-4111-8111-111111111111");
   const [scope, setScope] = useState<"own" | "all">("own");
   const [quantity, setQuantity] = useState(2);
+  const [version, setVersion] = useState(SEED_VARIANT_VERSION);
+  const [unitPrice, setUnitPrice] = useState(SEED_UNIT_PRICE);
   const [result, setResult] = useState<CallResult>({ kind: "idle" });
   const [trackedTicketId, setTrackedTicketId] = useState<string | null>(null);
   const [manualTicketId, setManualTicketId] = useState("");
@@ -114,10 +117,11 @@ export function TestPlaceOrderPage() {
           variantName: SEED_VARIANT_NAME,
           sellerId: SEED_SELLER_ID,
           sellerName: SEED_SELLER_NAME,
-          unitPrice: SEED_UNIT_PRICE,
+          unitPrice,
           quantity,
           discountAmount: 0,
           imageUrl: null,
+          version,
         },
       ],
       customerEmail: "buyer@example.com",
@@ -216,21 +220,59 @@ export function TestPlaceOrderPage() {
               </select>
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="qty">Quantity (seed product n=1, price 110.000)</Label>
-              <Input
-                id="qty"
-                type="number"
-                min={1}
-                max={100}
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value) || 1)}
-              />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="qty">Quantity</Label>
+                <Input
+                  id="qty"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value) || 1)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="unitPrice">Unit price</Label>
+                <Input
+                  id="unitPrice"
+                  type="number"
+                  min={0}
+                  value={unitPrice}
+                  onChange={(e) => setUnitPrice(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="version">Variant version</Label>
+                <Input
+                  id="version"
+                  type="number"
+                  min={1}
+                  value={version}
+                  onChange={(e) => setVersion(Number(e.target.value) || 1)}
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Seed product n=1: price <code>110.000</code>, <code>RowVersion=1</code>. Đổi{" "}
+              <code>version</code> ≠ 1 để test <code>Variant.VersionMismatch</code>; đổi{" "}
+              <code>unitPrice</code> lệch &gt;1% để test <code>PRICE_MISMATCH</code>.
+            </p>
 
-            <div className="pt-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               <Button onClick={handlePlaceOrder} disabled={result.kind === "loading"}>
                 {result.kind === "loading" ? "Đang gửi..." : "Place Order"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setVersion(SEED_VARIANT_VERSION);
+                  setUnitPrice(SEED_UNIT_PRICE);
+                }}
+                disabled={result.kind === "loading"}
+              >
+                Reset to seed
               </Button>
             </div>
 
