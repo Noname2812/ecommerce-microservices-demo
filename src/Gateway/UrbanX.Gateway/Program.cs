@@ -1,6 +1,10 @@
 using UrbanX.Gateway.Infrastructure.DependencyInjection;
 using UrbanX.Gateway.Infrastructure.Edge;
 
+// Pre-warm thread pool to avoid growth throttle (~1 thread/500ms) on burst.
+// Gateway sits in front of all traffic: YARP proxy + Duende.BFF + RBAC + rate limit middleware.
+ThreadPool.SetMinThreads(workerThreads: 200, completionPortThreads: 200);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();

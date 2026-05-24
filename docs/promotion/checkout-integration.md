@@ -1,10 +1,14 @@
 # Checkout Integration — Promotion Service
 
+> **Cập nhật 2026-05-23 (Phase 3):** Luồng Normal đã chuyển sang **Cart-hold pattern** — coupon được reserve ở Cart trước, Order saga chỉ verify token. Doc đầy đủ: [docs/order/place-order-normal-coupon.md](../order/place-order-normal-coupon.md). Phần "Luồng 1 — Sync HTTP" và phần Saga `CouponClaiming` ở dưới mô tả flow CŨ, giữ lại để tham khảo lịch sử nhưng không còn active.
+
 Promotion service tích hợp với Order theo **hai cơ chế song song**, tùy luồng đặt hàng:
 
 ---
 
-## Luồng 1 — PlaceOrder Normal (Sync HTTP)
+## Luồng 1 — PlaceOrder Normal (Sync HTTP) — DEPRECATED
+
+> Flow cũ trước Phase 3. Hiện tại Normal dùng Cart-hold token (xem doc link bên trên).
 
 Dùng cho đơn thường (không phải flash sale). Order service gọi HTTP trực tiếp.
 

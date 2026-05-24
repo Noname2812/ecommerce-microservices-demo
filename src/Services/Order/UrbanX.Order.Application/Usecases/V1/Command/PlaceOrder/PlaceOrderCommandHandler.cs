@@ -49,7 +49,7 @@ public sealed class PlaceOrderCommandHandler(
                     CorrelationId = orderId.ToString("D"),
                     UserId = userId.ToString("D"),
                     IdempotencyKey = cmd.IdempotencyKey,
-                    CouponCode = cmd.CouponCode,
+                    CouponHoldToken = cmd.CouponHoldToken,
                     Subtotal = PlaceOrderEventMappings.SumLineTotal(cmd.Items),
                     ShippingFee = cmd.ShippingFee,
                     ShippingAddress = PlaceOrderEventMappings.MapShipping(cmd.ShippingAddress),

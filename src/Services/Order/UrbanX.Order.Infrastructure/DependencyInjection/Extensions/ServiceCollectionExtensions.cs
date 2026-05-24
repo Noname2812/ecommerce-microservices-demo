@@ -110,6 +110,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPendingOrderSlotService, RedisPendingOrderSlotService>();
         services.AddSingleton<IFlashSaleStockService, RedisFlashSaleStockService>();
         services.AddSingleton<ICouponLockService, RedisCouponLockService>();
+        services.AddSingleton<ICouponHoldClient, CouponHoldClient>();
     }
 
     private static void AddApplicationServices(IServiceCollection services)

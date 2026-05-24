@@ -19,6 +19,10 @@ using UrbanX.Catalog.Persistence;
 using UrbanX.Catalog.Persistence.DependencyInjection.Extensions;
 using UrbanX.Catalog.Persistence.Seeding;
 
+// Pre-warm thread pool to avoid growth throttle (~1 thread/500ms) on burst.
+// Catalog is read-heavy and already cached; lower min threads suffice.
+ThreadPool.SetMinThreads(workerThreads: 100, completionPortThreads: 100);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();

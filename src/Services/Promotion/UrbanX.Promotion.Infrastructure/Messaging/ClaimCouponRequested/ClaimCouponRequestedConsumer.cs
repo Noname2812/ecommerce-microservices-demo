@@ -29,7 +29,8 @@ public sealed class ClaimCouponRequestedConsumer : IConsumer<ClaimCouponRequeste
             IdempotencyKey: @event.OrderIdempotencyKey,
             CouponCode: @event.CouponCode,
             UserId: Guid.Parse(@event.UserId),
-            OrderAmount: @event.OrderTotal);
+            OrderAmount: @event.OrderTotal,
+            HoldToken: @event.HoldToken);
 
         var result = await _sender.Send(command, context.CancellationToken);
 

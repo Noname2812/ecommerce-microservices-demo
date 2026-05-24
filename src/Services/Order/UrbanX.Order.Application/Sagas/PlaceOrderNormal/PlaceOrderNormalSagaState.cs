@@ -11,7 +11,13 @@ public sealed class PlaceOrderNormalSagaState : SagaStateBase
     public required string OrderNumber { get; set; }
     public string UserId { get; set; } = default!;
     public string IdempotencyKey { get; set; } = default!;
+
+    /// <summary>Set on the inbound event; resolved at saga start.</summary>
+    public string? CouponHoldToken { get; set; }
+
+    /// <summary>Populated after the hold token resolves to a coupon — used by post-payment claim publish.</summary>
     public string? CouponCode { get; set; }
+
     public decimal Subtotal { get; set; }
     public decimal ShippingFee { get; set; }
     public decimal CouponDiscount { get; set; }

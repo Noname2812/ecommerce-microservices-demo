@@ -20,6 +20,10 @@ using UrbanX.Promotion.Persistence;
 using UrbanX.Promotion.Persistence.DependencyInjection.Extensions;
 using UrbanX.Promotion.Persistence.Seeding;
 
+// Pre-warm thread pool to avoid growth throttle (~1 thread/500ms) on burst.
+// Promotion's ClaimCoupon path is DB-intensive and runs as MassTransit consumer under load.
+ThreadPool.SetMinThreads(workerThreads: 150, completionPortThreads: 150);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
@@ -28,13 +32,15 @@ builder.Services.AddOpenTelemetry().WithMetrics(m => m.AddMeter(PromotionMetrics
 builder.AddSharedCache("redis");
 builder.Services.AddOpenApi();
 
+// Pool sized for ClaimCoupon (4 DB ops + 2 Redis Lua per claim) × ConcurrentMessageLimit(8)
+// across ClaimCouponRequested + CouponReleaseRequested + RedeemSalePromotion consumers.
 builder.AddNpgsqlDbContext<PromotionDbContext>("promotiondb",
     configureSettings: settings =>
     {
         var csb = new Npgsql.NpgsqlConnectionStringBuilder(settings.ConnectionString)
         {
-            MaxPoolSize = 20,
-            MinPoolSize = 2,
+            MaxPoolSize = 80,
+            MinPoolSize = 10,
             ConnectionIdleLifetime = 60,
             ConnectionPruningInterval = 10,
             Timeout = 15,

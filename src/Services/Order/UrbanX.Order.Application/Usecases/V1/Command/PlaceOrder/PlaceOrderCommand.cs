@@ -10,7 +10,7 @@ namespace UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 public record PlaceOrderCommand(
     PlaceOrderShippingAddressDto ShippingAddress,
     decimal ShippingFee,
-    string? CouponCode,
+    string? CouponHoldToken,
     string? CustomerNote,
     string IdempotencyKey,
     PlaceOrderPricingSnapshotDto PricingSnapshot,
@@ -20,6 +20,9 @@ public record PlaceOrderCommand(
 ) : ICommand<Guid>, IPlaceOrderRequest, IIdempotentCommand
 {
     public TimeSpan? IdempotencyTtl => TimeSpan.FromMinutes(60);
+
+    // Normal flow uses Cart-issued hold token; the legacy CouponCode field is unused here.
+    string? IPlaceOrderRequest.CouponCode => null;
 }
 
 public record PlaceOrderShippingAddressDto(
@@ -63,7 +66,7 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
         this.RuleForShippingAddress();
         this.RuleForShippingFee();
         this.RuleForIdempotencyKey();
-        this.RuleForCouponCode();
+        this.RuleForCouponHoldToken();
         this.RuleForCustomerEmail();
         this.RuleForPricingSnapshot();
         this.RuleForPaymentMethod();

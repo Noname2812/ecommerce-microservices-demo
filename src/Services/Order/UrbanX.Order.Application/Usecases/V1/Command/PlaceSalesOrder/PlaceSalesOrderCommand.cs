@@ -24,6 +24,9 @@ public record PlaceSalesOrderCommand(
 ) : ICommand<Guid>, IIdempotentCommand, IPlaceOrderRequest
 {
     TimeSpan? IIdempotentCommand.IdempotencyTtl => TimeSpan.FromHours(24);
+
+    // Sales flow uses CouponCode directly with RedisCouponLockService; Cart-hold token is not used here.
+    string? IPlaceOrderRequest.CouponHoldToken => null;
 }
 
 public sealed class PlaceSalesOrderCommandValidator : AbstractValidator<PlaceSalesOrderCommand>

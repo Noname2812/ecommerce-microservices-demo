@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<ReleaseExpiredCouponClaimsJob>();
         services.AddScoped<ICouponClaimRedisGateway, CouponClaimRedisGateway>();
+        services.AddScoped<ICouponHoldGateway, CouponHoldGateway>();
 
         return services;
     }

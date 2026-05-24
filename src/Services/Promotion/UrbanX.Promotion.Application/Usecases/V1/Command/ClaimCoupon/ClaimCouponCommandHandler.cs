@@ -18,6 +18,8 @@ internal sealed class ClaimCouponCommandHandler(
 
     public async Task<Result<ClaimCouponResult>> Handle(ClaimCouponCommand request, CancellationToken cancellationToken)
     {
+        // IdempotencyPipelineBehavior already short-circuits on cache hit (Redis, 24h TTL).
+        // This DB check is the second safety net for cache miss (eviction, Redis restart).
         var existing = await couponClaimRepository.GetByIdempotencyKeyAsync(request.IdempotencyKey, cancellationToken);
         if (existing is not null)
             return Result.Success(MapFromClaim(existing));
@@ -32,16 +34,21 @@ internal sealed class ClaimCouponCommandHandler(
         if (validationError is not null)
             return Result.Failure<ClaimCouponResult>(validationError);
 
-        if (!await couponClaimRedis.TryAcquireUserHoldAsync(coupon.Id, request.UserId, ClaimHoldTtl, cancellationToken))
-            return Result.Failure<ClaimCouponResult>(CouponErrors.AlreadyUsed);
-
-        if (coupon.TotalQuota.HasValue)
+        // Phase 3 hold-token path: Cart already acquired user-lock + quota slot at hold time.
+        // Re-acquiring here would always fail (SET NX). Skip the Redis steps; trust the hold contract.
+        if (request.HoldToken is null)
         {
-            var initialRemaining = coupon.TotalQuota.Value - coupon.UsedQuota;
-            var safeInitial = initialRemaining < 0 ? 0 : initialRemaining;
+            if (!await couponClaimRedis.TryAcquireUserHoldAsync(coupon.Id, request.UserId, ClaimHoldTtl, cancellationToken))
+                return Result.Failure<ClaimCouponResult>(CouponErrors.AlreadyUsed);
 
-            if (!await couponClaimRedis.TryConsumeQuotaSlotAsync(coupon.Id, request.UserId, safeInitial, cancellationToken))
-                return Result.Failure<ClaimCouponResult>(CouponErrors.Exhausted);
+            if (coupon.TotalQuota.HasValue)
+            {
+                var initialRemaining = coupon.TotalQuota.Value - coupon.UsedQuota;
+                var safeInitial = initialRemaining < 0 ? 0 : initialRemaining;
+
+                if (!await couponClaimRedis.TryConsumeQuotaSlotAsync(coupon.Id, request.UserId, safeInitial, cancellationToken))
+                    return Result.Failure<ClaimCouponResult>(CouponErrors.Exhausted);
+            }
         }
 
         var discountAmount = CalculateDiscount(coupon, request.OrderAmount);

@@ -144,6 +144,40 @@ public sealed class Order : BaseEntity<Guid>
          || Status == OrderStatus.Confirmed)
         && UserId == userId;
 
+    /// <summary>
+    /// Applies the coupon resolved from a Cart-time hold token. Recomputes <see cref="DiscountAmount"/>,
+    /// <see cref="FinalAmount"/>, <see cref="TotalAmount"/>, and <see cref="PricingSnapshot"/>.
+    /// Caller-only: the place-order saga, once after resolving the hold but before payment.
+    /// </summary>
+    public void ApplyCoupon(string couponCode, decimal couponDiscount)
+    {
+        if (Status != OrderStatus.Processing) return;
+
+        CouponCode = couponCode;
+        CouponDiscount = couponDiscount;
+
+        var itemLevelDiscounts = _items.Sum(i => i.DiscountAmount);
+        var rawDiscountTotal = SaleDiscount + couponDiscount + itemLevelDiscounts;
+        DiscountAmount = Math.Min(rawDiscountTotal, OriginalPrice);
+        FinalAmount = OriginalPrice - DiscountAmount + ShippingFee + TaxAmount;
+        TotalAmount = FinalAmount;
+        UpdatedAt = DateTimeOffset.UtcNow;
+
+        PricingSnapshot = JsonSerializer.Serialize(new
+        {
+            OriginalPrice,
+            SaleDiscount,
+            CouponDiscount,
+            Subtotal,
+            DiscountAmount,
+            ShippingFee,
+            TaxAmount,
+            TotalAmount,
+            FinalAmount,
+            CapturedAt = UpdatedAt
+        });
+    }
+
     public void MarkReadyForPayment(
         Guid? claimId,
         string paymentUrl, string? qrCodeUrl,

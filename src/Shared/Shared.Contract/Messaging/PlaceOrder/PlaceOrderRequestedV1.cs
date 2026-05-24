@@ -13,6 +13,12 @@ public record PlaceOrderRequestedV1 : IntegrationEventBase
     public required string UserId { get; init; }
     public required string IdempotencyKey { get; init; }
     public string? CouponCode { get; init; }
+
+    /// <summary>
+    /// Cart-issued hold token. When set, the Normal saga resolves it via cross-service Redis read
+    /// (single GET) and skips the inline CouponClaiming step. Mutually exclusive with <see cref="CouponCode"/>.
+    /// </summary>
+    public string? CouponHoldToken { get; init; }
     public required decimal Subtotal { get; init; }
     public required decimal ShippingFee { get; init; }
     public required IReadOnlyList<NormalOrderItemSnapshot> Items { get; init; }

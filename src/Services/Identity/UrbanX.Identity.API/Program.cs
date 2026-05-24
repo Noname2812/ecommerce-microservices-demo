@@ -14,6 +14,10 @@ using UrbanX.Identity.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Identity.Persistence;
 using UrbanX.Identity.Persistence.DependencyInjection.Extensions;
 
+// Pre-warm thread pool to avoid growth throttle (~1 thread/500ms) on burst.
+// Auth flow is bursty (login storms) but per-request cost is small; 100 is sufficient.
+ThreadPool.SetMinThreads(workerThreads: 100, completionPortThreads: 100);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();

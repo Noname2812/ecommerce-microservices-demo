@@ -17,6 +17,10 @@ using UrbanX.Order.Infrastructure.Sagas.PlaceOrderSales;
 using UrbanX.Order.Persistence;
 using UrbanX.Order.Persistence.DependencyInjection.Extensions;
 
+// Pre-warm thread pool to avoid growth throttle (~1 thread/500ms) on burst.
+// Order is the hottest path: saga orchestration + Catalog HTTP + multiple consumers.
+ThreadPool.SetMinThreads(workerThreads: 200, completionPortThreads: 200);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
@@ -25,15 +29,16 @@ builder.Services.AddHttpIdempotency(o => o.ServiceId = "order");
 builder.Services.AddOpenApi();
 
 // Database
-// Bounded Npgsql pool keeps the sum across services below PostgreSQL max_connections (see AppHost).
+// Pool sized for burst: saga state writes + multiple consumers + cache projections under load.
+// Formula: pool ≈ Σ(consumer_concurrent × avg_db_ops) × safety(1.5).
 // Idle connections release after 60s so background spikes don't permanently hold capacity.
 builder.AddNpgsqlDbContext<OrderDbContext>("orderdb",
     configureSettings: settings =>
     {
         var csb = new Npgsql.NpgsqlConnectionStringBuilder(settings.ConnectionString)
         {
-            MaxPoolSize = 40,
-            MinPoolSize = 2,
+            MaxPoolSize = 120,
+            MinPoolSize = 10,
             ConnectionIdleLifetime = 60,
             ConnectionPruningInterval = 10,
             Timeout = 15,

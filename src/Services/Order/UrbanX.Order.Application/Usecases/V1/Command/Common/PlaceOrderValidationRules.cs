@@ -6,6 +6,7 @@ internal static class PlaceOrderValidationRules
 {
     public const string PhoneRegex = @"^\+?[0-9]{8,15}$";
     public const string CouponCodeRegex = @"^[A-Za-z0-9-]{1,64}$";
+    public const string CouponHoldTokenRegex = @"^[A-Za-z0-9]{32}$";
 
     public static void RuleForShippingAddress<T>(this AbstractValidator<T> validator)
         where T : IPlaceOrderRequest
@@ -43,6 +44,13 @@ internal static class PlaceOrderValidationRules
             .Matches(CouponCodeRegex)
             .When(x => !string.IsNullOrWhiteSpace(x.CouponCode))
             .WithMessage("Coupon code must be 1-64 characters using letters, digits, or dash.");
+
+    public static void RuleForCouponHoldToken<T>(this AbstractValidator<T> validator)
+        where T : IPlaceOrderRequest
+        => validator.RuleFor(x => x.CouponHoldToken)
+            .Matches(CouponHoldTokenRegex)
+            .When(x => !string.IsNullOrWhiteSpace(x.CouponHoldToken))
+            .WithMessage("CouponHoldToken must be a 32-char hex string issued by /api/v1/promotion/coupon-holds.");
 
     public static void RuleForCustomerEmail<T>(this AbstractValidator<T> validator)
         where T : IPlaceOrderRequest

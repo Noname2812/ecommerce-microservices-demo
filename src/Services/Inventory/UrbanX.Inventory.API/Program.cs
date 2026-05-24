@@ -17,6 +17,10 @@ using UrbanX.Inventory.Persistence;
 using UrbanX.Inventory.Persistence.DependencyInjection.Extensions;
 using UrbanX.Inventory.Persistence.Seeding;
 
+// Pre-warm thread pool to avoid growth throttle (~1 thread/500ms) on burst.
+// Inventory's Reserve/Confirm consumers spike with Order saga load.
+ThreadPool.SetMinThreads(workerThreads: 150, completionPortThreads: 150);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
