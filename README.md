@@ -1,22 +1,22 @@
-# UrbanX - Multi-Merchant Commerce Platform
+# UrbanX — Multi-Merchant Commerce Platform
 
-UrbanX is a sample e-commerce platform built to demonstrate how a real-world application is structured using modern software engineering techniques. It is designed for educational purposes, so the code is organized to make each concept as clear as possible.
+UrbanX is a sample e-commerce platform built to demonstrate how a real-world application is structured using modern software engineering techniques. It is designed for educational purposes, with code organised to make each concept as clear as possible.
 
-The system is built as a set of **microservices** — small, independent backend programs that each handle one area of the business. A React frontend provides the customer-facing interface. Everything runs behind an API Gateway that acts as the single entry point for all requests.
+The system is built as a set of **microservices** — small, independent backend services that each handle one area of the business. A React frontend provides the customer-facing interface. Everything runs behind an API Gateway that acts as the single entry point for all requests.
 
 ---
 
 ## What This Project Teaches
 
-This project is a hands-on example of several industry-standard patterns and technologies:
-
 - **Microservices architecture** — breaking a large application into small, independently deployable services
-- **Event-driven communication** — services talk to each other by publishing and subscribing to events via Apache Kafka
-- **CQRS (Command Query Responsibility Segregation)** — separating write operations (PostgreSQL) from read operations (Elasticsearch) for better performance
-- **Saga pattern (choreography-based)** — coordinating a multi-step business process (place order → reserve stock → process payment → notify merchant) without a central controller
-- **Transactional outbox** — a technique that guarantees messages are never lost even if a service crashes after saving data but before sending the message
-- **JWT authentication and policy-based authorization** — securing APIs so only the right users can access the right endpoints
-- **API Gateway with rate limiting** — a single front door that protects backend services from being overwhelmed
+- **Event-driven communication** — services talk to each other by publishing and subscribing to integration events via **RabbitMQ + MassTransit**
+- **CQRS (Command Query Responsibility Segregation)** — separating write operations (EF Core) from read operations (PostgreSQL read schema via Dapper)
+- **Saga pattern (choreography-based)** — coordinating a multi-step business process (place order → reserve stock → process payment) without a central controller
+- **Transactional outbox** — guarantees messages are never lost even if a service crashes after saving data but before sending the message (MassTransit EF Outbox)
+- **Trust-the-Gateway auth** — the Gateway verifies the JWT once and forwards enriched identity headers; downstream services do not re-verify tokens
+- **Policy-based authorization via MediatR pipeline** — `[RequirePermission]` / `[RequireRole]` attributes on Commands and Queries enforced by `AuthorizationPipelineBehavior`
+- **Distributed caching & locking** — Redis-backed cache and `[DistributedLock]` attribute-driven locks via a MediatR pipeline behavior
+- **API Gateway with rate limiting** — a single front door that protects backend services (YARP + Duende.BFF)
 - **OpenTelemetry and distributed tracing** — observing what happens across many services when a single request is processed
 
 ---
@@ -25,73 +25,80 @@ This project is a hands-on example of several industry-standard patterns and tec
 
 When a customer places an order, the following sequence of events happens automatically across multiple services:
 
-1. The customer adds products to a cart (Order Service) and checks out.
-2. The Order Service creates an order and publishes an `OrderCreated` event to Kafka.
-3. The Inventory Service receives the event, checks available stock, reserves the items, and publishes an `InventoryReserved` or `InventoryFailed` event.
-4. If inventory is reserved, the Payment Service processes the charge via Stripe and publishes a `PaymentCompleted` or `PaymentFailed` event.
-5. If payment succeeds, the Merchant Service is notified so the merchant can accept and fulfill the order.
-6. If any step fails, the order is cancelled and the customer is informed.
+1. The customer browses products (Catalog Service) and applies a coupon/promotion (Promotion Service).
+2. The Order Service creates a pending order slot, then dispatches a saga that publishes an `OrderCreated` event.
+3. The Inventory Service reserves stock; on success it publishes `InventoryReserved`, on failure `InventoryReservationFailed`.
+4. The Payment Service processes the charge (MoMo / SePay webhook) and publishes `PaymentCompleted` or `PaymentFailed`.
+5. On payment failure, compensation events cancel the order and release the reserved inventory.
 
-This flow is an example of the **Saga (choreography)** pattern — no single service controls the whole process; each service reacts to events from the previous step.
+This flow uses the **Saga (choreography)** pattern — no single service controls the whole process; each service reacts to integration events from the previous step.
 
 ---
 
 ## Architecture
 
-### Microservices
+### Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Catalog Service | 5001 | Manages the product catalog. Uses CQRS: writes go to PostgreSQL, reads come from Elasticsearch for fast search. |
-| Order Service | 5002 | Handles shopping carts, order creation, and order status tracking. |
-| Merchant Service | 5003 | Manages merchant accounts and their product listings. |
-| Payment Service | 5004 | Processes payments using Stripe. Uses the transactional outbox to reliably publish payment events. |
-| Inventory Service | (dynamic) | Tracks stock levels. Reserves stock when an order is placed and releases it if the order is cancelled. |
-| Identity Service | 5005 | Handles user registration, login, and issues JWT tokens using Duende IdentityServer. |
-| API Gateway | 5000 | The single entry point for all client requests. Routes traffic to the correct service using YARP. Enforces rate limiting. |
+| Service | Port | Status | DB | Description |
+|---------|------|--------|----|-------------|
+| **API Gateway** | 5000 | Active | — | YARP reverse proxy + Duende.BFF cookie session. Enforces JWT auth, rate limiting, CORS, and forwards enriched identity headers. |
+| **Identity** | 5005 | Active | `urbanx_identity` | Duende IdentityServer 7 + ASP.NET Core Identity. Issues JWTs, manages users/roles/permissions, Google OAuth, account lockout, audit log. |
+| **Catalog** | 5025 | Active | `urbanx_catalog` | Product & category management. CQRS: writes via EF Core, reads via Dapper on a PostgreSQL read schema (`read.*`). MassTransit EF Outbox. |
+| **Inventory** | 5020 | Active | `urbanx_inventory` | Stock tracking and reservation. Consumers for `ReserveInventoryRequested` and `ConfirmInventoryReservation`. Hangfire TTL job for expired reservations. ⭐ Reference layout for new services. |
+| **Order** | 5010 | Active | `urbanx_order` | Shopping order creation and tracking. Saga choreography (PlaceOrderNormal / PlaceSalesOrder). Async ticket-polling flow. Product-variant read model (local projection). |
+| **Payment** | 5015 | Active | `urbanx_payment` | Payment processing via MoMo and SePay webhook integrations. Auto-refund on saga compensation. |
+| **Promotion** | 5040 | Active | `urbanx_promotion` | Coupons, voucher codes, flash sales. Coupon hold/release (distributed lock) + redemption used by Order saga. |
 
 ### Frontend
 
-The frontend is a React 19 single-page application (SPA) located in `src/Frontend/urbanx-react`. It connects to the backend exclusively through the API Gateway and authenticates users via OpenID Connect (OIDC).
+React 19 SPA located in `front-end/`. Connects to the backend exclusively through the API Gateway and authenticates users via OpenID Connect (OIDC). Managed by Aspire alongside backend services.
 
-### Infrastructure
+### Infrastructure (Aspire-managed)
 
 | Component | Purpose |
 |-----------|---------|
-| PostgreSQL | Each service has its own dedicated database (database-per-service pattern). |
-| Apache Kafka | The message broker used for asynchronous event-driven communication between services. |
-| Elasticsearch | Stores a searchable copy of the product catalog for fast full-text search. |
-| .NET Aspire | A development-time tool that starts all services together, provides service discovery, health checks, and a live observability dashboard. |
+| **PostgreSQL 16** | Each service has its own isolated database (database-per-service). |
+| **RabbitMQ** | Message broker for asynchronous event-driven communication via MassTransit. |
+| **Redis** | Distributed cache (`ICacheService`) and distributed locking (`IDistributedLockService`). |
+| **.NET Aspire** | Development orchestration — starts all services together, provides service discovery, health checks, and a live observability dashboard. |
 
 ---
 
 ## Architecture Patterns Explained
 
-### Transactional Outbox
+### Transactional Outbox (MassTransit EF Outbox)
 
-**The problem it solves:** A service saves data to its database and then needs to send a message (event) to Kafka. If the service crashes between these two steps, the data is saved but the message is never sent. Other services never learn what happened.
+**The problem:** A service saves data to its database and then needs to publish an event to RabbitMQ. If the service crashes between these two steps, data is saved but the event is never sent.
 
-**How it works:** Instead of publishing to Kafka directly, the service saves the event as a row in an "outbox" table in the *same database transaction* as the business data. A background worker (`OutboxRelayService`) then reads from this outbox table and publishes the messages to Kafka. This guarantees that if the data is saved, the message will eventually be sent — even after a crash.
+**How it works:** Instead of publishing directly, the handler publishes via `IEventPublisher`. MassTransit's bus outbox intercepts this publish within the EF Core transaction and stages it as a row in `outbox_message` alongside business data — in the same `SaveChanges`. A background `BusOutboxDeliveryService` then relays messages to RabbitMQ with at-least-once delivery and MessageId-based deduplication.
 
-Services that use this pattern: Catalog, Order, Payment, Inventory.
+Services using this pattern: Catalog, Identity, Inventory, Order, Payment, Promotion.
 
 ### Saga (Choreography)
 
-**The problem it solves:** Completing an order requires several steps across multiple services. If one step fails, all previous steps must be rolled back. How do you coordinate this without tightly coupling the services together?
+There is no central coordinator. Each service listens for integration events and reacts:
 
-**How it works (choreography style):** There is no central coordinator. Each service listens for events and reacts to them. For example:
-- The Order Service publishes `OrderCreated`.
-- The Inventory Service hears this and reserves stock, then publishes `InventoryReserved`.
-- The Payment Service hears this and charges the customer, then publishes `PaymentCompleted`.
-- The Merchant Service hears this and marks the order as ready for fulfillment.
+- Order Service publishes `OrderCreated`
+- Inventory Service reserves stock → publishes `InventoryReserved` or `InventoryReservationFailed`
+- Payment Service charges the customer → publishes `PaymentCompleted` or `PaymentFailed`
+- On failure: compensation events cancel the order and release stock / coupons
 
-If anything goes wrong, a failure event triggers the appropriate compensation steps (cancelling the order, releasing reserved stock, etc.).
+### CQRS
 
-### CQRS (Command Query Responsibility Segregation)
+**Catalog service example:** Writes go through EF Core (the command side). Integration events flow via Outbox → RabbitMQ → Catalog's own projection consumers, which rebuild `read.product_list_view` and `read.product_detail_view`. Read requests use Dapper to query these views directly.
 
-**The problem it solves:** A product database optimized for safe, transactional writes (PostgreSQL) is not always the best tool for fast, flexible search queries.
+### Trust-the-Gateway Auth
 
-**How it works:** The Catalog Service writes all product changes to PostgreSQL (the "command" side). At the same time, it publishes events that update an Elasticsearch index (the "query" side). Read requests — like searching for products — go directly to Elasticsearch for speed, while writes always go through PostgreSQL for consistency.
+The API Gateway verifies the JWT once, strips the `Authorization` header, then forwards enriched headers to downstream services:
+
+```
+X-User-Id          → user identity
+X-User-Roles       → role claims
+X-Merchant-Id      → merchant scope
+X-Permission-Scope → permission scope
+```
+
+Downstream services read identity via `IUserContext` (injected into handlers). `AuthorizationPipelineBehavior` enforces `[RequirePermission]` / `[RequireRole]` attributes declared on each Command or Query.
 
 ---
 
@@ -99,17 +106,15 @@ If anything goes wrong, a failure event triggers the appropriate compensation st
 
 ### Prerequisites
 
-Before running the project, make sure you have the following installed:
-
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [Node.js 20+](https://nodejs.org/)
 - [Docker and Docker Compose](https://www.docker.com/)
 
-### Option 1: .NET Aspire (Recommended for Development)
+### Option 1: .NET Aspire (Recommended)
 
-.NET Aspire is the easiest way to run the whole project locally. It automatically starts PostgreSQL and Kafka in Docker, connects all the services together, and opens a dashboard where you can see logs and traces from every service in one place.
+Aspire automatically starts PostgreSQL, RabbitMQ, and Redis in Docker, connects all services together, and opens a dashboard with logs and traces from every service.
 
-**Step 1:** Install the Aspire workload (only needed once):
+**Step 1:** Install the Aspire workload (once only):
 
 ```bash
 dotnet workload install aspire
@@ -122,149 +127,116 @@ cd src/AppHost/UrbanX.AppHost
 dotnet run
 ```
 
-The Aspire Dashboard will open at `http://localhost:15260`. Wait until all services show as healthy before proceeding.
+Aspire Dashboard opens at **`http://localhost:15260`**. Wait until all services show as healthy.
 
-**Step 3:** Start the frontend in a new terminal:
+The frontend is started automatically by Aspire via a Vite app resource.
 
-```bash
-cd src/Frontend/urbanx-react
-npm install
-npm run dev
-```
+### Option 2: Infrastructure Only (Docker Compose)
 
-The application is now available at:
-
-- Frontend: `http://localhost:5173`
-- API Gateway: Shown in the Aspire Dashboard (dynamically assigned)
-- Aspire Dashboard: `http://localhost:15260`
-
-### Option 2: Manual Setup
-
-Use this approach if you prefer to start each component individually or if you are not using Aspire.
-
-**Step 1:** Start the infrastructure (PostgreSQL and Kafka) using Docker:
+Starts PostgreSQL and RabbitMQ for running services manually:
 
 ```bash
 docker-compose up -d
 ```
 
-This starts:
-- PostgreSQL on port 5432
-- Kafka on port 9092
-
-**Step 2:** Copy the environment file and fill in any required values:
+Then start the Identity Service first (other services depend on it for token validation), followed by the remaining services:
 
 ```bash
-cp .env.example .env
-```
+# Terminal 1 — Identity (start first)
+cd src/Services/Identity/UrbanX.Identity.API && dotnet run
 
-**Step 3:** Start each backend service in its own terminal. The Identity Service must start first because other services depend on it for authentication:
+# Terminal 2 — Catalog
+cd src/Services/Catalog/UrbanX.Catalog.API && dotnet run
 
-```bash
-# Terminal 1 - Identity Service (start this first)
-cd src/Services/Identity/UrbanX.Services.Identity && dotnet run
+# Terminal 3 — Inventory
+cd src/Services/Inventory/UrbanX.Inventory.API && dotnet run
 
-# Terminal 2 - Catalog Service
-cd src/Services/Catalog/UrbanX.Services.Catalog && dotnet run
+# Terminal 4 — Order
+cd src/Services/Order/UrbanX.Order.API && dotnet run
 
-# Terminal 3 - Order Service
-cd src/Services/Order/UrbanX.Services.Order && dotnet run
+# Terminal 5 — Payment
+cd src/Services/Payment/UrbanX.Payment.API && dotnet run
 
-# Terminal 4 - Merchant Service
-cd src/Services/Merchant/UrbanX.Services.Merchant && dotnet run
+# Terminal 6 — Promotion
+cd src/Services/Promotion/UrbanX.Promotion.API && dotnet run
 
-# Terminal 5 - Payment Service
-cd src/Services/Payment/UrbanX.Services.Payment && dotnet run
-
-# Terminal 6 - Inventory Service
-cd src/Services/Inventory/UrbanX.Services.Inventory && dotnet run
-
-# Terminal 7 - API Gateway
+# Terminal 7 — Gateway
 cd src/Gateway/UrbanX.Gateway && dotnet run
 ```
-
-Alternatively, use the provided scripts:
-
-```bash
-# Linux / macOS
-./start-services.sh
-
-# Windows PowerShell
-.\start-services.ps1
-```
-
-**Step 4:** Start the frontend:
-
-```bash
-cd src/Frontend/urbanx-react
-npm install
-npm run dev
-```
-
-The application is now available at:
-
-- Frontend: `http://localhost:5173`
-- API Gateway: `http://localhost:5050`
-- Identity Service: `http://localhost:5005`
 
 ---
 
 ## API Endpoints
 
-All API requests from the frontend go through the API Gateway at `http://localhost:5050`. The gateway forwards them to the appropriate service.
+All requests from the frontend go through the API Gateway. Endpoints marked **[Auth]** require a valid BFF cookie session (`urbanx.bff` HttpOnly). See `docs/gateway/bff.md` and `docs/auth/trust-gateway-flow.md`.
 
-Endpoints marked **[Auth required]** require a valid Gateway BFF cookie session (`urbanx.bff` HttpOnly). The frontend obtains it by navigating to `/bff/login` (Gateway acts as OIDC client thay SPA). Direct JWT bearer testing qua Gateway không hỗ trợ — xem `docs/gateway/bff.md` cho chi tiết flow và `docs/auth/trust-gateway-flow.md` cho cơ chế trust-the-gateway.
-
-### Catalog Service — `/api/products`
+### Catalog — `/api/v1/catalog`
 
 | Method | Path | Access | Description |
 |--------|------|--------|-------------|
-| GET | `/api/products` | Public | Search and list all products |
-| GET | `/api/products/{id}` | Public | Get details of a specific product |
-| GET | `/api/products/merchant/{merchantId}` | Public | List products for a specific merchant |
-| POST | `/api/products` | [Auth required] Merchant | Create a new product |
-| PUT | `/api/products/{id}` | [Auth required] Merchant | Update an existing product |
-| DELETE | `/api/products/{id}` | [Auth required] Merchant | Delete a product |
+| GET | `/api/v1/catalog/products` | Public | Search and list products |
+| GET | `/api/v1/catalog/product/{id}` | Public | Get product detail |
+| POST | `/api/v1/catalog/product` | [Auth] Merchant | Create a product |
+| PUT | `/api/v1/catalog/product/{id}/variants` | [Auth] Merchant | Update product variants |
+| POST | `/api/v1/catalog/category` | [Auth] Admin | Create a category |
+| PUT | `/api/v1/catalog/category/{id}` | [Auth] Admin | Update a category |
+| DELETE | `/api/v1/catalog/category/{id}` | [Auth] Admin | Delete a category |
 
-### Order Service — `/api/cart` and `/api/orders`
-
-| Method | Path | Access | Description |
-|--------|------|--------|-------------|
-| GET | `/api/cart/{customerId}` | [Auth required] Customer | Get the customer's current cart |
-| POST | `/api/cart/{customerId}/items` | [Auth required] Customer | Add an item to the cart |
-| DELETE | `/api/cart/{customerId}/items/{itemId}` | [Auth required] Customer | Remove an item from the cart |
-| POST | `/api/orders` | [Auth required] Customer | Place an order (checkout) |
-| GET | `/api/orders/{orderId}` | [Auth required] Customer or Merchant | Get details of a specific order |
-| GET | `/api/orders/customer/{customerId}` | [Auth required] Customer | List all orders for a customer |
-| PUT | `/api/orders/{orderId}/status` | [Auth required] Merchant | Update the status of an order |
-
-### Merchant Service — `/api/merchants`
+### Order — `/api/v1/orders`
 
 | Method | Path | Access | Description |
 |--------|------|--------|-------------|
-| GET | `/api/merchants/{id}` | Public | Get merchant profile |
-| POST | `/api/merchants` | [Auth required] Merchant | Register as a new merchant |
-| GET | `/api/merchants/{merchantId}/products` | Public | List a merchant's products |
-| POST | `/api/merchants/{merchantId}/products` | [Auth required] Merchant | Add a product |
-| PUT | `/api/merchants/{merchantId}/products/{productId}` | [Auth required] Merchant | Update a product |
-| DELETE | `/api/merchants/{merchantId}/products/{productId}` | [Auth required] Merchant | Delete a product |
+| POST | `/api/v1/orders/` | [Auth] Customer | Place a standard order |
+| POST | `/api/v1/orders/sales` | [Auth] Customer | Place a sales (flash-sale) order |
+| GET | `/api/v1/orders/sales/{id}/status` | [Auth] Customer | Poll async sales order status |
+| GET | `/api/v1/orders/ticket/{ticketId}` | [Auth] Customer | Get order by ticket |
+| GET | `/api/v1/orders/my` | [Auth] Customer | List my orders |
+| GET | `/api/v1/orders/{id}` | [Auth] Customer | Get order by ID |
+| PUT | `/api/v1/orders/{id}/cancel` | [Auth] Customer | Cancel an order |
 
-### Payment Service — `/api/payments`
-
-| Method | Path | Access | Description |
-|--------|------|--------|-------------|
-| POST | `/api/payments` | [Auth required] Customer | Submit a payment for an order |
-| GET | `/api/payments/{id}` | [Auth required] Customer or Merchant | Get a payment record by ID |
-| GET | `/api/payments/order/{orderId}` | [Auth required] Customer or Merchant | Get the payment for a specific order |
-
-### Inventory Service — `/api/inventory`
+### Payment — `/api/v1/payments`
 
 | Method | Path | Access | Description |
 |--------|------|--------|-------------|
-| GET | `/api/inventory/{productId}` | [Auth required] Merchant | Get the inventory record for a product |
-| POST | `/api/inventory` | [Auth required] Merchant | Create an inventory record for a new product |
-| PUT | `/api/inventory/{productId}` | [Auth required] Merchant | Update the stock quantity for a product |
-| GET | `/api/inventory/reservations/{orderId}` | [Auth required] Customer or Merchant | Get the inventory reservations for an order |
+| GET | `/api/v1/payments/` | [Auth] | List payments |
+| GET | `/api/v1/payments/{id}` | [Auth] | Get payment by ID |
+| GET | `/api/v1/payments/by-order/{orderId}` | [Auth] | Get payment by order |
+| POST | `/api/v1/payments/webhook/momo` | Public | MoMo IPN webhook |
+| POST | `/api/v1/payments/webhook/sepay` | Public | SePay webhook |
+| GET | `/api/v1/payments/{paymentId}/refunds/` | [Auth] | List refunds for a payment |
+| GET | `/api/v1/payments/{paymentId}/refunds/{id}` | [Auth] | Get refund |
+
+### Promotion — `/api/v1/promotions`
+
+| Method | Path | Access | Description |
+|--------|------|--------|-------------|
+| POST | `/api/v1/promotions/` | [Auth] Admin | Create promotion |
+| GET | `/api/v1/promotions/` | [Auth] | List promotions |
+| GET | `/api/v1/promotions/{id}` | [Auth] | Get promotion |
+| PUT | `/api/v1/promotions/{id}` | [Auth] Admin | Update promotion |
+| POST | `/api/v1/promotions/{id}/activate` | [Auth] Admin | Activate promotion |
+| POST | `/api/v1/promotions/{id}/pause` | [Auth] Admin | Pause promotion |
+| POST | `/api/v1/promotions/{id}/voucher-codes` | [Auth] Admin | Add voucher codes |
+| POST | `/api/v1/promotions/{id}/flash-sale-items` | [Auth] Admin | Add flash-sale items |
+| POST | `/api/v1/promotions/preview` | [Auth] | Preview discount |
+
+### Identity — `/api/account` and `/api/v1/identity`
+
+| Method | Path | Access | Description |
+|--------|------|--------|-------------|
+| POST | `/api/account/register` | Public | Register a new user |
+| POST | `/api/account/confirm-email` | Public | Confirm email address |
+| POST | `/api/account/forgot-password` | Public | Request password reset |
+| POST | `/api/account/reset-password` | Public | Reset password |
+| POST | `/api/account/change-password` | [Auth] | Change password |
+| GET | `/api/v1/identity/profile` | [Auth] | Get own profile |
+| PUT | `/api/v1/identity/profile` | [Auth] | Update profile |
+| GET | `/api/v1/identity/users` | [Auth] Admin | List users |
+| GET | `/api/v1/identity/roles` | [Auth] Admin | List roles |
+| POST | `/api/v1/identity/roles` | [Auth] Admin | Create role |
+| GET | `/api/v1/identity/audit-logs` | [Auth] Admin | Get audit logs |
+
+OIDC endpoints (`/connect/**`, `/.well-known/**`) are proxied directly to the Identity Service.
 
 ---
 
@@ -274,33 +246,43 @@ Endpoints marked **[Auth required]** require a valid Gateway BFF cookie session 
 
 | Technology | Purpose |
 |------------|---------|
-| .NET 10 / ASP.NET Core | The main framework for all backend services, using Minimal API style |
-| .NET Aspire | Development orchestration, service discovery, health checks, and distributed tracing dashboard |
-| Entity Framework Core | Object-relational mapper (ORM) for database access |
-| PostgreSQL | Relational database; each service has its own isolated database |
-| Apache Kafka | Distributed message broker for event-driven communication |
-| Elasticsearch | Full-text search engine used for the product catalog read model |
-| Duende IdentityServer | OpenID Connect and OAuth 2.0 server for issuing JWT tokens |
-| YARP | The "Yet Another Reverse Proxy" library used to build the API Gateway |
-| Stripe SDK | Payment processing integration |
+| .NET 10 / ASP.NET Core | Main framework for all backend services (Minimal API style) |
+| .NET Aspire | Development orchestration, service discovery, health checks, observability dashboard |
+| Carter | Minimal API module system for defining endpoints |
+| MediatR | In-process CQRS dispatch (commands, queries, pipeline behaviors) |
+| FluentValidation | Input validation integrated into the MediatR pipeline |
+| MassTransit + RabbitMQ | Asynchronous integration events and transactional outbox |
+| Entity Framework Core 10 / Npgsql | ORM for write-side data access |
+| Dapper | Micro-ORM for read-schema queries (Catalog read model) |
+| PostgreSQL 16 | Relational database — each service has its own isolated database |
+| Redis | Distributed cache and distributed locking |
+| Hangfire | Recurring background jobs (e.g., Inventory reservation TTL expiry) |
+| Duende IdentityServer 7 | OpenID Connect and OAuth 2.0 server for issuing JWTs |
+| YARP | Reverse proxy used to build the API Gateway |
+| Duende.BFF | Cookie-based BFF session for the React SPA |
 | OpenTelemetry | Distributed tracing and metrics collection |
 
 ### Frontend
 
 | Technology | Purpose |
 |------------|---------|
-| React 19 + TypeScript | UI library and language for building the customer-facing application |
-| Vite | Fast development server and build tool |
-| Tailwind CSS 4 | Utility-first CSS framework for styling |
+| React 19 + TypeScript | UI library |
+| Vite | Development server and build tool |
+| Tailwind CSS 4 | Utility-first CSS framework |
 | React Router | Client-side routing |
-| oidc-client-ts | Handles OpenID Connect login flow with the Identity Service |
+| oidc-client-ts | Handles OpenID Connect login flow |
 
-### Shared Libraries
+### Shared Libraries (`src/Shared/`)
 
 | Library | Purpose |
 |---------|---------|
-| `UrbanX.Shared.Security` | Reusable security utilities: JWT authorization policies, input validation helpers, and the global exception handler |
-| `UrbanX.ServiceDefaults` | Common Aspire configuration applied to all services: health checks, telemetry, and resilience policies |
+| `Shared.Kernel` | Domain primitives: `Error`, `Result<T>`, `DomainException`, `BaseEntity<TKey>`, `IUnitOfWork`, `GatewayHeaderNames` |
+| `Shared.Contract` | Cross-service contracts: `IIntegrationEvent`, `IntegrationEventBase`, integration event DTOs |
+| `Shared.Application` | CQRS abstractions: `ICommand`, `IQuery`, `IMessagingCommand`, `IEventPublisher`, `ISagaState`, `IUserContext`, `Permissions`, authorization attributes |
+| `Shared.Cache` | Redis cache (`ICacheService`), distributed lock (`IDistributedLockService`), `[DistributedLock]` attribute |
+| `Shared.Observability` | OpenTelemetry configuration: tracing, metrics, OTLP exporter |
+
+`Shared.Messaging` provides: MassTransit + RabbitMQ configuration, MediatR pipeline behaviors (Authorization → Idempotency → Validation → DistributedLock → Transaction), saga base classes, `EventPublisher` implementation, and Trust-Gateway user context middleware.
 
 ---
 
@@ -309,32 +291,50 @@ Endpoints marked **[Auth required]** require a valid Gateway BFF cookie session 
 ```
 urbanx-sample/
 ├── src/
-│   ├── AppHost/
-│   │   └── UrbanX.AppHost/           # .NET Aspire host — starts and wires up all services
-│   ├── ServiceDefaults/
-│   │   └── UrbanX.ServiceDefaults/   # Shared Aspire defaults (health, telemetry, resilience)
+│   ├── AppHost/UrbanX.AppHost/           # Aspire host — starts and wires all services
+│   ├── ServiceDefaults/                  # Shared Aspire defaults (health, telemetry, resilience)
 │   ├── Services/
-│   │   ├── Catalog/                  # Product catalog service (CQRS, Elasticsearch)
-│   │   ├── Order/                    # Cart and order service (Saga coordinator via events)
-│   │   ├── Merchant/                 # Merchant registration and management
-│   │   ├── Payment/                  # Payment processing via Stripe
-│   │   ├── Inventory/                # Stock tracking and reservation
-│   │   └── Identity/                 # Authentication server (Duende IdentityServer)
+│   │   ├── Catalog/                      # Product catalog (CQRS + MT EF Outbox + Dapper read schema)
+│   │   │   ├── UrbanX.Catalog.API/
+│   │   │   ├── UrbanX.Catalog.Application/
+│   │   │   ├── UrbanX.Catalog.Domain/
+│   │   │   ├── UrbanX.Catalog.Infrastructure/
+│   │   │   └── UrbanX.Catalog.Persistence/
+│   │   ├── Inventory/                    # ⭐ Reference layout for new services
+│   │   │   ├── UrbanX.Inventory.API/
+│   │   │   ├── UrbanX.Inventory.Application/
+│   │   │   ├── UrbanX.Inventory.Domain/
+│   │   │   ├── UrbanX.Inventory.Infrastructure/   # Consumer + ConsumerDefinition + Hangfire job
+│   │   │   └── UrbanX.Inventory.Persistence/
+│   │   ├── Order/                        # Order saga choreography
+│   │   ├── Payment/                      # MoMo / SePay webhook + auto-refund
+│   │   ├── Promotion/                    # Coupons, voucher codes, flash sales
+│   │   └── Identity/                     # Duende IdentityServer + ASP.NET Identity
 │   ├── Gateway/
-│   │   └── UrbanX.Gateway/           # API Gateway (YARP reverse proxy + rate limiting)
-│   ├── Frontend/
-│   │   └── urbanx-react/             # Customer-facing React SPA
-│   └── Shared/
-│       ├── UrbanX.Shared/            # Shared domain models and contracts
-│       └── UrbanX.Shared.Security/   # Security helpers used across all services
-├── tests/                            # Unit and integration tests for all services
-├── kubernetes/                       # Kubernetes deployment manifests
-├── docker-compose.yml                # Local infrastructure (PostgreSQL, Kafka, Elasticsearch)
-├── docker-compose.production.yml     # Production-ready Docker Compose configuration
-├── generate-migrations.sh            # Helper script to generate EF Core migrations
-├── start-services.sh                 # Linux/macOS script to start all services
-├── start-services.ps1                # Windows PowerShell script to start all services
-└── UrbanX.sln                        # .NET solution file
+│   │   ├── UrbanX.Gateway/              # YARP reverse proxy, BFF, rate limiting
+│   │   ├── UrbanX.Gateway.Application/
+│   │   └── UrbanX.Gateway.Infrastructure/ # RBAC, header enrichment, observability
+│   ├── Shared/
+│   │   ├── Shared.Kernel/               # Domain primitives (Error, Result, BaseEntity, …)
+│   │   ├── Shared.Contract/             # Cross-service integration event contracts
+│   │   ├── Shared.Application/          # CQRS abstractions + authorization contracts
+│   │   ├── Shared.Cache/                # Redis cache + distributed lock
+│   │   └── Shared.Observability/        # OpenTelemetry wiring
+│   └── front-end/                       # React 19 SPA (Vite)
+├── tests/
+│   ├── UrbanX.Services.Catalog.UnitTests/
+│   ├── UrbanX.Services.Catalog.IntegrationTests/
+│   ├── UrbanX.Services.Inventory.UnitTests/
+│   ├── UrbanX.Services.Order.UnitTests/
+│   ├── UrbanX.Services.Promotion.UnitTests/
+│   └── UrbanX.Shared.Messaging.UnitTests/
+├── docs/                                 # Per-service documentation
+├── docker/                               # Dockerfiles
+├── kubernetes/                           # Kubernetes manifests
+├── docker-compose.yml                    # Local infrastructure (PostgreSQL, RabbitMQ)
+├── docker-compose.production.yml         # Production Docker Compose
+├── Directory.Packages.props              # Centralised NuGet version management
+└── UrbanX.sln
 ```
 
 ---
@@ -343,77 +343,70 @@ urbanx-sample/
 
 ### Running Tests
 
-The `tests/` directory contains both unit tests and integration tests for each service. To run all tests:
+```bash
+# All tests
+dotnet test UrbanX.sln
+
+# Catalog unit tests only
+dotnet test tests/UrbanX.Services.Catalog.UnitTests/UrbanX.Services.Catalog.UnitTests.csproj
+```
+
+Tests use **xUnit 2.9.3** + **Moq 4.20.72**. Assertions use xUnit's built-in `Assert` (no FluentAssertions).
+
+### EF Core Migrations
 
 ```bash
-dotnet test UrbanX.sln
+# From the service's Persistence project directory
+dotnet ef migrations add <MigrationName>
+dotnet ef database update
 ```
+
+### Adding a New NuGet Package
+
+Add the version entry to **`Directory.Packages.props`** only. Do not add `<Version>` to individual `.csproj` files.
 
 ### Hot Reload
 
-- **Frontend:** Hot reload is enabled automatically when you run `npm run dev`. Changes to React components appear in the browser instantly.
-- **Backend:** Use `dotnet watch run` instead of `dotnet run` to enable hot reload for .NET services.
-
-### Database Migrations
-
-Database schema migrations are applied automatically when each service starts up. To create a new migration after changing a data model:
-
 ```bash
-cd src/Services/<ServiceName>/UrbanX.Services.<ServiceName>
-dotnet ef migrations add <MigrationName> --context <ServiceName>DbContext
+# Frontend — automatic via Vite
+npm run dev
+
+# Backend
+dotnet watch run
 ```
-
-Replace `<ServiceName>` with the name of the service you changed (for example, `Catalog`, `Order`, `Merchant`).
-
-See [DATABASE_MIGRATIONS.md](DATABASE_MIGRATIONS.md) for full guidance.
 
 ### Environment Configuration
 
-Sensitive values such as database passwords and Stripe API keys are managed through environment variables. A template is provided:
-
 ```bash
 cp .env.example .env
+# Fill in required values (DB passwords, MoMo/SePay keys, etc.)
 ```
 
-Open `.env` in a text editor and fill in the required values before starting the services manually.
-
-### Testing API Endpoints Manually
-
-Each service includes a `.http` file that you can use to test endpoints directly from Visual Studio Code (with the REST Client extension) or JetBrains Rider:
-
-- `UrbanX.Services.Catalog.http`
-- `UrbanX.Services.Order.http`
-- `UrbanX.Services.Merchant.http`
-- `UrbanX.Services.Payment.http`
-
-You can also use `curl` to test the API through the gateway:
-
-```bash
-# List all products (no authentication required)
-curl http://localhost:5050/api/v1/catalog/products
-
-# Get a specific product by ID
-curl http://localhost:5050/api/v1/catalog/products/<product-id>
-```
+Sensitive values (API keys, secrets) belong in `appsettings.Development.json` or environment variables — never committed to source control.
 
 ### Troubleshooting
 
-**Port already in use:** Change the port in the service's `Properties/launchSettings.json` file.
+**Port already in use:** Change the port in `Properties/launchSettings.json`.
+
+**RabbitMQ not connecting:**
+```bash
+docker-compose ps
+docker-compose up -d rabbitmq
+```
 
 **Database connection problems:**
 ```bash
-docker-compose ps               # Check which containers are running
-docker-compose up -d postgres   # Restart the PostgreSQL container
+docker-compose up -d postgres
 ```
 
 **Frontend not loading:**
 ```bash
-cd src/Frontend/urbanx-react
-rm -rf node_modules package-lock.json
+cd front-end
+rm -rf node_modules
 npm install
 ```
 
-**Backend build errors:**
+**Build errors:**
 ```bash
 dotnet clean && dotnet build
 ```
@@ -422,14 +415,13 @@ dotnet clean && dotnet build
 
 ## Security
 
-- **JWT authentication** — All sensitive endpoints require a valid JWT bearer token issued by the Identity Service.
-- **Policy-based authorization** — Three authorization policies are defined: `CustomerOnly`, `MerchantOnly`, and `CustomerOrMerchant`. Each endpoint declares which policy applies.
-- **Rate limiting** — The API Gateway limits each IP address to 100 requests per minute. Requests that exceed this limit receive an HTTP 429 response with a `Retry-After` header.
-- **Input validation** — All write endpoints validate request data using helpers in `UrbanX.Shared.Security.RequestValidation`.
-- **Global exception handling** — Unhandled exceptions are caught and returned as standardized error responses. Stack traces are hidden in production environments.
-- **Security headers** — All responses include `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, and `Referrer-Policy` headers.
-
-See [SECURITY.md](SECURITY.md) for production security guidance.
+- **Trust-the-Gateway auth** — the API Gateway is the single JWT verification point. Downstream services read identity from enriched headers via `IUserContext`.
+- **Policy-based authorization** — `[RequirePermission]` / `[RequireRole]` attributes on Commands/Queries are enforced by `AuthorizationPipelineBehavior` in the MediatR pipeline. Permission constants are centralised in `Shared.Application/Authorization/Permissions.cs`.
+- **Rate limiting** — Global 1 000 req/60 s per IP; auth endpoints 10/60 s; write operations 50/60 s; sales-order burst bucket (token bucket).
+- **Distributed lock** — `[DistributedLock]` on Commands/Queries prevents concurrent execution of the same logical operation (e.g., coupon hold).
+- **Input validation** — FluentValidation validators run in the MediatR pipeline before every handler.
+- **Transactional outbox** — at-least-once event delivery with MessageId-based deduplication prevents double-processing.
+- **Account lockout** — 5 failed login attempts → 15-minute lockout (Identity Service).
 
 ---
 
@@ -437,21 +429,15 @@ See [SECURITY.md](SECURITY.md) for production security guidance.
 
 ### Docker Compose (Production)
 
-A production-ready Docker Compose file is included:
-
 ```bash
 docker-compose -f docker-compose.production.yml up -d
 ```
 
 ### Kubernetes
 
-Kubernetes manifests for all services are located in the `kubernetes/` directory:
-
 ```bash
 kubectl apply -f kubernetes/
 ```
-
-See [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for a complete step-by-step deployment guide.
 
 ---
 
