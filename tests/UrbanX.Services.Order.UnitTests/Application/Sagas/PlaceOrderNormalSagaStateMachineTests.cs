@@ -87,7 +87,7 @@ public sealed class PlaceOrderNormalSagaStateMachineTests : IAsyncLifetime
 
     private static PlaceOrderRequestedV1 BuildRequest(Guid orderId, string? couponCode = null)
     {
-        var items = new[] { new NormalOrderItemSnapshot(ProductId, VariantId, 1, UnitPrice) };
+        var items = new[] { new NormalOrderItemSnapshot(ProductId, VariantId, 1, UnitPrice, 1) };
         return new PlaceOrderRequestedV1
         {
             OrderId          = orderId,

@@ -265,6 +265,10 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("coupon_expiry_token_id");
 
+                    b.Property<string>("CouponHoldToken")
+                        .HasColumnType("text")
+                        .HasColumnName("coupon_hold_token");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1003,6 +1007,92 @@ namespace UrbanX.Order.Persistence.Migrations
                         .HasDatabaseName("ix_order_status_histories_order_id");
 
                     b.ToTable("order_status_histories", (string)null);
+                });
+
+            modelBuilder.Entity("UrbanX.Order.Domain.Models.ProductVariantReadModel", b =>
+                {
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("image_url");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("price");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<bool>("ProductIsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("product_is_active");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("product_name");
+
+                    b.Property<int>("ProjectionVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("projection_version");
+
+                    b.Property<int>("RowVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("row_version");
+
+                    b.Property<Guid>("SellerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("seller_id");
+
+                    b.Property<bool>("SellerIsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("seller_is_active");
+
+                    b.Property<string>("SellerName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("seller_name");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("sku");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VariantName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("variant_name");
+
+                    b.HasKey("VariantId")
+                        .HasName("pk_product_variant_view");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_product_variant_view_product_id");
+
+                    b.HasIndex("SellerId")
+                        .HasDatabaseName("ix_product_variant_view_seller_id");
+
+                    b.ToTable("product_variant_view", "read");
                 });
 
             modelBuilder.Entity("UrbanX.Order.Domain.Models.OrderItem", b =>

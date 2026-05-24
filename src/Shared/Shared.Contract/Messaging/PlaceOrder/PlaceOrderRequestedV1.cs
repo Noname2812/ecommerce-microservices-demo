@@ -36,4 +36,5 @@ public record NormalOrderItemSnapshot(
     Guid ProductId,
     Guid VariantId,
     int Quantity,
-    decimal UnitPrice);
+    decimal UnitPrice,
+    int Version);

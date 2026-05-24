@@ -75,7 +75,8 @@
             string? Barcode,
             bool IsActive,
             IReadOnlyList<ProductVariantAttributeSnapshot> AttributeValues,
-            IReadOnlyList<string> ImageUrls
+            IReadOnlyList<string> ImageUrls,
+            int RowVersion
         );
     }
 }

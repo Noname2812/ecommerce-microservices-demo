@@ -12,10 +12,17 @@ using UrbanX.Order.API.Middleware;
 using UrbanX.Order.Infrastructure.DependencyInjection.Extensions;
 using UrbanX.Order.Infrastructure.Messaging.OrderCancelledCache;
 using UrbanX.Order.Infrastructure.Messaging.OrderConfirmedCache;
+using UrbanX.Order.Infrastructure.Messaging.ProductCreated;
+using UrbanX.Order.Infrastructure.Messaging.ProductInfoUpdated;
+using UrbanX.Order.Infrastructure.Messaging.ProductStatusChanged;
+using UrbanX.Order.Infrastructure.Messaging.ProductVariantAdded;
+using UrbanX.Order.Infrastructure.Messaging.ProductVariantDeleted;
+using UrbanX.Order.Infrastructure.Messaging.ProductVariantUpdated;
 using UrbanX.Order.Infrastructure.Sagas.PlaceOrderNormal;
 using UrbanX.Order.Infrastructure.Sagas.PlaceOrderSales;
 using UrbanX.Order.Persistence;
 using UrbanX.Order.Persistence.DependencyInjection.Extensions;
+using UrbanX.Order.Persistence.Seeding;
 
 // Pre-warm thread pool to avoid growth throttle (~1 thread/500ms) on burst.
 // Order is the hottest path: saga orchestration + Catalog HTTP + multiple consumers.
@@ -84,6 +91,14 @@ builder.Services
 
         bus.AddConsumer<OrderConfirmedCacheConsumer>(typeof(OrderConfirmedCacheConsumerDefinition));
         bus.AddConsumer<OrderCancelledCacheConsumer>(typeof(OrderCancelledCacheConsumerDefinition));
+
+        // Catalog → Order read-model projection consumers
+        bus.AddConsumer<ProductCreatedReadModelConsumer>(typeof(ProductCreatedReadModelConsumerDefinition));
+        bus.AddConsumer<ProductInfoUpdatedReadModelConsumer>(typeof(ProductInfoUpdatedReadModelConsumerDefinition));
+        bus.AddConsumer<ProductStatusChangedReadModelConsumer>(typeof(ProductStatusChangedReadModelConsumerDefinition));
+        bus.AddConsumer<ProductVariantAddedReadModelConsumer>(typeof(ProductVariantAddedReadModelConsumerDefinition));
+        bus.AddConsumer<ProductVariantUpdatedReadModelConsumer>(typeof(ProductVariantUpdatedReadModelConsumerDefinition));
+        bus.AddConsumer<ProductVariantDeletedReadModelConsumer>(typeof(ProductVariantDeletedReadModelConsumerDefinition));
     });
 
 // Health checks
@@ -127,6 +142,13 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Applying database migrations for OrderDbContext...");
         await context.Database.MigrateAsync();
         logger.LogInformation("Database migrations applied successfully");
+
+        if (app.Environment.IsDevelopment())
+        {
+            logger.LogInformation("Seeding order read model...");
+            await OrderReadModelSeeder.SeedIfEmptyAsync(context);
+            logger.LogInformation("Order read model seeded successfully");
+        }
     }
     catch (Exception ex)
     {

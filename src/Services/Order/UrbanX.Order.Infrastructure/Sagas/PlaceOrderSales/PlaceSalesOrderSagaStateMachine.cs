@@ -10,7 +10,6 @@ using Shared.Kernel.Primitives;
 using Shared.Messaging;
 using Shared.Messaging.Saga;
 using System.Text.Json;
-using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.Application.Services;
 using UrbanX.Order.Domain.Errors;
@@ -295,23 +294,12 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
         BehaviorContext<PlaceSalesOrderSagaState, PlaceSalesOrderRequestedV1> ctx)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var catalog = scope.ServiceProvider.GetRequiredService<ICatalogServiceClient>();
+        var repository = scope.ServiceProvider.GetRequiredService<IProductVariantReadModelRepository>();
 
-        var variantIds = ctx.Message.Items.Select(i => i.VariantId).Distinct().ToArray();
-        var result = await catalog.GetVariantsAsync(variantIds, ctx.CancellationToken);
+        var variantIds = ctx.Message.Items.Select(i => i.VariantId).Distinct().ToList();
+        var variantMap = await repository.GetByIdsAsync(variantIds, ctx.CancellationToken);
 
-        if (result.IsFailure)
-        {
-            ctx.Saga.ValidationError = result.Error.Code == OrderErrors.CatalogUnavailable.Code
-                ? "CATALOG_UNAVAILABLE"
-                : "VARIANT_VALIDATION_FAILED";
-            ctx.Saga.FailureStep = "CatalogValidation";
-            ctx.Saga.FailureReason = result.Error.Message;
-            StampInstance(ctx.Saga);
-            return;
-        }
-
-        var validation = ValidateBusinessRules(result.Value!, ctx.Message.Items);
+        var validation = ValidateBusinessRules(variantMap, ctx.Message.Items);
         if (validation.IsFailure)
         {
             ctx.Saga.ValidationError = validation.Error.Code;
@@ -321,11 +309,10 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
             return;
         }
 
-        ctx.Saga.VariantsJson = JsonSerializer.Serialize(result.Value);
+        ctx.Saga.VariantsJson = JsonSerializer.Serialize(variantMap.Values);
 
-        // Server-side subtotal authoritative; uses catalog current price * client quantity.
-        var variantMap = result.Value!.ToDictionary(v => v.VariantId);
-        ctx.Saga.Subtotal = ctx.Message.Items.Sum(i => variantMap[i.VariantId].CurrentPrice * i.Quantity);
+        // Server-side subtotal authoritative; uses read-model price * client quantity.
+        ctx.Saga.Subtotal = ctx.Message.Items.Sum(i => variantMap[i.VariantId].Price * i.Quantity);
         ctx.Saga.OriginalPrice = ctx.Saga.Subtotal;
         StampInstance(ctx.Saga);
     }
@@ -640,17 +627,22 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
     // ── Business validation ───────────────────────────────────────────────────
 
     private static Result ValidateBusinessRules(
-        IReadOnlyList<CatalogVariantInfo> variants,
+        IReadOnlyDictionary<Guid, ProductVariantReadModel> variantMap,
         IReadOnlyList<SalesOrderItemSnapshot> items)
     {
-        var variantMap = variants.ToDictionary(v => v.VariantId);
-
         foreach (var item in items)
         {
             if (!variantMap.TryGetValue(item.VariantId, out var variant))
-                return Result.Failure(OrderErrors.VariantNotFound(item.VariantId));
+                return Result.Failure(OrderErrors.VariantNotInReadModel(item.VariantId));
 
-            if (!variant.VariantIsActive)
+            if (variant.DeletedAt is not null)
+                return Result.Failure(OrderErrors.VariantInactive(item.VariantId));
+
+            if (variant.RowVersion != item.Version)
+                return Result.Failure(
+                    OrderErrors.VariantVersionMismatch(item.VariantId, item.Version, variant.RowVersion));
+
+            if (!variant.IsActive)
                 return Result.Failure(OrderErrors.VariantInactive(item.VariantId));
 
             if (!variant.ProductIsActive)

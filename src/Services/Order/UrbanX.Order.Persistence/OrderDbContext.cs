@@ -14,6 +14,7 @@ public sealed class OrderDbContext(DbContextOptions<OrderDbContext> options) : D
     public DbSet<OrderStatusHistory> OrderStatusHistories => Set<OrderStatusHistory>();
     public DbSet<PlaceSalesOrderSagaState>  PlaceSalesOrderSagas  => Set<PlaceSalesOrderSagaState>();
     public DbSet<PlaceOrderNormalSagaState> PlaceOrderNormalSagas => Set<PlaceOrderNormalSagaState>();
+    public DbSet<ProductVariantReadModel> ProductVariants => Set<ProductVariantReadModel>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

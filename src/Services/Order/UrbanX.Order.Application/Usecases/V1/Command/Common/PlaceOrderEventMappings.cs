@@ -24,10 +24,10 @@ internal static class PlaceOrderEventMappings
         JsonSerializer.Serialize(snapshot);
 
     public static IReadOnlyList<NormalOrderItemSnapshot> MapNormalItems(IReadOnlyList<PlaceOrderLineDto> items) =>
-        items.Select(i => new NormalOrderItemSnapshot(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice)).ToList();
+        items.Select(i => new NormalOrderItemSnapshot(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice, i.Version)).ToList();
 
     public static IReadOnlyList<OrderItemSnapshot> MapSalesItems(IReadOnlyList<PlaceOrderLineDto> items) =>
-        items.Select(i => new OrderItemSnapshot(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice)).ToList();
+        items.Select(i => new OrderItemSnapshot(i.ProductId, i.VariantId, i.Quantity, i.UnitPrice, i.Version)).ToList();
 
     public static decimal SumLineTotal(IReadOnlyList<PlaceOrderLineDto> items) =>
         items.Sum(i => i.UnitPrice * i.Quantity);

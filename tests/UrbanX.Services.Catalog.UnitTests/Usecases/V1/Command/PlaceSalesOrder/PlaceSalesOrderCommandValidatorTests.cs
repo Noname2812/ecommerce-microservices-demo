@@ -19,7 +19,7 @@ public class PlaceSalesOrderCommandValidatorTests
         PricingSnapshot: new(DateTimeOffset.UtcNow.AddMinutes(-1)),
         ExpectedTotal: 130_000,
         Items: [new(Guid.NewGuid(), "Product A", null, Guid.NewGuid(),
-            "SKU-001", null, Guid.NewGuid(), "Seller A", 100_000, 1, 0, null)]
+            "SKU-001", null, Guid.NewGuid(), "Seller A", 100_000, 1, 0, null, 1)]
     );
 
     [Fact]
@@ -60,7 +60,7 @@ public class PlaceSalesOrderCommandValidatorTests
     {
         var items = Enumerable.Range(0, 10)
             .Select(_ => new PlaceOrderLineDto(Guid.NewGuid(), "Product", null, Guid.NewGuid(),
-                "SKU", null, Guid.NewGuid(), "Seller", 100_000, 1, 0, null))
+                "SKU", null, Guid.NewGuid(), "Seller", 100_000, 1, 0, null, 1))
             .ToList();
         var cmd = ValidCommand() with { Items = items };
         _sut.TestValidate(cmd).ShouldNotHaveValidationErrorFor(x => x.Items);
@@ -71,7 +71,7 @@ public class PlaceSalesOrderCommandValidatorTests
     {
         var items = Enumerable.Range(0, 11)
             .Select(_ => new PlaceOrderLineDto(Guid.NewGuid(), "Product", null, Guid.NewGuid(),
-                "SKU", null, Guid.NewGuid(), "Seller", 100_000, 1, 0, null))
+                "SKU", null, Guid.NewGuid(), "Seller", 100_000, 1, 0, null, 1))
             .ToList();
         var cmd = ValidCommand() with { Items = items };
         _sut.TestValidate(cmd).ShouldHaveValidationErrorFor(x => x.Items);

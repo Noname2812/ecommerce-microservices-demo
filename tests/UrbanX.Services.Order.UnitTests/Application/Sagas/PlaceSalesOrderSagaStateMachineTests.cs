@@ -104,7 +104,7 @@ public sealed class PlaceSalesOrderSagaStateMachineTests : IAsyncLifetime
         string? couponCode = null,
         string? userId = null)
     {
-        var items = new[] { new SalesOrderItemSnapshot(ProductId, VariantId, 1, UnitPrice) };
+        var items = new[] { new SalesOrderItemSnapshot(ProductId, VariantId, 1, UnitPrice, 1) };
         var subtotal = UnitPrice;
         return new PlaceSalesOrderRequestedV1
         {

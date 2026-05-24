@@ -182,7 +182,8 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
                         .Select(a => new ProductDtos.ProductVariantAttributeSnapshot(
                             a.AttributeDefinitionId.ToString(), a.AttributeDefinitionId, a.Value))
                         .ToList(),
-                    galleryImages.Select(g => g.Url).ToList());
+                    galleryImages.Select(g => g.Url).ToList(),
+                    added.RowVersion);
 
                 addedEvents.Add(new ProductUpdateIntegrationEvents.ProductVariantAddedV1(
                     product.Id, product.SellerId, variantSnapshot));
@@ -216,7 +217,8 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
                         av.AttributeDefinition?.Name ?? av.AttributeId.ToString(),
                         av.AttributeId, av.Value))
                     .ToList(),
-                imageUrls.Distinct().ToList());
+                imageUrls.Distinct().ToList(),
+                v.RowVersion);
         }
     }
 }

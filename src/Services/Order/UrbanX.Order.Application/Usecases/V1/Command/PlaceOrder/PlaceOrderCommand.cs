@@ -53,7 +53,8 @@ public record PlaceOrderLineDto(
     decimal UnitPrice,
     int Quantity,
     decimal DiscountAmount,
-    string? ImageUrl
+    string? ImageUrl,
+    int Version
 );
 
 public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCommand>

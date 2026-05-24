@@ -30,7 +30,8 @@ public record OrderItemSnapshot(
     Guid ProductId,
     Guid VariantId,
     int Quantity,
-    decimal UnitPrice);
+    decimal UnitPrice,
+    int Version);
 
 public record PricingSnapshot(
     decimal Subtotal,

@@ -62,22 +62,15 @@ public static class ServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // ── Product-projection consumers (6 Catalog events → read.product_variant_view) ─
+        services.AddSingleton<IValidateOptions<ProductProjectionConsumerOptions>,
+            ProductProjectionConsumerOptionsValidator>();
+        services.AddOptions<ProductProjectionConsumerOptions>()
+            .BindConfiguration(ProductProjectionConsumerOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // ── Outbound HTTP-client config ───────────────────────────────────────
-        services.AddOptions<CatalogClientOptions>()
-            .BindConfiguration(CatalogClientOptions.SectionName)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        services.AddOptions<CatalogClientResilienceOptions>()
-            .BindConfiguration(CatalogClientResilienceOptions.SectionName)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        services.AddOptions<CatalogClientCacheOptions>()
-            .BindConfiguration(CatalogClientCacheOptions.SectionName)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
         services.AddOptions<PromotionClientOptions>()
             .BindConfiguration(PromotionClientOptions.SectionName)
             .ValidateDataAnnotations()
@@ -91,15 +84,6 @@ public static class ServiceCollectionExtensions
 
     private static void AddHttpClients(IServiceCollection services)
     {
-        // Register the raw HTTP client as a concrete typed client (no interface mapping) so the
-        // Redis caching decorator below can wrap it. The decorator implements ICatalogServiceClient
-        // and is what application code resolves.
-        services.AddResilientHttpClient<CatalogServiceClient, CatalogClientOptions, CatalogClientResilienceOptions>(
-            o => o.BaseAddress,
-            aspireServiceName: "catalog");
-
-        services.AddScoped<ICatalogServiceClient, CachingCatalogServiceClient>();
-
         services.AddResilientHttpClient<ISaleEligibilityService, PromotionSaleEligibilityClient, PromotionClientOptions, PromotionClientResilienceOptions>(
             o => o.BaseAddress,
             aspireServiceName: "promotion");

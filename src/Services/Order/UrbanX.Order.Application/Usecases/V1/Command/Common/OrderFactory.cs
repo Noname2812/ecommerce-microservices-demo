@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Shared.Contract.Dtos.Order;
 using Shared.Contract.Messaging.PlaceOrder;
-using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.Sagas.PlaceOrderNormal;
 using UrbanX.Order.Application.Sagas.PlaceOrderSales;
 using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
@@ -68,7 +67,7 @@ internal static class OrderFactory
 
     public static OrderEntity BuildFromSaga(
         PlaceOrderNormalSagaState saga,
-        IDictionary<Guid, CatalogVariantInfo> variants,
+        IDictionary<Guid, ProductVariantReadModel> variants,
         Guid orderId)
     {
         var snapshots = JsonSerializer.Deserialize<List<NormalOrderItemSnapshot>>(saga.ItemsJson ?? "[]")
@@ -81,7 +80,7 @@ internal static class OrderFactory
             .Select(i =>
             {
                 if (!variants.TryGetValue(i.VariantId, out var variant))
-                    throw new InvalidOperationException($"Catalog variant {i.VariantId} was not found.");
+                    throw new InvalidOperationException($"Read-model variant {i.VariantId} was not found.");
 
                 return new NewOrderItemSpec(
                     variant.ProductId,
@@ -125,7 +124,7 @@ internal static class OrderFactory
 
     public static OrderEntity BuildSalesFromSaga(
         PlaceSalesOrderSagaState saga,
-        IDictionary<Guid, CatalogVariantInfo> variants,
+        IDictionary<Guid, ProductVariantReadModel> variants,
         SalesPricingSnapshot pricing,
         Guid orderId)
     {
@@ -139,9 +138,9 @@ internal static class OrderFactory
             .Select(i =>
             {
                 if (!variants.TryGetValue(i.VariantId, out var variant))
-                    throw new InvalidOperationException($"Catalog variant {i.VariantId} was not found.");
+                    throw new InvalidOperationException($"Read-model variant {i.VariantId} was not found.");
 
-                // Use catalog current price as authoritative — server-side pricing.
+                // Use read-model price as authoritative — server-side pricing.
                 return new NewOrderItemSpec(
                     variant.ProductId,
                     variant.ProductName,
@@ -151,7 +150,7 @@ internal static class OrderFactory
                     variant.VariantName,
                     variant.SellerId,
                     variant.SellerName,
-                    variant.CurrentPrice,
+                    variant.Price,
                     i.Quantity,
                     DiscountAmount: 0m,
                     variant.ImageUrl);

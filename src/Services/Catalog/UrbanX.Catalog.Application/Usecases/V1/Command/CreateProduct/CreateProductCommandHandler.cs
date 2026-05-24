@@ -203,7 +203,8 @@ namespace UrbanX.Catalog.Application.Usecases.V1.Command
                                         av.AttributeId,
                                         av.Value))
                                 .ToList(),
-                            BuildVariantImageUrlList(v, product)))
+                            BuildVariantImageUrlList(v, product),
+                            v.RowVersion))
                     .ToList());
         }
 

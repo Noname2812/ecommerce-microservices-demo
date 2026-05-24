@@ -105,6 +105,9 @@ internal static class PlaceOrderValidationRules
             item.RuleFor(i => i.Quantity)
                 .InclusiveBetween(1, maxQtyPerItem)
                 .WithMessage(itemQtyMessage ?? $"Each item quantity must be between 1 and {maxQtyPerItem}.");
+            item.RuleFor(i => i.Version)
+                .GreaterThan(0)
+                .WithMessage("Each item must include the variant Version returned by the catalog read API.");
         });
     }
 }

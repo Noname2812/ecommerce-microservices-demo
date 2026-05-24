@@ -290,25 +290,22 @@ public sealed class PlaceOrderNormalSagaStateMachine
         await holdClient.ReleaseAsync(saga.CouponHoldToken, ct);
     }
 
+    /// <summary>
+    /// Validates each requested line against the local <c>read.product_variant_view</c> projection
+    /// instead of calling Catalog over HTTP. Each item must carry the variant <c>Version</c> the
+    /// client read from Catalog; a mismatch means the variant was edited after the client loaded
+    /// the page and the order must be re-confirmed.
+    /// </summary>
     private async Task ValidateThroughCatalogAsync(
         BehaviorContext<PlaceOrderNormalSagaState, PlaceOrderRequestedV1> ctx)
     {
-        await using var scope  = _scopeFactory.CreateAsyncScope();
-        var catalog = scope.ServiceProvider.GetRequiredService<ICatalogServiceClient>();
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IProductVariantReadModelRepository>();
 
-        var variantIds = ctx.Message.Items.Select(i => i.VariantId).Distinct().ToArray();
-        var result     = await catalog.GetVariantsAsync(variantIds, ctx.CancellationToken);
+        var variantIds = ctx.Message.Items.Select(i => i.VariantId).Distinct().ToList();
+        var variantMap = await repository.GetByIdsAsync(variantIds, ctx.CancellationToken);
 
-        if (result.IsFailure)
-        {
-            ctx.Saga.ValidationError = result.Error.Code == OrderErrors.CatalogUnavailable.Code
-                ? "CATALOG_UNAVAILABLE"
-                : "VARIANT_VALIDATION_FAILED";
-            StampInstance(ctx.Saga);
-            return;
-        }
-
-        var validation = ValidateBusinessRules(result.Value!, ctx.Message.Items);
+        var validation = ValidateBusinessRules(variantMap, ctx.Message.Items);
         if (validation.IsFailure)
         {
             ctx.Saga.ValidationError = validation.Error.Code;
@@ -316,7 +313,7 @@ public sealed class PlaceOrderNormalSagaStateMachine
             return;
         }
 
-        ctx.Saga.VariantsJson = JsonSerializer.Serialize(result.Value);
+        ctx.Saga.VariantsJson = JsonSerializer.Serialize(variantMap.Values);
         StampInstance(ctx.Saga);
     }
 
@@ -475,17 +472,22 @@ public sealed class PlaceOrderNormalSagaStateMachine
     private const decimal PriceTolerancePercent = 0.01m;
 
     private static Result ValidateBusinessRules(
-        IReadOnlyList<CatalogVariantInfo> variants,
+        IReadOnlyDictionary<Guid, ProductVariantReadModel> variantMap,
         IReadOnlyList<NormalOrderItemSnapshot> items)
     {
-        var variantMap = variants.ToDictionary(v => v.VariantId);
-
         foreach (var item in items)
         {
             if (!variantMap.TryGetValue(item.VariantId, out var variant))
-                return Result.Failure(OrderErrors.VariantNotFound(item.VariantId));
+                return Result.Failure(OrderErrors.VariantNotInReadModel(item.VariantId));
 
-            if (!variant.VariantIsActive)
+            if (variant.DeletedAt is not null)
+                return Result.Failure(OrderErrors.VariantInactive(item.VariantId));
+
+            if (variant.RowVersion != item.Version)
+                return Result.Failure(
+                    OrderErrors.VariantVersionMismatch(item.VariantId, item.Version, variant.RowVersion));
+
+            if (!variant.IsActive)
                 return Result.Failure(OrderErrors.VariantInactive(item.VariantId));
 
             if (!variant.ProductIsActive)
@@ -494,10 +496,12 @@ public sealed class PlaceOrderNormalSagaStateMachine
             if (!variant.SellerIsActive)
                 return Result.Failure(OrderErrors.SellerInactive(variant.SellerId));
 
-            var tolerance = variant.CurrentPrice * PriceTolerancePercent;
-            if (Math.Abs(variant.CurrentPrice - item.UnitPrice) > tolerance)
+            // Defense in depth: version match should already guarantee the snapshot price is current,
+            // but we still reject if the client somehow sends a wildly different UnitPrice.
+            var tolerance = variant.Price * PriceTolerancePercent;
+            if (Math.Abs(variant.Price - item.UnitPrice) > tolerance)
                 return Result.Failure(
-                    OrderErrors.VariantPriceMismatch(item.VariantId, variant.CurrentPrice, item.UnitPrice));
+                    OrderErrors.VariantPriceMismatch(item.VariantId, variant.Price, item.UnitPrice));
         }
 
         return Result.Success();

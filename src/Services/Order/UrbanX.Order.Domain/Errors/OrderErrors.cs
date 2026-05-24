@@ -87,6 +87,14 @@ public static class OrderErrors
     public static Error SellerInactive(Guid sellerId) =>
         new("SELLER_INACTIVE", $"Seller {sellerId} is no longer active.");
 
+    public static Error VariantVersionMismatch(Guid variantId, int clientVersion, int currentVersion) =>
+        new("Variant.VersionMismatch",
+            $"Variant {variantId} version mismatch: client sent {clientVersion}, current is {currentVersion}.");
+
+    public static Error VariantNotInReadModel(Guid variantId) =>
+        new("Variant.NotInReadModel",
+            $"Variant {variantId} is not yet synced to the local read model; please retry shortly.");
+
     // Sales
     public static Error FlashSaleSoldOut(Guid saleId) =>
         new("Order.FlashSaleSoldOut", $"Flash sale {saleId} is sold out");
