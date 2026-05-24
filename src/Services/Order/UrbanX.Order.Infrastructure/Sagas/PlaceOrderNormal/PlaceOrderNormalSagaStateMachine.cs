@@ -190,6 +190,21 @@ public sealed class PlaceOrderNormalSagaStateMachine
             .ThenAsync(ctx => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken))
             .TransitionTo(Faulted));
 
+        // ── Late-arriving events in terminal/compensation states ──────────────
+        // Once a timeout has driven the saga into Compensating/Faulted, the original consumer
+        // (Inventory / Payment) may still finish processing and publish its outcome event.
+        // Without an explicit Ignore, MassTransit raises NotAcceptedStateMachineException.
+        // Inventory-side reservations made after our timeout will be cleaned up by Inventory's
+        // ReleaseExpiredReservationsJob (TTL sweep); payment-side sessions expire on the gateway.
+        During(Compensating, Faulted,
+            Ignore(InventoryReserved),
+            Ignore(InventoryReserveFailed),
+            Ignore(PaymentSessionCreated),
+            Ignore(PaymentCompleted),
+            Ignore(InventoryTimeout.Received),
+            Ignore(PaymentSessionTimeout.Received),
+            Ignore(PaymentExpiry.Received));
+
         SetCompletedWhenFinalized();
         RegisterStateLogging();
     }
@@ -205,28 +220,32 @@ public sealed class PlaceOrderNormalSagaStateMachine
         Event(() => PaymentCompleted,       e => e.CorrelateById(ctx => ctx.Message.OrderId));
     }
 
+    /// <remarks>
+    /// MassTransit <c>Schedule(...)</c> evaluates <c>cfg.Delay</c> exactly once when the saga
+    /// state machine is built. Because the state machine is a singleton, runtime changes to
+    /// <c>OrderPaymentOptions.StepTimeoutSeconds</c> / <c>NormalOrderExpiryMinutes</c> via config
+    /// reload will <em>not</em> take effect — restart the host to apply new timeout values.
+    /// </remarks>
     private void ConfigureSchedules()
     {
-        // Inventory reserve — internal service
-        // Happy path ~200-500ms
+        // Inventory reserve + payment-session creation share the per-step budget. With MT EF Outbox
+        // (QueryDelay=1s) + RabbitMQ hop + DB transaction, anything below ~20s is unrealistic.
         Schedule(() => InventoryTimeout, x => x.InventoryExpiryTokenId, cfg =>
         {
-            cfg.Delay = TimeSpan.FromSeconds(5);
+            cfg.Delay = TimeSpan.FromSeconds(_paymentOptions.StepTimeoutSeconds);
             cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
         });
 
-        // Payment session — call external gateway (VNPay/Momo...)
-        // Network round-trip + gateway processing
         Schedule(() => PaymentSessionTimeout, x => x.PaymentSessionExpiryTokenId, cfg =>
         {
-            cfg.Delay = TimeSpan.FromSeconds(10);
+            cfg.Delay = TimeSpan.FromSeconds(_paymentOptions.StepTimeoutSeconds);
             cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
         });
 
-        // Payment expiry
+        // Payment expiry — customer-facing wait time on the payment page
         Schedule(() => PaymentExpiry, x => x.PaymentExpiryTokenId, cfg =>
         {
-            cfg.Delay = TimeSpan.FromMinutes(_paymentOptions.NormalOrderExpiryMinutes); // 15
+            cfg.Delay = TimeSpan.FromMinutes(_paymentOptions.NormalOrderExpiryMinutes);
             cfg.Received = r => r.CorrelateById(ctx => ctx.Message.OrderId);
         });
     }

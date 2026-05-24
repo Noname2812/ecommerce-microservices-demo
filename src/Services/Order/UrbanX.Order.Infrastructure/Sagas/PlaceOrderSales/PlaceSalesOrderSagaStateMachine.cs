@@ -194,6 +194,22 @@ public sealed class PlaceSalesOrderSagaStateMachine : SagaStateMachineBase<Place
                 () => ReleasePendingSlotAsync(ctx.Saga, ctx.CancellationToken)))
             .TransitionTo(Faulted));
 
+        // ── Late-arriving events in terminal/compensation states ──────────────
+        // Once a timeout has driven the saga into Compensating/Faulted, the original consumer
+        // (Inventory / Payment) may still finish processing and publish its outcome event.
+        // Without an explicit Ignore, MassTransit raises NotAcceptedStateMachineException.
+        // Inventory reservations created after our timeout will be cleaned up by Inventory's
+        // ReleaseExpiredReservationsJob (TTL sweep); payment sessions expire on the gateway side.
+        During(Compensating, Faulted,
+            Ignore(InventoryReserved),
+            Ignore(InventoryReserveFailed),
+            Ignore(PaymentSessionCreated),
+            Ignore(PaymentCompleted),
+            Ignore(InventoryTimeout.Received),
+            Ignore(CouponTimeout.Received),
+            Ignore(PaymentSessionTimeout.Received),
+            Ignore(PaymentExpiry.Received));
+
         SetCompletedWhenFinalized();
         RegisterStateLogging();
     }
