@@ -30,7 +30,6 @@ var orderDb = postgres.AddDatabase("orderdb", "urbanx_order");
 var paymentDb = postgres.AddDatabase("paymentdb", "urbanx_payment");
 var inventoryDb = postgres.AddDatabase("inventorydb", "urbanx_inventory");
 var promotionDb = postgres.AddDatabase("promotiondb", "urbanx_promotion");
-// var merchantDb = postgres.AddDatabase("merchantdb", "urbanx_merchant");
 
 // Add Redis (built-in Redis Commander UI — reachable from Aspire Dashboard endpoints)
 var redis = builder.AddRedis("redis").WithRedisCommander();
@@ -95,12 +94,6 @@ var orderService = builder.AddProject<Projects.UrbanX_Order_API>("order")
    .WaitFor(inventoryService)
    .WaitFor(promotionService);
 
-//var merchantService = builder.AddProject<Projects.UrbanX_Services_Merchant>("merchant")
-//    .WithReference(merchantDb)
-//    .WithReference(identityService)
-//    .WaitFor(merchantDb)
-//    .WaitFor(identityService);
-
 var paymentService = builder.AddProject<Projects.UrbanX_Payment_API>("payment")
    .WithReference(paymentDb)
    .WithReference(redis)
@@ -112,28 +105,24 @@ var paymentService = builder.AddProject<Projects.UrbanX_Payment_API>("payment")
    .WaitFor(rabbitMq);
 
 // Add Gateway with references to all services
-//var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
-//    .WithReference(catalogService)
-//    .WithReference(orderService)
-//    //.WithReference(merchantService)
-//    .WithReference(paymentService)
-//    .WithReference(inventoryService)
-//    .WithReference(identityService)
-//    .WithReference(promotionService)
-//    .WaitFor(catalogService)
-//    .WaitFor(orderService)
-//    //.WaitFor(merchantService)
-//    .WaitFor(paymentService)
-//    .WaitFor(inventoryService)
-//    .WaitFor(identityService)
-//    .WaitFor(promotionService);
+var gateway = builder.AddProject<Projects.UrbanX_Gateway>("gateway")
+   .WithReference(catalogService)
+   .WithReference(orderService)
+   .WithReference(paymentService)
+   .WithReference(inventoryService)
+   .WithReference(identityService)
+   .WithReference(promotionService)
+   .WaitFor(catalogService)
+   .WaitFor(orderService)
+   .WaitFor(paymentService)
+   .WaitFor(inventoryService)
+   .WaitFor(identityService)
+   .WaitFor(promotionService);
 
-//var frontend = builder.AddViteApp("frontend", "../../front-end")
-////    .WithReference(gateway)
-////    .WaitFor(gateway)
-//   .WithExternalHttpEndpoints();
 var frontend = builder.AddViteApp("frontend", "../../front-end")
-    .WithExternalHttpEndpoints();
+   .WithReference(gateway)
+   .WaitFor(gateway)
+  .WithExternalHttpEndpoints();
 
 
 builder.Build().Run();
