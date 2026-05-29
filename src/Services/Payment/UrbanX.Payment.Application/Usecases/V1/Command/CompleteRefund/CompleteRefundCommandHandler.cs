@@ -12,7 +12,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.CompleteRefund;
 public sealed class CompleteRefundCommandHandler(
     IRefundRepository refundRepository,
     IPaymentRepository paymentRepository,
-    IEnumerable<IPaymentRefundProvider> refundProviders,
+    IPaymentProviderFactory providerFactory,
     IEventPublisher eventPublisher,
     ILogger<CompleteRefundCommandHandler> logger) : ICommandHandler<CompleteRefundCommand>
 {
@@ -32,8 +32,8 @@ public sealed class CompleteRefundCommandHandler(
         var providerMethod = MapProviderNameToMethod(payment.ProviderName);
         var providerRefundId = request.ProviderRefundId;
 
-        var refundProvider = refundProviders.FirstOrDefault(p =>
-            string.Equals(p.Method, providerMethod, StringComparison.OrdinalIgnoreCase));
+        var refundProviderResult = providerFactory.GetRefundProvider(providerMethod);
+        var refundProvider = refundProviderResult.IsSuccess ? refundProviderResult.Value : null;
 
         if (refundProvider is not null)
         {

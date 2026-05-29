@@ -4,7 +4,6 @@ using Shared.Contract.Dtos.Payment;
 using Shared.Kernel.Primitives;
 using UrbanX.Payment.Application.Abstractions;
 using UrbanX.Payment.Domain;
-using UrbanX.Payment.Domain.Errors;
 using UrbanX.Payment.Domain.ValueObjects;
 using PaymentEntity = UrbanX.Payment.Domain.Models.Payment;
 
@@ -12,7 +11,7 @@ namespace UrbanX.Payment.Application.Usecases.V1.Command.CreatePaymentSession;
 
 internal sealed class CreatePaymentSessionCommandHandler(
     IPaymentRepository paymentRepository,
-    IEnumerable<IPaymentSessionProvider> sessionProviders,
+    IPaymentProviderFactory providerFactory,
     ILogger<CreatePaymentSessionCommandHandler> logger)
     : ICommandHandler<CreatePaymentSessionCommand, CreatePaymentSessionResult>
 {
@@ -40,14 +39,14 @@ internal sealed class CreatePaymentSessionCommandHandler(
         }
 
         var providerCode = request.PaymentMethod.ToProviderTypeCode();
-        var provider = sessionProviders.FirstOrDefault(p =>
-            string.Equals(p.Method, providerCode, StringComparison.OrdinalIgnoreCase));
-        if (provider is null)
+        var providerResult = providerFactory.GetSessionProvider(providerCode);
+        if (providerResult.IsFailure)
         {
             logger.LogWarning(
                 "No payment session provider registered for method {Method}.", request.PaymentMethod);
-            return Result.Failure<CreatePaymentSessionResult>(PaymentErrors.UnsupportedPaymentMethod);
+            return Result.Failure<CreatePaymentSessionResult>(providerResult.Error);
         }
+        var provider = providerResult.Value;
 
         var paymentId = Guid.NewGuid();
         var context = new PaymentSessionContext(

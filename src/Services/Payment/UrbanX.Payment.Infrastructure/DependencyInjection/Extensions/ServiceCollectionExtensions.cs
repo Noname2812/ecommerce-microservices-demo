@@ -5,6 +5,7 @@ using UrbanX.Payment.Application.Abstractions;
 using UrbanX.Payment.Application.Configuration;
 using UrbanX.Payment.Application.Services;
 using UrbanX.Payment.Infrastructure.DependencyInjection.Options;
+using UrbanX.Payment.Infrastructure.Integrations;
 using UrbanX.Payment.Infrastructure.Integrations.Momo;
 using UrbanX.Payment.Infrastructure.Integrations.SePay;
 using UrbanX.Payment.Infrastructure.Jobs;
@@ -57,12 +58,14 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<PaymentExpirySweepJob>();
 
-        // Payment session providers — resolved by Method string in CreatePaymentSessionCommandHandler
+        // Payment session providers — resolved by Method string via IPaymentProviderFactory
         services.AddScoped<IPaymentSessionProvider, SePayPaymentProvider>();
         services.AddScoped<IPaymentSessionProvider, MomoPaymentProvider>();
 
-        // Refund providers — resolved by Method string in CompleteRefund handler
+        // Refund providers — resolved by Method string via IPaymentProviderFactory
         services.AddScoped<IPaymentRefundProvider, MomoRefundProvider>();
+
+        services.AddScoped<IPaymentProviderFactory, PaymentProviderFactory>();
 
         services.AddScoped<IAutoRefundService, AutoRefundService>();
 
