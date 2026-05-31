@@ -27,7 +27,8 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "WebFetch(domain:developers.momo.vn)",
       "Bash(grep -E \"\\\\.\\(cs|json\\)$\")",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(xargs wc -l)"
     ]
   }
 }

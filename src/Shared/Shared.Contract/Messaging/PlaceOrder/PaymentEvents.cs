@@ -1,6 +1,6 @@
 using Shared.Contract.Abstractions;
 
-namespace Shared.Contract.Messaging.PlaceOrderSaga;
+namespace Shared.Contract.Messaging.PlaceOrder;
 
 /// <summary>Saga publishes this to trigger payment processing by the Payment service.</summary>
 public record ProcessPaymentRequestedV1 : IntegrationEventBase

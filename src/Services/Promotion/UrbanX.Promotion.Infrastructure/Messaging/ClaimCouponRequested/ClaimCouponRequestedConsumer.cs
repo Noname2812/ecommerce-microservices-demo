@@ -1,7 +1,7 @@
 using MassTransit;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Shared.Contract.Messaging.PlaceOrderSaga;
+using Shared.Contract.Messaging.PlaceOrder;
 using UrbanX.Promotion.Application.Usecases.V1.Command;
 
 namespace UrbanX.Promotion.Infrastructure.Messaging.ClaimCouponRequested;

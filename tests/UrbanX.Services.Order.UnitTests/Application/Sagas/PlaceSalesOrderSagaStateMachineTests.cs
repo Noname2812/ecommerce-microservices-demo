@@ -6,8 +6,6 @@ using Moq;
 using Shared.Contract.Messaging.Order;
 using Shared.Contract.Messaging.Payment;
 using Shared.Contract.Messaging.PlaceOrder;
-using Shared.Contract.Messaging.PlaceOrderSaga;
-using SalesOrderItemSnapshot = Shared.Contract.Messaging.PlaceOrderSaga.OrderItemSnapshot;
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Clients;
 using UrbanX.Order.Application.DependencyInjection.Options;

@@ -1,5 +1,5 @@
 using Shared.Application;
-using Shared.Contract.Messaging.PlaceOrderSaga;
+using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
 using UrbanX.Inventory.Domain;
 using UrbanX.Inventory.Domain.Models;

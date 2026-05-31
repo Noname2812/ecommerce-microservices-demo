@@ -1,6 +1,6 @@
 using Shared.Contract.Abstractions;
 
-namespace Shared.Contract.Messaging.PlaceOrderSaga;
+namespace Shared.Contract.Messaging.PlaceOrder;
 
 public record InventoryReserveItem(Guid VariantId, int Quantity);
 
@@ -31,7 +31,6 @@ public record InventoryReserveFailedV1 : IntegrationEventBase
     public required string ErrorMessage { get; init; }
     public required IReadOnlyList<Guid> VariantIdsOutOfStock { get; init; }
 }
-
 
 public record ConfirmInventoryRequestedV1 : IntegrationEventBase
 {

@@ -2,7 +2,7 @@ using Shared.Contract.Abstractions;
 
 namespace Shared.Contract.Messaging.PlaceOrder;
 
-public sealed record OrderConfirmedForPlaceOrderV1 : IntegrationEventBase, IOrderConfirmed
+public sealed record OrderConfirmedForPlaceOrderV1 : IntegrationEventBase
 {
     public required Guid OrderId { get; init; }
     public required Guid UserId { get; init; }
@@ -11,5 +11,4 @@ public sealed record OrderConfirmedForPlaceOrderV1 : IntegrationEventBase, IOrde
     public required decimal FinalAmount { get; init; }
     public required DateTimeOffset ConfirmedAt { get; init; }
     public override string Source => "order-service";
-    string IPlaceOrderIntegrationContract.EventId => EventId.ToString();
 }

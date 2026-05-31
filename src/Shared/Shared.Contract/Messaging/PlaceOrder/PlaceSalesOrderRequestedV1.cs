@@ -2,7 +2,7 @@ using Shared.Contract.Abstractions;
 using Shared.Contract.Dtos.Order;
 using Shared.Contract.Dtos.Payment;
 
-namespace Shared.Contract.Messaging.PlaceOrderSaga;
+namespace Shared.Contract.Messaging.PlaceOrder;
 
 public record PlaceSalesOrderRequestedV1 : IntegrationEventBase
 {
@@ -17,7 +17,7 @@ public record PlaceSalesOrderRequestedV1 : IntegrationEventBase
     public required decimal ShippingFee { get; init; }
     public required OrderDtos.ShippingAddressSnapshot ShippingAddress { get; init; }
     public string? CouponCode { get; init; }
-    public required IReadOnlyList<OrderItemSnapshot> Items { get; init; }
+    public required IReadOnlyList<SalesOrderItemSnapshot> Items { get; init; }
     public required PricingSnapshot PricingSnapshot { get; init; }
     public string CustomerEmail { get; init; } = "";
     public string CustomerName { get; init; } = "";
@@ -26,7 +26,7 @@ public record PlaceSalesOrderRequestedV1 : IntegrationEventBase
     public PaymentMethod PaymentMethod { get; init; } = PaymentMethod.Sepay;
 }
 
-public record OrderItemSnapshot(
+public record SalesOrderItemSnapshot(
     Guid ProductId,
     Guid VariantId,
     int Quantity,

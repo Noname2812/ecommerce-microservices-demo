@@ -1,6 +1,6 @@
 using Shared.Contract.Abstractions;
 
-namespace Shared.Contract.Messaging.PlaceOrderSaga;
+namespace Shared.Contract.Messaging.PlaceOrder;
 
 public record RedeemSalePromotionRequestedV1 : IntegrationEventBase
 {
@@ -14,7 +14,7 @@ public record RedeemSalePromotionRequestedV1 : IntegrationEventBase
     public required IReadOnlyList<PromotionOrderItem> Items { get; init; }
 }
 
-public record PromotionRedeemedV1 : IntegrationEventBase
+public record SalePromotionRedeemedV1 : IntegrationEventBase
 {
     public override string Source => "promotion-service";
 
@@ -25,7 +25,7 @@ public record PromotionRedeemedV1 : IntegrationEventBase
     public required IReadOnlyList<ClaimedFlashSaleSlot> ClaimedFlashSaleSlots { get; init; }
 }
 
-public record PromotionRedeemFailedV1 : IntegrationEventBase
+public record SalePromotionRedeemFailedV1 : IntegrationEventBase
 {
     public override string Source => "promotion-service";
 

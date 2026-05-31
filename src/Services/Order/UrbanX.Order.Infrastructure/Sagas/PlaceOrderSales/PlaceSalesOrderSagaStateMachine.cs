@@ -5,7 +5,6 @@ using Microsoft.Extensions.Options;
 using Shared.Contract.Messaging.Order;
 using Shared.Contract.Messaging.Payment;
 using Shared.Contract.Messaging.PlaceOrder;
-using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
 using Shared.Messaging;
 using Shared.Messaging.Saga;
@@ -16,7 +15,6 @@ using UrbanX.Order.Domain.Errors;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.Repositories;
 using UrbanX.Order.Infrastructure.DependencyInjection.Options;
-using SalesOrderItemSnapshot = Shared.Contract.Messaging.PlaceOrderSaga.OrderItemSnapshot;
 
 namespace UrbanX.Order.Infrastructure.Sagas.PlaceOrderSales;
 

@@ -1,6 +1,6 @@
 using Shared.Application;
 using Shared.Application.Authorization;
-using Shared.Contract.Messaging.PlaceOrderSaga;
+using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Kernel.Primitives;
 using UrbanX.Order.Application.Services;
 using UrbanX.Order.Application.Usecases.V1.Command.Common;

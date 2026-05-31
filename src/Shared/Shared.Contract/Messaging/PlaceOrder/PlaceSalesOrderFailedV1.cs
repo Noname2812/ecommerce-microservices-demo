@@ -1,6 +1,6 @@
 using Shared.Contract.Abstractions;
 
-namespace Shared.Contract.Messaging.PlaceOrderSaga;
+namespace Shared.Contract.Messaging.PlaceOrder;
 
 public record PlaceSalesOrderFailedV1 : IntegrationEventBase
 {

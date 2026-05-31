@@ -1,5 +1,5 @@
 using Moq;
-using Shared.Contract.Messaging.PlaceOrderSaga;
+using Shared.Contract.Messaging.PlaceOrder;
 using Shared.Application;
 using UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 using UrbanX.Inventory.Domain;

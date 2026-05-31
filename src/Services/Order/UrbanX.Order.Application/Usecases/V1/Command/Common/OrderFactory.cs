@@ -7,7 +7,6 @@ using UrbanX.Order.Application.Usecases.V1.Command.PlaceOrder;
 using UrbanX.Order.Domain.Models;
 using UrbanX.Order.Domain.ValueObjects;
 using OrderEntity = UrbanX.Order.Domain.Models.Order;
-using SalesOrderItemSnapshot = Shared.Contract.Messaging.PlaceOrderSaga.OrderItemSnapshot;
 
 namespace UrbanX.Order.Application.Usecases.V1.Command.Common;
 

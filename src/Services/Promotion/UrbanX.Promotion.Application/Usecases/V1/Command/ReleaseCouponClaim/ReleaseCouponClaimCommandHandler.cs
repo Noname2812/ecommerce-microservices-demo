@@ -126,7 +126,7 @@ internal sealed class ReleaseCouponClaimCommandHandler(
             new ProcessedEvent
             {
                 EventId = eventId.Value,
-                EventType = nameof(ICouponReleaseRequested),
+                EventType = nameof(CouponReleaseRequestedV1),
                 ProcessedAt = DateTimeOffset.UtcNow
             });
     }

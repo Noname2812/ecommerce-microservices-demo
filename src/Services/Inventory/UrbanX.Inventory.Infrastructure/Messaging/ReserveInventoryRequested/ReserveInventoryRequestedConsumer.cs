@@ -1,6 +1,6 @@
 using MassTransit;
 using MediatR;
-using Shared.Contract.Messaging.PlaceOrderSaga;
+using Shared.Contract.Messaging.PlaceOrder;
 using UrbanX.Inventory.Application.Usecases.V1.Command.Reserve;
 
 namespace UrbanX.Inventory.Infrastructure.Messaging.ReserveInventoryRequested;

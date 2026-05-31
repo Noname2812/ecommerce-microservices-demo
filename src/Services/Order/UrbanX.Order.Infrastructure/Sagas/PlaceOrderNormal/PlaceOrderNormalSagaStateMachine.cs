@@ -5,7 +5,6 @@ using Microsoft.Extensions.Options;
 using Shared.Contract.Messaging.Order;
 using Shared.Contract.Messaging.Payment;
 using Shared.Contract.Messaging.PlaceOrder;
-using Shared.Contract.Messaging.PlaceOrderSaga;
 using Shared.Kernel.Primitives;
 using Shared.Messaging;
 using Shared.Messaging.Saga;
